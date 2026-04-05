@@ -53,6 +53,26 @@ public class UserService {
         return userRepository.save(existing);
     }
 
+    // ─── Filter by Preference (JSONB) ────────────────────────────────────────────
+
+    /**
+     * Returns all users whose {@code preferences} JSONB column contains an entry
+     * where the given {@code key} maps to the given {@code value}.
+     *
+     * Throws 400 Bad Request if either {@code key} or {@code value} is blank.
+     */
+    public List<User> findByPreference(String key, String value) {
+        if (key == null || key.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Query parameter 'key' must not be blank");
+        }
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Query parameter 'value' must not be blank");
+        }
+        return userRepository.findByPreference(key, value);
+    }
+
     // ─── Delete ───────────────────────────────────────────────────────────────────
 
     public void delete(Long id) {
