@@ -1,8 +1,9 @@
 package com.team22.eventticketing.user.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.team22.eventticketing.user.converter.JsonbConverter;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -84,10 +85,10 @@ public class User {
      *   - preferredTicketType (String)  "VIP" or "standard"
      *   - timezone            (String)  e.g. "Africa/Cairo"
      *
-     * @Convert wires the JsonbConverter for serialisation.
-     * columnDefinition = "jsonb" tells Hibernate/PostgreSQL the exact column type.
+     * Hibernate 6 (Spring Boot 3.x) serialises/deserialises the Map natively
+     * via Jackson — no custom AttributeConverter needed (Lab 4 pattern).
      */
-    @Convert(converter = JsonbConverter.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> preferences = new HashMap<>();
 
