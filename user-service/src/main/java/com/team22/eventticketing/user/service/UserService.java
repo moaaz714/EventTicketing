@@ -1,5 +1,6 @@
 package com.team22.eventticketing.user.service;
 
+import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -51,6 +52,12 @@ public class UserService {
         if (patch.getPreferences() != null) existing.setPreferences(patch.getPreferences());
 
         return userRepository.save(existing);
+    }
+
+    // ─── Search ───────────────────────────────────────────────────────────────────
+
+    public List<User> search(String name, String email, Role role) {
+        return userRepository.searchUsers(name, email, role == null ? null : role.name());
     }
 
     // ─── Delete ───────────────────────────────────────────────────────────────────
