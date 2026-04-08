@@ -1,5 +1,5 @@
 package com.team22.eventticketing.event.controller;
-
+import com.team22.eventticketing.event.dto.TopEventDTO;
 
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
 import com.team22.eventticketing.event.model.Event;
@@ -39,5 +39,9 @@ public class eventController {
             @RequestParam String value
     ) {
         return ResponseEntity.ok(eventService.filterEventsByDetail(key, value));
+    }
+    @GetMapping("/reports/top-rated")
+    public ResponseEntity<List<TopEventDTO>> getTopRatedEvents(@RequestParam int limit) {
+        return ResponseEntity.ok(eventService.getTopRatedEvents(limit));
     }
 }
