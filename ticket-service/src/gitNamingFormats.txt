@@ -1,0 +1,2 @@
+Branch: feat/ticket/S4-F7/55-2296
+commit: "feat(ticket-service): add ticket model and ticketstatus enum (55-2296)"
