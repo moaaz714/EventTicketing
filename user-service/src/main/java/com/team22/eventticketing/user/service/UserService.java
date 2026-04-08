@@ -1,8 +1,9 @@
 package com.team22.eventticketing.user.service;
 
-import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.dto.UserBookingSummaryDTO;
 import com.team22.eventticketing.user.dto.TopAttendeeDTO;
+import com.team22.eventticketing.user.dto.UserProfileDTO;
+import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -153,5 +154,14 @@ public class UserService {
 
         user.setStatus(com.team22.eventticketing.user.entity.UserStatus.DEACTIVATED);
         return userRepository.save(user);
+    }
+
+    // ─── [S1-F8] Get User Profile ────────────────────────────────────────────────
+
+    public UserProfileDTO getProfile(Long id) {
+        User user = userRepository.findByIdWithVenues(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found with id: " + id));
+        return UserProfileDTO.from(user);
     }
 }
