@@ -62,4 +62,13 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
     // --- @Modifying + @Transactional for updates/deletes ---
 
+    @Query(value = "SELECT t.id as ticketId, t.attendee_name as attendeeName, " +
+            "t.ticket_code as ticketCode, t.booking_id as bookingId, " +
+            "e.name as eventName, e.event_date as eventDate " + 
+            "FROM tickets t " +
+            "JOIN bookings b ON t.booking_id = b.id " +
+            "JOIN events e ON b.event_id = e.id " +
+            "WHERE t.status = 'VALID' AND e.status = 'UPCOMING'", nativeQuery = true)
+    List<Map<String, Object>> findUnusedUpcomingTicketsNative();
+
 }

@@ -2,6 +2,7 @@ package com.team22.eventticketing.ticket.service;
 
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
+import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -10,6 +11,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class TicketService {
@@ -46,6 +48,18 @@ public class TicketService {
         LocalDateTime last = (LocalDateTime) data.get("last_checkin");
 
         return new EventAttendanceSummaryDTO(eventId, total, used, valid, last);
+    }
+
+    public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
+        List<Map<String, Object>> results = ticketRepository.findUnusedUpcomingTicketsNative();
+
+        return results.stream().map(row -> new UnusedTicketDTO(
+                ((Number) row.get("ticketId")).longValue(),
+                (String) row.get("attendeeName"),
+                (String) row.get("ticketCode"),
+                ((Number) row.get("bookingId")).longValue(),
+                (String) row.get("eventName"),
+                ((java.sql.Timestamp) row.get("eventDate")).toLocalDateTime())).toList();
     }
 
 }
