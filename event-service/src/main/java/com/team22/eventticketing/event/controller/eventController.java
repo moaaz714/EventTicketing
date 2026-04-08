@@ -2,9 +2,12 @@ package com.team22.eventticketing.event.controller;
 
 
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
+import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.service.EventService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/events")
@@ -28,5 +31,13 @@ public class eventController {
     ) {
         eventService.updateEventStatus(id, request);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/filter")
+    public ResponseEntity<List<Event>> filterEvents(
+            @RequestParam String key,
+            @RequestParam String value
+    ) {
+        return ResponseEntity.ok(eventService.filterEventsByDetail(key, value));
     }
 }
