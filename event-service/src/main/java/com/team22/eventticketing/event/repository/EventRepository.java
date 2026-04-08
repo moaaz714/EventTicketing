@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface EventRepository extends JpaRepository<Event, Long> {
 
     @Query(value = """
@@ -17,4 +19,14 @@ public interface EventRepository extends JpaRepository<Event, Long> {
             )
             """, nativeQuery = true)
     boolean existsActiveBookingsForEvent(@Param("eventId") Long eventId);
+
+
+    @Query(value = """
+            SELECT * FROM events e
+            WHERE e.details ->> :key = :value
+            """, nativeQuery = true)
+    List<Event> findByDetailAttribute(
+            @Param("key") String key,
+            @Param("value") String value
+    );
 }
