@@ -1,5 +1,6 @@
 package com.team22.eventticketing.user.controller;
 
+import com.team22.eventticketing.user.dto.UserProfileDTO;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.service.FavoriteVenueService;
@@ -79,5 +80,12 @@ public class userController {
             @PathVariable Long userId,
             @PathVariable Long venueId) {
         return ResponseEntity.ok(favoriteVenueService.setDefault(userId, venueId));
+    }
+
+    // ─── [S1-F8] Get User Profile ────────────────────────────────────────────────
+
+    @GetMapping("/{id}/profile")
+    public ResponseEntity<UserProfileDTO> getProfile(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.getProfile(id));
     }
 }
