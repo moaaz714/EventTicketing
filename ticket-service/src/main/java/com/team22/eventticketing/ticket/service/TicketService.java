@@ -3,6 +3,9 @@ package com.team22.eventticketing.ticket.service;
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
+import com.team22.eventticketing.ticket.model.Ticket;
+
+
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,6 +24,25 @@ public class TicketService {
     public TicketService(TicketRepository ticketRepository) {
         this.ticketRepository = ticketRepository;
     }
+
+
+    public Ticket getLatestTicketByBooking(Long bookingId) {
+
+        //Check if booking exists using SQL
+        boolean bookingExists = ticketRepository.existsBookingById(bookingId);
+
+        if (!bookingExists) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
+        }
+
+        //Get the latest ticket
+        return ticketRepository
+                .findTopByBookingIdOrderByIssuedAtDesc(bookingId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "No tickets found for this booking"));
+    }
+
 
     @Transactional
     public int purgeExpiredTickets(int olderThanDays) {

@@ -1,5 +1,6 @@
 package com.team22.eventticketing.ticket.controller;
 
+import com.team22.eventticketing.ticket.model.Ticket;
 import org.springframework.web.bind.annotation.*;
 
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
@@ -17,6 +18,13 @@ public class ticketController {
     public ticketController(TicketService ticketService) {
         this.ticketService = ticketService;
     }
+
+    //[S4-F1]
+    @GetMapping("/booking/{bookingId}/latest")
+    public Ticket getLatestTicket(@PathVariable Long bookingId) {
+        return ticketService.getLatestTicketByBooking(bookingId);
+    }
+
 
     @GetMapping("/health")
     public String statusCheck() {
