@@ -33,11 +33,12 @@ public class eventController {
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping("/filter")
+    @GetMapping("/details/search")
     public ResponseEntity<List<Event>> filterEvents(
             @RequestParam String key,
-            @RequestParam String value
+            @RequestParam String value,
+            @RequestParam(required = false) String status
     ) {
-        return ResponseEntity.ok(eventService.filterEventsByDetail(key, value));
+        return ResponseEntity.ok(eventService.filterEventsByDetail(key, value, status));
     }
 }

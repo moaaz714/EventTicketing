@@ -29,4 +29,14 @@ public interface EventRepository extends JpaRepository<Event, Long> {
             @Param("key") String key,
             @Param("value") String value
     );
+    @Query(value = """
+        SELECT * FROM events e
+        WHERE e.details ->> :key = :value
+          AND e.status = :status
+        """, nativeQuery = true)
+    List<Event> findByDetailAttributeAndStatus(
+            @Param("key") String key,
+            @Param("value") String value,
+            @Param("status") String status
+    );
 }
