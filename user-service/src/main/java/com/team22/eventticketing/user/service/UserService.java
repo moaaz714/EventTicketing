@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public UserService(UserRepository userRepository) {
         this.userRepository = userRepository;
@@ -163,5 +165,25 @@ public class UserService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "User not found with id: " + id));
         return UserProfileDTO.from(user);
+    }
+
+    // ─── [S1-F9] Filter by Favorite Category ─────────────────────────────────────
+
+    public List<User> findByFavoriteCategoryAndMinBookings(String category, int minBookings) {
+        if (category == null || category.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Category must not be blank");
+        }
+
+        String categoryJson;
+        try {
+            categoryJson = objectMapper.writeValueAsString(
+                    Map.of("favoriteCategory", category));
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to build category filter");
+        }
+
+        return userRepository.findByFavoriteCategoryAndMinBookings(categoryJson, minBookings);
     }
 }
