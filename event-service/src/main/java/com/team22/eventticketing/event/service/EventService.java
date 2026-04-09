@@ -49,7 +49,7 @@ public class EventService {
         eventRepository.save(event);
     }
 
-    public List<Event> filterEventsByDetail(String key, String value) {
+    public List<Event> filterEventsByDetail(String key, String value, String status) {
 
         if (key == null || key.isBlank() || value == null) {
             throw new ResponseStatusException(
@@ -58,6 +58,10 @@ public class EventService {
             );
         }
 
-        return eventRepository.findByDetailAttribute(key, value);
+        if (status == null || status.isBlank()) {
+            return eventRepository.findByDetailAttribute(key, value);
+        }
+
+        return eventRepository.findByDetailAttributeAndStatus(key, value, status);
     }
 }
