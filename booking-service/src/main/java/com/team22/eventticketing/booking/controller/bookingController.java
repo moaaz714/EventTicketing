@@ -7,9 +7,6 @@ import com.team22.eventticketing.booking.model.BookingStatus;
 import com.team22.eventticketing.booking.service.BookingService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,14 +33,5 @@ public class bookingController {
 
         List<Booking> results = bookingService.searchBookings(status, startDate, endDate);
         return ResponseEntity.ok(results);
-    }
-
-    @PutMapping("/{bookingId}/confirm")
-    public ResponseEntity<Booking> confirmBooking(
-            @PathVariable Long bookingId,
-            @RequestParam Long eventId) {
-
-        Booking confirmedBooking = bookingService.confirmBooking(bookingId, eventId);
-        return ResponseEntity.ok(confirmedBooking);
     }
 }
