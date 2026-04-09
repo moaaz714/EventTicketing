@@ -16,6 +16,14 @@ import java.util.Map;
 @Repository
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
+        // get latest ticket
+        Optional<Ticket> findTopByBookingIdOrderByIssuedAtDesc(Long bookingId);
+        //Check if booking exists (cross-table query)
+        @Query(value = "SELECT COUNT(*) > 0 FROM bookings WHERE id = :bookingId", nativeQuery = true)
+        boolean existsBookingById(@Param("bookingId") Long bookingId);
+
+
+
         Optional<Ticket> findById(Long id);
 
         /**
