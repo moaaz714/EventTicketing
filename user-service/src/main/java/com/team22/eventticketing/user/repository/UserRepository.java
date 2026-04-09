@@ -71,4 +71,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Transactional
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.favoriteVenues WHERE u.id = :id")
     Optional<User> findByIdWithVenues(@Param("id") Long id);
+
+    // S1-F9
+    @Transactional
+    @Query(value = """
+        SELECT u.* FROM users u
+        WHERE u.preferences @> CAST(:categoryJson AS jsonb)
+        AND (
+            (SELECT COUNT(b.id)
+            FROM bookings b
+            WHERE b.user_id = u.id
+            AND b.status = 'COMPLETED'
+          ) >= :minBookings)
+        """, nativeQuery = true)
+    List<User> findByFavoriteCategoryAndMinBookings(
+            @Param("categoryJson") String categoryJson,
+            @Param("minBookings") int minBookings);
 }
