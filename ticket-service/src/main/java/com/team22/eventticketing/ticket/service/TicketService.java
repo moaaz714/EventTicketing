@@ -4,6 +4,8 @@ import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.model.Ticket;
+import com.team22.eventticketing.ticket.model.TicketStatus;
+
 
 
 
@@ -25,7 +27,7 @@ public class TicketService {
         this.ticketRepository = ticketRepository;
     }
 
-
+    //Get ticket S4-F1
     public Ticket getLatestTicketByBooking(Long bookingId) {
 
         //Check if booking exists using SQL
@@ -41,6 +43,29 @@ public class TicketService {
                 .orElseThrow(() ->
                         new ResponseStatusException(HttpStatus.NOT_FOUND,
                                 "No tickets found for this booking"));
+    }
+
+    //Create ticket S4-F2
+    public Ticket issueTicket(Long bookingId,
+                              String attendeeName,
+                              String ticketCode,
+                              Map<String, Object> metadata) {
+
+        boolean exists = ticketRepository.existsBookingById(bookingId);
+
+        if (!exists) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
+        }
+
+        Ticket ticket = new Ticket();
+        ticket.setBookingId(bookingId);
+        ticket.setAttendeeName(attendeeName);
+        ticket.setTicketCode(ticketCode);
+        ticket.setMetadata(metadata);
+        ticket.setIssuedAt(LocalDateTime.now());
+        ticket.setStatus(TicketStatus.VALID);
+
+        return ticketRepository.save(ticket);
     }
 
 
