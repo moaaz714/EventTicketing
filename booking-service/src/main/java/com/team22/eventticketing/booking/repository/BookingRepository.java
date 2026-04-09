@@ -18,4 +18,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     // Method 2: When status is NOT provided (fallback) [cite: 574, 580]
     List<Booking> findByBookingDateBetweenOrderByBookingDateDesc(
             LocalDateTime startDate, LocalDateTime endDate);
+
+    // Add this to your existing BookingRepository interface
+    @org.springframework.data.jpa.repository.Query(value = "SELECT status FROM events WHERE id = :eventId", nativeQuery = true)
+    String findEventStatusById(@org.springframework.data.repository.query.Param("eventId") Long eventId);
 }
