@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Map;
 
 @Repository
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
@@ -29,7 +28,7 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     Optional<Ticket> findByTicketCode(String ticketCode);
 
     /**
-     * [S4-F7] Purge Expired Tickets.
+     * [S4-F7] Purge Expired Tickets[cite: 761, 765].
      * Deletes tickets older than a specific date if they are EXPIRED or CANCELLED.
      */
     @Modifying
@@ -38,19 +37,8 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             "AND status IN ('EXPIRED', 'CANCELLED')", nativeQuery = true)
     int purgeExpiredAndCancelledTickets(@Param("cutoff") LocalDateTime cutoff);
 
-    // [S4-F8] Update Ticket Status on Check-In.
-    @Query(value = "SELECT " +
-            "COUNT(*) as total, " +
-            "COUNT(*) FILTER (WHERE t.status = 'USED') as used, " +
-            "COUNT(*) FILTER (WHERE t.status = 'VALID') as _valid, " +
-            "MAX(t.issued_at) FILTER (WHERE t.status = 'USED') as last_checkin " +
-            "FROM tickets t " +
-            "JOIN bookings b ON t.booking_id = b.id " +
-            "WHERE b.event_id = :eventId", nativeQuery = true)
-    Map<String, Object> getAttendanceSummaryData(@Param("eventId") Long eventId);
-
     /**
-     * [S4-F9] Find Unused Tickets for Upcoming Events.
+     * [S4-F9] Find Unused Tickets for Upcoming Events[cite: 782, 786].
      * Demonstrates cross-service access by joining tickets with the bookings
      * and events tables using native SQL[cite: 337, 338, 340].
      */
