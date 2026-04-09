@@ -1,14 +1,63 @@
 package com.team22.eventticketing.sales.controller;
 
-
+import com.team22.eventticketing.sales.entity.TicketSale;
+import com.team22.eventticketing.sales.service.TicketSaleService;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
-@RequestMapping("/api/sales") // Requirement 4.a [cite: 98]
+@RequestMapping("/api/sales")
 public class salesController {
 
+    private final TicketSaleService ticketSaleService;
+
+    public salesController(TicketSaleService ticketSaleService) {
+        this.ticketSaleService = ticketSaleService;
+    }
+
     @GetMapping("/health")
-    public String statusCheck(){
+    public String statusCheck() {
         return "OK";
+    }
+
+    // ─── CRUD ─────────────────────────────────────────────────────────────────────
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public TicketSale create(@RequestBody TicketSale ticketSale) {
+        return ticketSaleService.create(ticketSale);
+    }
+
+    @GetMapping("/{id}")
+    public TicketSale getById(@PathVariable Long id) {
+        return ticketSaleService.findById(id);
+    }
+
+    @GetMapping
+    public List<TicketSale> getAll() {
+        return ticketSaleService.findAll();
+    }
+
+    @PutMapping("/{id}")
+    public TicketSale update(@PathVariable Long id, @RequestBody TicketSale ticketSale) {
+        return ticketSaleService.update(id, ticketSale);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long id) {
+        ticketSaleService.delete(id);
+    }
+
+    // ─── [S5-F1] Search by optional status and date range ────────────────────────
+
+    @GetMapping("/search")
+    public List<TicketSale> search(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        return ticketSaleService.search(status, startDate, endDate);
     }
 }
