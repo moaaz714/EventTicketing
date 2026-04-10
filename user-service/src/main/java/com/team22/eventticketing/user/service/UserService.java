@@ -1,5 +1,6 @@
 package com.team22.eventticketing.user.service;
 
+import com.team22.eventticketing.user.dto.UserBookingSummaryDTO;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -71,6 +72,30 @@ public class UserService {
                     HttpStatus.BAD_REQUEST, "Query parameter 'value' must not be blank");
         }
         return userRepository.findByPreference(key, value);
+    }
+
+    // ─── [S1-F3] Get User Booking Summary (DTO) ──────────────────────────────────
+
+    public UserBookingSummaryDTO getBookingSummary(Long id) {
+        User user = findById(id); // throws 404 if not found
+
+        Object[] row = userRepository.getBookingSummaryByUserId(id).get(0);
+
+        long totalBookings        = ((Number) row[0]).longValue();
+        long completedBookings    = ((Number) row[1]).longValue();
+        long cancelledBookings    = ((Number) row[2]).longValue();
+        double totalSpent         = ((Number) row[3]).doubleValue();
+        double averageBookingAmount = ((Number) row[4]).doubleValue();
+
+        return new UserBookingSummaryDTO(
+                user.getId(),
+                user.getName(),
+                totalBookings,
+                completedBookings,
+                cancelledBookings,
+                totalSpent,
+                averageBookingAmount
+        );
     }
 
     // ─── Delete ───────────────────────────────────────────────────────────────────
