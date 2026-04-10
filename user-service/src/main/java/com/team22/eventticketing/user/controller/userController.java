@@ -2,6 +2,7 @@ package com.team22.eventticketing.user.controller;
 
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
+import com.team22.eventticketing.user.service.FavoriteVenueService;
 import com.team22.eventticketing.user.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,9 +16,11 @@ import java.util.Map;
 public class userController {
 
     private final UserService userService;
+    private final FavoriteVenueService favoriteVenueService;
 
-    public userController(UserService userService) {
+    public userController(UserService userService, FavoriteVenueService favoriteVenueService) {
         this.userService = userService;
+        this.favoriteVenueService = favoriteVenueService;
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────
@@ -67,5 +70,14 @@ public class userController {
     @PutMapping("/{id}/deactivate")
     public ResponseEntity<User> deactivate(@PathVariable Long id) {
         return ResponseEntity.ok(userService.deactivateUser(id));
+    }
+
+    // ─── [S1-F7] Set Default Venue ───────────────────────────────────────────────
+
+    @PutMapping("/{userId}/venues/{venueId}/default")
+    public ResponseEntity<User> setDefaultVenue(
+            @PathVariable Long userId,
+            @PathVariable Long venueId) {
+        return ResponseEntity.ok(favoriteVenueService.setDefault(userId, venueId));
     }
 }
