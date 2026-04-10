@@ -1,4 +1,6 @@
 package com.team22.eventticketing.event.controller;
+import com.team22.eventticketing.event.dto.TopEventDTO;
+
 
 import com.team22.eventticketing.event.dto.EventRatingRequestDTO;
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
@@ -65,5 +67,9 @@ public class eventController {
     @GetMapping("/sessions/unverified")
     public ResponseEntity<java.util.List<com.team22.eventticketing.event.dto.EventSessionAlertDTO>> getUnverifiedSessions() {
         return ResponseEntity.ok(eventService.getUnverifiedSessionsReport());
+    }
+    @GetMapping("/reports/top-rated")
+    public ResponseEntity<List<TopEventDTO>> getTopRatedEvents(@RequestParam int limit) {
+        return ResponseEntity.ok(eventService.getTopRatedEvents(limit));
     }
 }

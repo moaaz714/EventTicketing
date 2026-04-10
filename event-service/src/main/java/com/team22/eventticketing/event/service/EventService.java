@@ -1,4 +1,5 @@
 package com.team22.eventticketing.event.service;
+import com.team22.eventticketing.event.dto.TopEventDTO;
 
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
 import com.team22.eventticketing.event.model.Event;
@@ -11,7 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.List;
+
 
 @Service
 public class EventService {
@@ -157,5 +160,27 @@ public class EventService {
         }
 
         return eventRepository.findByDetailAttributeAndStatus(key, value, status);
+    }
+    public List<TopEventDTO> getTopRatedEvents(int limit) {
+        if (limit <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Limit must be greater than 0"
+            );
+        }
+
+        List<Object[]> rows = eventRepository.findTopRatedEvents(limit);
+        List<TopEventDTO> result = new ArrayList<>();
+
+        for (Object[] row : rows) {
+            Long eventId = ((Number) row[0]).longValue();
+            String name = (String) row[1];
+            Double rating = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
+            Long totalBookings = row[3] == null ? 0L : ((Number) row[3]).longValue();
+
+            result.add(new TopEventDTO(eventId, name, rating, totalBookings));
+        }
+
+        return result;
     }
 }
