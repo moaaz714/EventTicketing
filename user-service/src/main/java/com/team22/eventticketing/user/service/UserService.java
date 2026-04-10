@@ -62,4 +62,19 @@ public class UserService {
         }
         userRepository.deleteById(id);
     }
+
+    // ─── Deactivate ─────────────────────────────────────────────────────────────
+
+    @org.springframework.transaction.annotation.Transactional
+    public User deactivateUser(Long id) {
+        User user = findById(id);
+
+        long activeBookings = userRepository.countActiveBookingsByUserId(id);
+        if (activeBookings > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User has active bookings");
+        }
+
+        user.setStatus(com.team22.eventticketing.user.entity.UserStatus.DEACTIVATED);
+        return userRepository.save(user);
+    }
 }
