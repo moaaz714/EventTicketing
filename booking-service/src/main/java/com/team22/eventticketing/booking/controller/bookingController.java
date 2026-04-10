@@ -8,7 +8,8 @@ import org.springframework.web.bind.annotation.*;
 import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
 import java.time.LocalDateTime;
 import java.util.List;
-
+import com.team22.eventticketing.booking.dto.BookingItemRequest;
+import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
 @RestController
 @RequestMapping("/api/bookings")
 public class bookingController {
@@ -87,5 +88,22 @@ public class bookingController {
         LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
         LocalDateTime end   = LocalDateTime.parse(endDate + "T23:59:59");
         return ResponseEntity.ok(bookingService.getAnalytics(start, end));
+    }
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
+        bookingService.cancelBooking(id);
+        return ResponseEntity.ok().build();
+    }
+    @PostMapping("/{bookingId}/items")
+    public ResponseEntity<Booking> addItems(
+            @PathVariable Long bookingId,
+            @RequestBody List<BookingItemRequest> items) {
+        return ResponseEntity.ok(bookingService.addItemsToBooking(bookingId, items));
+    }
+
+    @GetMapping("/{bookingId}/details")
+    public ResponseEntity<BookingDetailsDTO> getBookingDetails(
+            @PathVariable Long bookingId) {
+        return ResponseEntity.ok(bookingService.getBookingDetails(bookingId));
     }
 }
