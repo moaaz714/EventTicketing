@@ -13,11 +13,11 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
-public class UserController {
+public class userController {
 
     private final UserService userService;
 
-    public UserController(UserService userService) {
+    public userController(UserService userService) {
         this.userService = userService;
     }
 
