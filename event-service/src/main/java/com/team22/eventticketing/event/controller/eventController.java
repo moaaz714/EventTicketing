@@ -5,9 +5,13 @@ import com.team22.eventticketing.event.dto.TopEventDTO;
 import com.team22.eventticketing.event.dto.EventRatingRequestDTO;
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
 import com.team22.eventticketing.event.model.Event;
+import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.service.EventService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 import java.util.List;
 
@@ -61,6 +65,16 @@ public class eventController {
 
         Event updatedEvent = eventService.verifyEventSession(eventId, sessionId, request.verifiedBy());
         return ResponseEntity.ok(updatedEvent);
+    }
+    @GetMapping("/search")
+    public ResponseEntity<List<Event>> searchEvents(
+            @RequestParam(required = false) EventCategory category,
+            @RequestParam(required = false) LocalDateTime startDate,
+            @RequestParam(required = false) LocalDateTime endDate) {
+
+        return ResponseEntity.ok(
+                eventService.searchEvents(category, startDate, endDate)
+        );
     }
 
     // [S2-F9] Get Events with Unverified Sessions Report (Your Feature)

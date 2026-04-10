@@ -1,8 +1,9 @@
 package com.team22.eventticketing.event.service;
-import com.team22.eventticketing.event.dto.TopEventDTO;
 
+import com.team22.eventticketing.event.dto.TopEventDTO;
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
 import com.team22.eventticketing.event.model.Event;
+import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.model.EventStatus;
 import com.team22.eventticketing.event.model.EventSession;
 import com.team22.eventticketing.event.repository.EventRepository;
@@ -12,9 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-
 
 @Service
 public class EventService {
@@ -27,7 +28,52 @@ public class EventService {
         this.eventSessionRepository = eventSessionRepository;
     }
 
-    // [S2-F4] Update Event Status (Teammate's Feature)
+    // [S2-F1] Search Events by Category and Date Range
+    public List<Event> searchEvents(EventCategory category, LocalDateTime startDate, LocalDateTime endDate) {
+        // Case 1: category + both dates
+        if (category != null && startDate != null && endDate != null) {
+            return eventRepository.findByCategoryAndEventDateBetweenOrderByEventDateAsc(category, startDate, endDate);
+        }
+        // Case 2: category + only startDate
+        if (category != null && startDate != null) {
+            return eventRepository.findByCategoryAndEventDateAfterOrderByEventDateAsc(category, startDate);
+        }
+        // Case 3: category + only endDate
+        if (category != null && endDate != null) {
+            return eventRepository.findByCategoryAndEventDateBeforeOrderByEventDateAsc(category, endDate);
+        }
+        // Case 4: only category
+        if (category != null) {
+            return eventRepository.findByCategoryOrderByEventDateAsc(category);
+        }
+        // Case 5: only date range
+        if (startDate != null && endDate != null) {
+            return eventRepository.findByEventDateBetweenOrderByEventDateAsc(startDate, endDate);
+        }
+        // Case 6: only startDate
+        if (startDate != null) {
+            return eventRepository.findByEventDateAfterOrderByEventDateAsc(startDate);
+        }
+        // Case 7: only endDate
+        if (endDate != null) {
+            return eventRepository.findByEventDateBeforeOrderByEventDateAsc(endDate);
+        }
+        // Case 8: no filters
+        return eventRepository.findAllByOrderByEventDateAsc();
+    }
+
+    // [S2-F2 & S2-F5] Filter Events by Detail
+    public List<Event> filterEventsByDetail(String key, String value, String status) {
+        if (key == null || key.isBlank() || value == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Key and value are required");
+        }
+        if (status == null || status.isBlank()) {
+            return eventRepository.findByDetailAttribute(key, value);
+        }
+        return eventRepository.findByDetailAttributeAndStatus(key, value, status);
+    }
+
+    // [S2-F4] Update Event Status
     @Transactional
     public void updateEventStatus(Long eventId, UpdateEventStatusRequest request) {
         if (request == null || request.getStatus() == null) {
@@ -47,7 +93,28 @@ public class EventService {
         eventRepository.save(event);
     }
 
-    // [S2-F7] Rate an Event (Your Feature)
+    // [S2-F6] Top Rated Events Report
+    public List<TopEventDTO> getTopRatedEvents(int limit) {
+        if (limit <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Limit must be greater than 0");
+        }
+
+        List<Object[]> rows = eventRepository.findTopRatedEvents(limit);
+        List<TopEventDTO> result = new ArrayList<>();
+
+        for (Object[] row : rows) {
+            Long eventId = ((Number) row[0]).longValue();
+            String name = (String) row[1];
+            Double rating = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
+            Long totalBookings = row[3] == null ? 0L : ((Number) row[3]).longValue();
+
+            result.add(new TopEventDTO(eventId, name, rating, totalBookings));
+        }
+
+        return result;
+    }
+
+    // [S2-F7] Rate an Event
     @Transactional
     public void rateEvent(Long eventId, Long bookingId, Double newRating) {
         // 1. Check rating bounds (400)
@@ -82,7 +149,7 @@ public class EventService {
         eventRepository.save(event);
     }
 
-    // [S2-F8] Verify Event Session (Your Feature)
+    // [S2-F8] Verify Event Session
     @Transactional
     public Event verifyEventSession(Long eventId, Long sessionId, Long verifiedByUserId) {
 
@@ -124,7 +191,7 @@ public class EventService {
         return event;
     }
 
-    // [S2-F9] Get Events with Unverified Sessions (Your Feature)
+    // [S2-F9] Get Events with Unverified Sessions
     public java.util.List<com.team22.eventticketing.event.dto.EventSessionAlertDTO> getUnverifiedSessionsReport() {
 
         java.util.List<Event> events = eventRepository.findEventsWithUnverifiedSessions();
@@ -144,43 +211,5 @@ public class EventService {
                     unverifiedSessions.size()
             );
         }).toList();
-    }
-
-    public List<Event> filterEventsByDetail(String key, String value, String status) {
-
-        if (key == null || key.isBlank() || value == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Key and value are required"
-            );
-        }
-
-        if (status == null || status.isBlank()) {
-            return eventRepository.findByDetailAttribute(key, value);
-        }
-
-        return eventRepository.findByDetailAttributeAndStatus(key, value, status);
-    }
-    public List<TopEventDTO> getTopRatedEvents(int limit) {
-        if (limit <= 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Limit must be greater than 0"
-            );
-        }
-
-        List<Object[]> rows = eventRepository.findTopRatedEvents(limit);
-        List<TopEventDTO> result = new ArrayList<>();
-
-        for (Object[] row : rows) {
-            Long eventId = ((Number) row[0]).longValue();
-            String name = (String) row[1];
-            Double rating = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
-            Long totalBookings = row[3] == null ? 0L : ((Number) row[3]).longValue();
-
-            result.add(new TopEventDTO(eventId, name, rating, totalBookings));
-        }
-
-        return result;
     }
 }
