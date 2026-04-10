@@ -6,6 +6,7 @@ import com.team22.eventticketing.booking.model.BookingStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -71,5 +72,36 @@ public class BookingService {
                     HttpStatus.NOT_FOUND, "Booking not found with id: " + id);
         }
         bookingRepository.deleteById(id);
+    }
+    // ─── S3-F4: Complete Booking ──────────────────────────────────────────────────
+    @Transactional
+    public Booking completeBooking(Long id) {
+        Booking booking = bookingRepository.findByIdWithItems(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Booking not found with id: " + id));
+
+        if (booking.getStatus() != BookingStatus.CHECKED_IN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only CHECKED_IN bookings can be completed");
+        }
+
+        booking.setStatus(BookingStatus.COMPLETED);
+
+        if (booking.getTotalAmount() == null && booking.getBookingItems() != null) {
+            double total = booking.getBookingItems().stream()
+                    .mapToDouble(item -> item.getQuantity() * item.getUnitPrice())
+                    .sum();
+            booking.setTotalAmount(total);
+        }
+
+        Booking saved = bookingRepository.save(booking);
+
+        bookingRepository.insertTicketSale(
+                saved.getId(),
+                saved.getUserId(),
+                saved.getTotalAmount() != null ? saved.getTotalAmount() : 0.0
+        );
+
+        return saved;
     }
 }

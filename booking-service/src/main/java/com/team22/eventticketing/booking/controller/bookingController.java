@@ -66,4 +66,9 @@ public class bookingController {
         bookingService.delete(id);
         return ResponseEntity.noContent().build();
     }
+    // ─── S3-F4: Complete Booking ──────────────────────────────────────────────────
+    @PutMapping("/{id}/complete")
+    public ResponseEntity<Booking> completeBooking(@PathVariable Long id) {
+        return ResponseEntity.ok(bookingService.completeBooking(id));
+    }
 }
