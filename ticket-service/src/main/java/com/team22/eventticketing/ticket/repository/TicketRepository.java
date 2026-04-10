@@ -28,6 +28,11 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
          */
         Optional<Ticket> findByTicketCode(String ticketCode);
 
+        boolean existsByTicketCode(String ticketCode);
+
+        @Query(value = "SELECT COUNT(*) > 0 FROM bookings WHERE id = :bookingId", nativeQuery = true)
+        boolean bookingExistsById(@Param("bookingId") Long bookingId);
+
         /**
          * [S4-F7] Purge Expired Tickets.
          * Deletes tickets older than a specific date if they are EXPIRED or CANCELLED.
