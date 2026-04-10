@@ -1,6 +1,7 @@
 package com.team22.eventticketing.event.controller;
 
 import com.team22.eventticketing.event.dto.EventRatingRequestDTO;
+import com.team22.eventticketing.event.dto.EventRevenueDTO;
 import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.service.EventService;
@@ -65,6 +66,21 @@ public class eventController {
 
     }
 
+
+
+
+
+    @GetMapping("/{id}/revenue")
+    public ResponseEntity<EventRevenueDTO> getRevenue(
+            @PathVariable Long id,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+
+        LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
+        LocalDateTime end   = LocalDateTime.parse(endDate + "T23:59:59");
+
+        return ResponseEntity.ok(eventService.getEventRevenue(id, start, end));
+    }
     @GetMapping("/test")
     public String test() {
         return "CONTROLLER OK";

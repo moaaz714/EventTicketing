@@ -63,4 +63,6 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     List<Event> findByEventDateAfterOrderByEventDateAsc(LocalDateTime startDate);
 
     List<Event> findByEventDateBeforeOrderByEventDateAsc(LocalDateTime endDate);
+
+
 }
