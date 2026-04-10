@@ -2,6 +2,7 @@ package com.team22.eventticketing.booking.controller;
 
 import com.team22.eventticketing.booking.model.Booking;
 import com.team22.eventticketing.booking.service.BookingService;
+import com.team22.eventticketing.booking.repository.BookingRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,10 +14,13 @@ import java.util.List;
 @RequestMapping("/api/bookings")
 public class bookingController {
 
+    private final BookingRepository bookingRepository;
+
     private final BookingService bookingService;
 
-    public bookingController(BookingService bookingService) {
+    public bookingController(BookingService bookingService, BookingRepository bookingRepository) {
         this.bookingService = bookingService;
+        this.bookingRepository= bookingRepository;
     }
 
     // ─── Health ───────────────────────────────────────────────────────────────────
@@ -87,5 +91,19 @@ public class bookingController {
         LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
         LocalDateTime end   = LocalDateTime.parse(endDate + "T23:59:59");
         return ResponseEntity.ok(bookingService.getAnalytics(start, end));
+    }
+
+    @GetMapping("/event/{eventId}/revenue")
+    public ResponseEntity<?> getEventRevenue(
+            @PathVariable Long eventId,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+
+        LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
+        LocalDateTime end   = LocalDateTime.parse(endDate + "T23:59:59");
+
+        Object[] result = bookingRepository.getEventRevenueStats(eventId, start, end);
+
+        return ResponseEntity.ok(result);
     }
 }

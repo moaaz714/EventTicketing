@@ -1,5 +1,6 @@
 package com.team22.eventticketing.event.service;
 
+import com.team22.eventticketing.event.dto.EventRevenueDTO;
 import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.model.EventSession;
@@ -9,21 +10,28 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.team22.eventticketing.booking.model.Booking;
+import com.team22.eventticketing.booking.model.BookingStatus;
+import com.team22.eventticketing.booking.repository.BookingRepository;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+
 @Service
 public class EventService {
 
-    private final EventRepository eventRepository;
+    private final RestTemplate restTemplate = new RestTemplate();
+    private  final EventRepository eventRepository;
     private final EventSessionRepository eventSessionRepository;
 
     public EventService(EventRepository eventRepository, EventSessionRepository eventSessionRepository) {
         this.eventRepository = eventRepository;
         this.eventSessionRepository = eventSessionRepository;
+
     }
     public List<Event> searchEvents(EventCategory category,
                                     LocalDateTime startDate,
@@ -89,6 +97,37 @@ public class EventService {
         event.setDetails(existingDetails);
 
         eventRepository.save(event);
+    }
+
+
+    public EventRevenueDTO getEventRevenue(Long eventId,
+                                           LocalDateTime start,
+                                           LocalDateTime end) {
+
+        // 1. Check event exists
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Event not found"));
+
+        // 2. Call booking-service
+        String url = "http://localhost:8081/api/bookings/event/" + eventId +
+                "/revenue?startDate=" + start.toLocalDate() +
+                "&endDate=" + end.toLocalDate();
+
+        Map response = restTemplate.getForObject(url, Map.class);
+
+        long totalBookings = ((Number) response.get("totalBookings")).longValue();
+        double totalRevenue = ((Number) response.get("totalRevenue")).doubleValue();
+
+        double avg = totalBookings == 0 ? 0 : totalRevenue / totalBookings;
+
+        return new EventRevenueDTO(
+                eventId,
+                event.getName(),
+                totalBookings,
+                totalRevenue,
+                avg
+        );
     }
 
 

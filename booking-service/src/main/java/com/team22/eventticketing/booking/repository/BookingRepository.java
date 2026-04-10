@@ -17,7 +17,6 @@ import java.util.List;
 public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     List<Booking> findByUserId(Long userId);
-
     long countByUserIdAndStatus(Long userId, BookingStatus status);
     // S3-F4: load booking with items for calculation
     @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.bookingItems WHERE b.id = :id")
@@ -69,4 +68,16 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     """, nativeQuery = true)
     double sumRevenueInRange(@Param("start") LocalDateTime start,
                              @Param("end") LocalDateTime end);
+    @Query(value = """
+SELECT 
+    COUNT(*) as totalBookings,
+    COALESCE(SUM(total_amount), 0) as totalRevenue
+FROM bookings
+WHERE event_id = :eventId
+AND status = 'COMPLETED'
+AND booking_date BETWEEN :start AND :end
+""", nativeQuery = true)
+    Object[] getEventRevenueStats(Long eventId,
+                                  LocalDateTime start,
+                                  LocalDateTime end);
 }
