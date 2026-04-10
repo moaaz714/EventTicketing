@@ -88,4 +88,9 @@ public class bookingController {
         LocalDateTime end   = LocalDateTime.parse(endDate + "T23:59:59");
         return ResponseEntity.ok(bookingService.getAnalytics(start, end));
     }
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
+        bookingService.cancelBooking(id);
+        return ResponseEntity.ok().build();
+    }
 }
