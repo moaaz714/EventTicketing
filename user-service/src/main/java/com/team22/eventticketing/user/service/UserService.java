@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class UserService {
@@ -52,6 +53,14 @@ public class UserService {
         if (patch.getPreferences() != null) existing.setPreferences(patch.getPreferences());
 
         return userRepository.save(existing);
+    }
+
+    // ─── Update Preferences ───────────────────────────────────────────────────────
+
+    public User updatePreferences(Long id, Map<String, Object> incoming) {
+        User user = findById(id);
+        user.getPreferences().putAll(incoming);
+        return userRepository.save(user);
     }
 
     // ─── Search ───────────────────────────────────────────────────────────────────
