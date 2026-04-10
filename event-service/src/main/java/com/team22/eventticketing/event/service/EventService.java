@@ -1,6 +1,7 @@
 package com.team22.eventticketing.event.service;
 
 import com.team22.eventticketing.event.model.Event;
+import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.model.EventSession;
 import com.team22.eventticketing.event.repository.EventRepository;
 import com.team22.eventticketing.event.repository.EventSessionRepository;
@@ -8,6 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class EventService {
@@ -19,7 +23,52 @@ public class EventService {
         this.eventRepository = eventRepository;
         this.eventSessionRepository = eventSessionRepository;
     }
+    public List<Event> searchEvents(EventCategory category,
+                                    LocalDateTime startDate,
+                                    LocalDateTime endDate) {
 
+        // Case 1: category + both dates
+        if (category != null && startDate != null && endDate != null) {
+            return eventRepository.findByCategoryAndEventDateBetweenOrderByEventDateAsc(
+                    category, startDate, endDate);
+        }
+
+        // Case 2: category + only startDate
+        if (category != null && startDate != null) {
+            return eventRepository.findByCategoryAndEventDateAfterOrderByEventDateAsc(
+                    category, startDate);
+        }
+
+        // Case 3: category + only endDate
+        if (category != null && endDate != null) {
+            return eventRepository.findByCategoryAndEventDateBeforeOrderByEventDateAsc(
+                    category, endDate);
+        }
+
+        // Case 4: only category
+        if (category != null) {
+            return eventRepository.findByCategoryOrderByEventDateAsc(category);
+        }
+
+        // Case 5: only date range
+        if (startDate != null && endDate != null) {
+            return eventRepository.findByEventDateBetweenOrderByEventDateAsc(
+                    startDate, endDate);
+        }
+
+        // Case 6: only startDate
+        if (startDate != null) {
+            return eventRepository.findByEventDateAfterOrderByEventDateAsc(startDate);
+        }
+
+        // Case 7: only endDate
+        if (endDate != null) {
+            return eventRepository.findByEventDateBeforeOrderByEventDateAsc(endDate);
+        }
+
+        // Case 8: no filters
+        return eventRepository.findAllByOrderByEventDateAsc();
+    }
 
 
     @Transactional
