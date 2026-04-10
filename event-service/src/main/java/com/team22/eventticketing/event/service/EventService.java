@@ -114,12 +114,14 @@ public class EventService {
                 "/revenue?startDate=" + start.toLocalDate() +
                 "&endDate=" + end.toLocalDate();
 
-        Map response = restTemplate.getForObject(url, Map.class);
+        // 🔥 FIX HERE (array of arrays)
+        Object[][] response = restTemplate.getForObject(url, Object[][].class);
 
-        long totalBookings = ((Number) response.get("totalBookings")).longValue();
-        double totalRevenue = ((Number) response.get("totalRevenue")).doubleValue();
+        Object[] stats = response[0];
 
-        double avg = totalBookings == 0 ? 0 : totalRevenue / totalBookings;
+        long totalBookings = ((Number) stats[0]).longValue();
+        double totalRevenue = ((Number) stats[1]).doubleValue();
+        double avg = ((Number) stats[2]).doubleValue(); // already computed in DB
 
         return new EventRevenueDTO(
                 eventId,
