@@ -1,34 +1,41 @@
 package com.team22.eventticketing.booking.service;
 
+import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
+import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
+import com.team22.eventticketing.booking.dto.BookingItemDTO;
+import com.team22.eventticketing.booking.dto.BookingItemRequest;
 import com.team22.eventticketing.booking.model.Booking;
-import com.team22.eventticketing.booking.repository.BookingRepository;
+import com.team22.eventticketing.booking.model.BookingItem;
+import com.team22.eventticketing.booking.model.BookingItemStatus;
 import com.team22.eventticketing.booking.model.BookingStatus;
+import com.team22.eventticketing.booking.repository.BookingItemRepository;
+import com.team22.eventticketing.booking.repository.BookingRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
-import java.time.LocalDateTime;
-import org.springframework.transaction.annotation.Transactional;
-import com.team22.eventticketing.booking.dto.BookingItemRequest;
-import com.team22.eventticketing.booking.model.BookingItem;
-import com.team22.eventticketing.booking.model.BookingItemStatus;
-import com.team22.eventticketing.booking.repository.BookingItemRepository;
-import java.util.List;
-import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
-import com.team22.eventticketing.booking.dto.BookingItemDTO;
 import java.util.stream.Collectors;
+
 @Service
 public class BookingService {
 
     private final BookingRepository bookingRepository;
     private final BookingItemRepository bookingItemRepository;
-    public BookingService(BookingRepository bookingRepository,BookingItemRepository bookingItemRepository) {
+
+    public BookingService(BookingRepository bookingRepository, BookingItemRepository bookingItemRepository) {
         this.bookingRepository = bookingRepository;
         this.bookingItemRepository = bookingItemRepository;
+    }
+
+    public List<Booking> searchBookings(BookingStatus status, LocalDateTime startDate, LocalDateTime endDate) {
+        if (status != null) {
+            return bookingRepository.findByStatusAndBookingDateBetweenOrderByBookingDateDesc(status, startDate, endDate);
+        } else {
+            return bookingRepository.findByBookingDateBetweenOrderByBookingDateDesc(startDate, endDate);
+        }
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────
@@ -84,7 +91,9 @@ public class BookingService {
         }
         bookingRepository.deleteById(id);
     }
+
     // ─── S3-F4: Complete Booking ──────────────────────────────────────────────────
+
     @Transactional
     public Booking completeBooking(Long id) {
         Booking booking = bookingRepository.findByIdWithItems(id)
@@ -115,7 +124,9 @@ public class BookingService {
 
         return saved;
     }
+
     // ─── S3-F5: Filter Bookings by Metadata ──────────────────────────────────────
+
     public List<Booking> filterByMetadata(String key, String value) {
         if (key == null || key.isBlank() || value == null || value.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -123,7 +134,9 @@ public class BookingService {
         }
         return bookingRepository.findByMetadataField(key, value);
     }
+
     // ─── S3-F6: Booking Analytics ─────────────────────────────────────────────────
+
     public BookingAnalyticsDTO getAnalytics(LocalDateTime start, LocalDateTime end) {
         long total     = bookingRepository.countInRange(start, end);
         long completed = bookingRepository.countCompletedInRange(start, end);
@@ -134,6 +147,7 @@ public class BookingService {
 
         return new BookingAnalyticsDTO(total, completed, cancelled, revenue, avg, rate);
     }
+
     @Transactional
     public void cancelBooking(Long id) {
         Booking booking = bookingRepository.findById(id)
@@ -149,8 +163,6 @@ public class BookingService {
         booking.setStatus(BookingStatus.CANCELLED);
         bookingRepository.save(booking);
         bookingRepository.cancelValidTicketsForBooking(id);
-
-
     }
 
     @Transactional
@@ -228,5 +240,35 @@ public class BookingService {
                 itemDTOs.size(),
                 confirmedItems
         );
+    }
+
+    @Transactional
+    public Booking confirmBooking(Long bookingId, Long eventId) {
+        // 1. Find booking -> throw 404 if not found
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+
+        // 3. Verify event exists and is UPCOMING -> throw 404 or 400
+        String eventStatus = bookingRepository.findEventStatusById(eventId);
+        if (eventStatus == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event with ID " + eventId + " not found");
+        }
+
+        // 2. Validate booking status is PENDING -> throw 400 if not
+        if (booking.getStatus() != BookingStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking is not PENDING. Current status: " + booking.getStatus());
+        }
+
+        if (!"UPCOMING".equals(eventStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event is not UPCOMING. Current status: " + eventStatus);
+        }
+
+        // 4. Update booking fields
+        booking.setEventId(eventId);
+        booking.setStatus(BookingStatus.CONFIRMED);
+        booking.setConfirmedAt(LocalDateTime.now());
+
+        // 5. Save and return
+        return bookingRepository.save(booking);
     }
 }
