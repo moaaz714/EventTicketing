@@ -130,37 +130,43 @@ public class TicketSaleService {
     @Transactional
     public TicketSale processBookingPayment(Long bookingId, PaymentMethod method, String cardLastFour) {
 
-        // 1. Find sale by booking
+        // 1. Verify booking exists — 404 if not found
+        String bookingStatus = ticketSaleRepository.findBookingStatus(bookingId);
+        if (bookingStatus == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "Booking not found: " + bookingId);
+        }
+
+        // 2. Verify booking is COMPLETED — 400 if different status
+        if (!"COMPLETED".equals(bookingStatus)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Booking is not COMPLETED");
+        }
+
+        // 3. Find the ticket sale for this booking
         TicketSale sale = ticketSaleRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "TicketSale not found for booking: " + bookingId));
 
-        // 2. Check if already COMPLETED
+        // 4. Check if already paid — 400 if already COMPLETED
         if (sale.getStatus() == SaleStatus.COMPLETED) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "already paid");
         }
 
-        // 3. Validate status (must be PENDING or allowed state)
-        if (sale.getStatus() != SaleStatus.PENDING) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Invalid booking status");
-        }
-
-        // 4. Update payment info
+        // 5. Update payment info
         sale.setMethod(method);
         sale.setStatus(SaleStatus.COMPLETED);
 
-        // 5. Populate transaction details (JSONB)
+        // 6. Populate transaction details (JSONB)
         if (sale.getTransactionDetails() == null) {
             sale.setTransactionDetails(new java.util.HashMap<>());
         }
-
         sale.getTransactionDetails().put("paymentMethod", method.toString());
         sale.getTransactionDetails().put("cardLastFour", cardLastFour);
         sale.getTransactionDetails().put("paidAt", java.time.LocalDateTime.now().toString());
 
-        // 6. Save
+        // 7. Save
         return ticketSaleRepository.save(sale);
     }
 }
