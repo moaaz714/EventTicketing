@@ -16,12 +16,12 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/bookings") // Requirement 4.a
-public class BookingController {
+public class bookingController {
 
     private final BookingService bookingService;
 
     // Constructor for dependency injection
-    public BookingController(BookingService bookingService) {
+    public bookingController(BookingService bookingService) {
         this.bookingService = bookingService;
     }
 
