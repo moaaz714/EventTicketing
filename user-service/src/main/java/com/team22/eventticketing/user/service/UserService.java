@@ -79,7 +79,7 @@ public class UserService {
     public UserBookingSummaryDTO getBookingSummary(Long id) {
         User user = findById(id); // throws 404 if not found
 
-        Object[] row = userRepository.getBookingSummaryByUserId(id);
+        Object[] row = userRepository.getBookingSummaryByUserId(id).get(0);
 
         long totalBookings        = ((Number) row[0]).longValue();
         long completedBookings    = ((Number) row[1]).longValue();
