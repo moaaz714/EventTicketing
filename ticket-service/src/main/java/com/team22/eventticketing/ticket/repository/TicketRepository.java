@@ -23,42 +23,41 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
         boolean existsBookingById(@Param("bookingId") Long bookingId);
 
         @Query(value = """
-        SELECT 
-            t.id AS ticketId,
-            t.attendee_name AS attendeeName,
-            t.booking_id AS bookingId,
-            e.name AS eventName,
-
-            CAST(e.details->>'venueLat' AS DOUBLE PRECISION) AS eventLat,
-            CAST(e.details->>'venueLon' AS DOUBLE PRECISION) AS eventLon,
-
-            (
+            SELECT 
+                t.id AS ticketId,
+                t.attendee_name AS attendeeName,
+                t.booking_id AS bookingId,
+                e.name AS eventName,
+        
+                CAST(e.details->>'venueLat' AS DOUBLE PRECISION) AS eventLat,
+                CAST(e.details->>'venueLon' AS DOUBLE PRECISION) AS eventLon,
+        
+                (
+                    SQRT(
+                        POWER(CAST(e.details->>'venueLat' AS DOUBLE PRECISION) - :lat, 2) +
+                        POWER(CAST(e.details->>'venueLon' AS DOUBLE PRECISION) - :lon, 2)
+                    ) * 111
+                ) AS distanceKm
+        
+            FROM tickets t
+            JOIN bookings b ON t.booking_id = b.id
+            JOIN events e ON b.event_id = e.id
+        
+            WHERE t.status = 'VALID'
+            AND (
                 SQRT(
                     POWER(CAST(e.details->>'venueLat' AS DOUBLE PRECISION) - :lat, 2) +
                     POWER(CAST(e.details->>'venueLon' AS DOUBLE PRECISION) - :lon, 2)
                 ) * 111
-            ) AS distanceKm
-
-        FROM tickets t
-        JOIN bookings b ON t.booking_id = b.id
-        JOIN events e ON b.event_id = e.id
-
-        WHERE t.status = 'VALID'
-
-        HAVING (
-            SQRT(
-                POWER(CAST(e.details->>'venueLat' AS DOUBLE PRECISION) - :lat, 2) +
-                POWER(CAST(e.details->>'venueLon' AS DOUBLE PRECISION) - :lon, 2)
-            ) * 111
-        ) <= :radiusKm
-
-        ORDER BY distanceKm ASC
-    """, nativeQuery = true)
-        List<Object[]> findNearbyTickets( //used Object[] bcz native queries don’t map DTO mn nafsohom
-                @Param("lat") double lat,
-                @Param("lon") double lon,
-                @Param("radiusKm") double radiusKm
-        );
+            ) <= :radiusKm
+        
+            ORDER BY distanceKm ASC
+        """, nativeQuery = true)
+                List<Object[]> findNearbyTickets(
+                        @Param("lat") double lat,
+                        @Param("lon") double lon,
+                        @Param("radiusKm") double radiusKm
+                );
 
         Optional<Ticket> findById(Long id);
 
