@@ -1,6 +1,7 @@
 package com.team22.eventticketing.user.repository;
 
 import com.team22.eventticketing.user.entity.User;
+import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -64,4 +66,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<Object[]> findTopAttendees(@Param("start") LocalDateTime start,
                                     @Param("end") LocalDateTime end,
                                     @Param("limit") int limit);
+
+    // S1-F8
+    @Transactional
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.favoriteVenues WHERE u.id = :id")
+    Optional<User> findByIdWithVenues(@Param("id") Long id);
 }
