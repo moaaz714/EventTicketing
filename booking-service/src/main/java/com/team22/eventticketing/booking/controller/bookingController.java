@@ -71,4 +71,11 @@ public class bookingController {
     public ResponseEntity<Booking> completeBooking(@PathVariable Long id) {
         return ResponseEntity.ok(bookingService.completeBooking(id));
     }
+    // ─── S3-F5: Filter by Metadata ────────────────────────────────────────────────
+    @GetMapping("/metadata/search")
+    public ResponseEntity<List<Booking>> searchByMetadata(
+            @RequestParam String key,
+            @RequestParam String value) {
+        return ResponseEntity.ok(bookingService.filterByMetadata(key, value));
+    }
 }
