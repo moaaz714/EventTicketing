@@ -1,10 +1,13 @@
 package com.team22.eventticketing.user.service;
 
+import com.team22.eventticketing.user.dto.UserBookingSummaryDTO;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
+import com.team22.eventticketing.user.entity.UserStatus;
 import com.team22.eventticketing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -69,6 +72,44 @@ public class UserService {
         return userRepository.searchUsers(name, email, role == null ? null : role.name());
     }
 
+    // ─── Filter by Preference (JSONB) ────────────────────────────────────────────
+
+    public List<User> findByPreference(String key, String value) {
+        if (key == null || key.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Query parameter 'key' must not be blank");
+        }
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Query parameter 'value' must not be blank");
+        }
+        return userRepository.findByPreference(key, value);
+    }
+
+    // ─── [S1-F3] Get User Booking Summary (DTO) ──────────────────────────────────
+
+    public UserBookingSummaryDTO getBookingSummary(Long id) {
+        User user = findById(id);
+
+        Object[] row = userRepository.getBookingSummaryByUserId(id).get(0);
+
+        long totalBookings          = ((Number) row[0]).longValue();
+        long completedBookings      = ((Number) row[1]).longValue();
+        long cancelledBookings      = ((Number) row[2]).longValue();
+        double totalSpent           = ((Number) row[3]).doubleValue();
+        double averageBookingAmount = ((Number) row[4]).doubleValue();
+
+        return new UserBookingSummaryDTO(
+                user.getId(),
+                user.getName(),
+                totalBookings,
+                completedBookings,
+                cancelledBookings,
+                totalSpent,
+                averageBookingAmount
+        );
+    }
+
     // ─── Delete ───────────────────────────────────────────────────────────────────
 
     public void delete(Long id) {
@@ -77,5 +118,20 @@ public class UserService {
                     HttpStatus.NOT_FOUND, "User not found with id: " + id);
         }
         userRepository.deleteById(id);
+    }
+
+    // ─── Deactivate ─────────────────────────────────────────────────────────────
+
+    @Transactional
+    public User deactivateUser(Long id) {
+        User user = findById(id);
+
+        long activeBookings = userRepository.countActiveBookingsByUserId(id);
+        if (activeBookings > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User has active bookings");
+        }
+
+        user.setStatus(UserStatus.DEACTIVATED);
+        return userRepository.save(user);
     }
 }
