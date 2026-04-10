@@ -1,6 +1,8 @@
 package com.team22.eventticketing.event.service;
 
+import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
 import com.team22.eventticketing.event.model.Event;
+import com.team22.eventticketing.event.model.EventStatus;
 import com.team22.eventticketing.event.model.EventSession;
 import com.team22.eventticketing.event.repository.EventRepository;
 import com.team22.eventticketing.event.repository.EventSessionRepository;
@@ -20,8 +22,27 @@ public class EventService {
         this.eventSessionRepository = eventSessionRepository;
     }
 
+    // [S2-F4] Update Event Status (Teammate's Feature)
+    @Transactional
+    public void updateEventStatus(Long eventId, UpdateEventStatusRequest request) {
+        if (request == null || request.getStatus() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required");
+        }
 
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found with id: " + eventId));
 
+        EventStatus newStatus = request.getStatus();
+
+        if (newStatus == EventStatus.CANCELLED && eventRepository.existsActiveBookingsForEvent(eventId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot cancel event because active bookings exist for this event");
+        }
+
+        event.setStatus(newStatus);
+        eventRepository.save(event);
+    }
+
+    // [S2-F7] Rate an Event (Your Feature)
     @Transactional
     public void rateEvent(Long eventId, Long bookingId, Double newRating) {
         // 1. Check rating bounds (400)
@@ -56,7 +77,7 @@ public class EventService {
         eventRepository.save(event);
     }
 
-    // [S2-F8] Verify Event Session
+    // [S2-F8] Verify Event Session (Your Feature)
     @Transactional
     public Event verifyEventSession(Long eventId, Long sessionId, Long verifiedByUserId) {
 
@@ -97,7 +118,8 @@ public class EventService {
         // Return the updated event
         return event;
     }
-    // [S2-F9] Get Events with Unverified Sessions
+
+    // [S2-F9] Get Events with Unverified Sessions (Your Feature)
     public java.util.List<com.team22.eventticketing.event.dto.EventSessionAlertDTO> getUnverifiedSessionsReport() {
 
         java.util.List<Event> events = eventRepository.findEventsWithUnverifiedSessions();
@@ -118,5 +140,4 @@ public class EventService {
             );
         }).toList();
     }
-
 }
