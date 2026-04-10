@@ -42,9 +42,12 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             @Param("endDate") LocalDateTime endDate
     );
 
-    // =========================
-    // S5-F3 (User summary)
-    // =========================
+
+    // [S5-F3] Cross-service: check user exists in the users table
+    @Query(value = "SELECT COUNT(*) FROM users WHERE id = :userId", nativeQuery = true)
+    Long countUserById(@Param("userId") Long userId);
+
+    // [S5-F3] Group by payment method for a specific user (COMPLETED only)
 
     @Query(value = """
             SELECT method, COUNT(*) as count, SUM(amount) as total

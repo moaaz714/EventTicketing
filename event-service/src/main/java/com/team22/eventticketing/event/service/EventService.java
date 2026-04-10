@@ -97,4 +97,26 @@ public class EventService {
         // Return the updated event
         return event;
     }
+    // [S2-F9] Get Events with Unverified Sessions
+    public java.util.List<com.team22.eventticketing.event.dto.EventSessionAlertDTO> getUnverifiedSessionsReport() {
+
+        java.util.List<Event> events = eventRepository.findEventsWithUnverifiedSessions();
+
+        return events.stream().map(event -> {
+
+            java.util.List<com.team22.eventticketing.event.model.EventSession> unverifiedSessions =
+                    event.getEventSessions().stream()
+                            .filter(session -> session.getVerified() != null && !session.getVerified())
+                            .toList();
+
+            return new com.team22.eventticketing.event.dto.EventSessionAlertDTO(
+                    event.getId(),
+                    event.getName(),
+                    event.getStatus(),
+                    unverifiedSessions,
+                    unverifiedSessions.size()
+            );
+        }).toList();
+    }
+
 }

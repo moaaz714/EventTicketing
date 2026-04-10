@@ -20,4 +20,8 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     //  check if the user is an ADMIN
     @Query(value = "SELECT COUNT(*) FROM users u WHERE u.id = :userId AND u.role = 'ADMIN'", nativeQuery = true)
     long checkUserIsAdmin(@Param("userId") Long userId);
+
+    //  Find events that have at least one unverified session
+    @Query("SELECT DISTINCT e FROM Event e JOIN e.eventSessions s WHERE s.verified = false")
+    java.util.List<Event> findEventsWithUnverifiedSessions();
 }
