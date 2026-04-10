@@ -1,9 +1,11 @@
 package com.team22.eventticketing.sales.service;
 
 import com.team22.eventticketing.sales.entity.TicketSale;
+import com.team22.eventticketing.sales.entity.enums.SaleStatus;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
@@ -62,6 +64,24 @@ public class TicketSaleService {
                     HttpStatus.NOT_FOUND, "TicketSale not found with id: " + id);
         }
         ticketSaleRepository.deleteById(id);
+    }
+
+    // ─── [S5-F2] Process Refund ───────────────────────────────────────────────────
+
+    @Transactional
+    public TicketSale refund(Long id, String reason) {
+        TicketSale sale = findById(id);
+
+        if (sale.getStatus() != SaleStatus.COMPLETED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Only COMPLETED sales can be refunded");
+        }
+
+        sale.setStatus(SaleStatus.REFUNDED);
+        sale.getTransactionDetails().put("refundReason", reason);
+        sale.getTransactionDetails().put("refundedAt", LocalDateTime.now().toString());
+
+        return ticketSaleRepository.save(sale);
     }
 
     // ─── [S5-F1] Search by optional status and date range ────────────────────────
