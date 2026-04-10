@@ -1,6 +1,7 @@
 package com.team22.eventticketing.ticket.controller;
 
 import com.team22.eventticketing.ticket.model.Ticket;
+import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.HttpStatus;
 
@@ -43,6 +44,16 @@ public class ticketController {
                 ticketCode,
                 metadata
         );
+    }
+
+
+    @GetMapping("/nearby")
+    public List<NearbyTicketDTO> getNearbyTickets(
+            @RequestParam double lat,
+            @RequestParam double lon,
+            @RequestParam double radiusKm
+    ) {
+        return ticketService.findNearbyTickets(lat, lon, radiusKm);
     }
 
 
