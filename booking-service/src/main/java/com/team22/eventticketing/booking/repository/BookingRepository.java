@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 import java.util.List;
 
@@ -37,4 +38,35 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             nativeQuery = true)
     List<Booking> findByMetadataField(@Param("key") String key,
                                       @Param("value") String value);
+    // S3-F6: count all bookings in date range
+    @Query(value = """
+    SELECT COUNT(*) FROM bookings
+    WHERE booking_date BETWEEN :start AND :end
+    """, nativeQuery = true)
+    long countInRange(@Param("start") LocalDateTime start,
+                      @Param("end") LocalDateTime end);
+
+    // S3-F6: count completed bookings in date range
+    @Query(value = """
+    SELECT COUNT(*) FROM bookings
+    WHERE booking_date BETWEEN :start AND :end AND status = 'COMPLETED'
+    """, nativeQuery = true)
+    long countCompletedInRange(@Param("start") LocalDateTime start,
+                               @Param("end") LocalDateTime end);
+
+    // S3-F6: count cancelled bookings in date range
+    @Query(value = """
+    SELECT COUNT(*) FROM bookings
+    WHERE booking_date BETWEEN :start AND :end AND status = 'CANCELLED'
+    """, nativeQuery = true)
+    long countCancelledInRange(@Param("start") LocalDateTime start,
+                               @Param("end") LocalDateTime end);
+
+    // S3-F6: sum revenue from completed bookings in date range
+    @Query(value = """
+    SELECT COALESCE(SUM(total_amount), 0) FROM bookings
+    WHERE booking_date BETWEEN :start AND :end AND status = 'COMPLETED'
+    """, nativeQuery = true)
+    double sumRevenueInRange(@Param("start") LocalDateTime start,
+                             @Param("end") LocalDateTime end);
 }

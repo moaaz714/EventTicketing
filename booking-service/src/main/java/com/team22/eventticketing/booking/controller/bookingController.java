@@ -5,7 +5,8 @@ import com.team22.eventticketing.booking.service.BookingService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -77,5 +78,14 @@ public class bookingController {
             @RequestParam String key,
             @RequestParam String value) {
         return ResponseEntity.ok(bookingService.filterByMetadata(key, value));
+    }
+    // ─── S3-F6: Booking Analytics ─────────────────────────────────────────────────
+    @GetMapping("/analytics")
+    public ResponseEntity<BookingAnalyticsDTO> getAnalytics(
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
+        LocalDateTime end   = LocalDateTime.parse(endDate + "T23:59:59");
+        return ResponseEntity.ok(bookingService.getAnalytics(start, end));
     }
 }
