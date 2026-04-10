@@ -10,6 +10,8 @@ import java.util.Map;
 
 @Entity
 @Table(name = "events")
+
+
 public class Event {
 
     @Id
@@ -45,6 +47,12 @@ public class Event {
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.List<EventSession> eventSessions = new java.util.ArrayList<>();
+
+    public java.util.List<EventSession> getEventSessions() { return eventSessions; }
+    public void setEventSessions(java.util.List<EventSession> eventSessions) { this.eventSessions = eventSessions; }
 
     public Event() {
     }
