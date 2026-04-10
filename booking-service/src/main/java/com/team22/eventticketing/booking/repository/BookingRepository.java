@@ -79,4 +79,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     WHERE booking_id = :bookingId AND status = 'VALID'
     """, nativeQuery = true)
     void cancelValidTicketsForBooking(@Param("bookingId") Long bookingId);
+    @Query(value = """
+    SELECT COALESCE(MAX(event_order), 0) FROM booking_items
+    WHERE booking_id = :bookingId
+    """, nativeQuery = true)
+    int findMaxEventOrderByBookingId(@Param("bookingId") Long bookingId);
+
+
 }

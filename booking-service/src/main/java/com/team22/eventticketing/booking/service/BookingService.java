@@ -13,13 +13,19 @@ import java.util.List;
 import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
 import java.time.LocalDateTime;
 import org.springframework.transaction.annotation.Transactional;
+import com.team22.eventticketing.booking.dto.BookingItemRequest;
+import com.team22.eventticketing.booking.model.BookingItem;
+import com.team22.eventticketing.booking.model.BookingItemStatus;
+import com.team22.eventticketing.booking.repository.BookingItemRepository;
+import java.util.List;
 @Service
 public class BookingService {
 
     private final BookingRepository bookingRepository;
-
-    public BookingService(BookingRepository bookingRepository) {
+    private final BookingItemRepository bookingItemRepository;
+    public BookingService(BookingRepository bookingRepository,BookingItemRepository bookingItemRepository) {
         this.bookingRepository = bookingRepository;
+        this.bookingItemRepository = bookingItemRepository;
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────
@@ -140,5 +146,47 @@ public class BookingService {
         booking.setStatus(BookingStatus.CANCELLED);
         bookingRepository.save(booking);
         bookingRepository.cancelValidTicketsForBooking(id);
+
+
+    }
+
+    @Transactional
+    public Booking addItemsToBooking(Long bookingId, List<BookingItemRequest> requests) {
+        Booking booking = bookingRepository.findByIdWithItems(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId));
+
+        if (booking.getStatus() != BookingStatus.PENDING &&
+                booking.getStatus() != BookingStatus.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot add items to a booking that is not PENDING or CONFIRMED");
+        }
+
+        for (BookingItemRequest req : requests) {
+            if (req.getSessionId() == null || req.getSessionTitle() == null ||
+                    req.getSessionTitle().isBlank() || req.getQuantity() == null ||
+                    req.getUnitPrice() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Each item must have sessionId, sessionTitle, quantity, and unitPrice");
+            }
+        }
+
+        int currentMax = bookingRepository.findMaxEventOrderByBookingId(bookingId);
+
+        for (BookingItemRequest req : requests) {
+            currentMax++;
+            BookingItem item = new BookingItem();
+            item.setEventOrder(currentMax);
+            item.setSessionId(req.getSessionId());
+            item.setSessionTitle(req.getSessionTitle());
+            item.setQuantity(req.getQuantity());
+            item.setUnitPrice(req.getUnitPrice());
+            item.setStatus(BookingItemStatus.RESERVED);
+            item.setMetadata(req.getMetadata());
+            item.setBooking(booking);
+            bookingItemRepository.save(item);
+        }
+
+        return bookingRepository.findByIdWithItems(bookingId).get();
     }
 }
