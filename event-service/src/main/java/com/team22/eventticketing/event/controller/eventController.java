@@ -38,4 +38,10 @@ public class eventController {
         Event updatedEvent = eventService.verifyEventSession(eventId, sessionId, request.verifiedBy());
         return ResponseEntity.ok(updatedEvent);
     }
+
+    // [S2-F9] Get Events with Unverified Sessions Report
+    @GetMapping("/sessions/unverified")
+    public ResponseEntity<java.util.List<com.team22.eventticketing.event.dto.EventSessionAlertDTO>> getUnverifiedSessions() {
+        return ResponseEntity.ok(eventService.getUnverifiedSessionsReport());
+    }
 }
