@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
@@ -24,6 +25,15 @@ public class userController {
     @PostMapping
     public ResponseEntity<User> create(@RequestBody User user) {
         return ResponseEntity.status(HttpStatus.CREATED).body(userService.create(user));
+    }
+
+    // ─── [S1-F2] Update User Preferences ─────────────────────────────────────────
+
+    @PutMapping("/{id}/preferences")
+    public ResponseEntity<User> updatePreferences(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> preferences) {
+        return ResponseEntity.ok(userService.updatePreferences(id, preferences));
     }
 
     // ─── Health ───────────────────────────────────────────────────────────────────
