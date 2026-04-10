@@ -1,5 +1,6 @@
 package com.team22.eventticketing.user.controller;
 
+import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.service.UserService;
 import org.springframework.http.HttpStatus;
@@ -7,52 +8,47 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
-public class UserController {
+public class userController {
 
     private final UserService userService;
 
-    public UserController(UserService userService) {
+    public userController(UserService userService) {
         this.userService = userService;
     }
 
+    // ─── Create ──────────────────────────────────────────────────────────────────
+
     @PostMapping
-    public ResponseEntity<User> createUser(@RequestBody User user) {
-        return new ResponseEntity<>(userService.create(user), HttpStatus.CREATED);
+    public ResponseEntity<User> create(@RequestBody User user) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(userService.create(user));
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<User> getUserById(@PathVariable Long id) {
-        return ResponseEntity.ok(userService.findById(id));
+    // ─── [S1-F2] Update User Preferences ─────────────────────────────────────────
+
+    @PutMapping("/{id}/preferences")
+    public ResponseEntity<User> updatePreferences(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> preferences) {
+        return ResponseEntity.ok(userService.updatePreferences(id, preferences));
     }
 
-    @GetMapping
-    public ResponseEntity<List<User>> getAllUsers() {
-        return ResponseEntity.ok(userService.findAll());
+    // ─── Health ───────────────────────────────────────────────────────────────────
+
+    @GetMapping("/health")
+    public String statusCheck() {
+        return "OK";
     }
 
-    @GetMapping("/preferences/search")
-    public ResponseEntity<List<User>> findByPreference(
-            @RequestParam String key,
-            @RequestParam String value) {
-        return ResponseEntity.ok(userService.findByPreference(key, value));
-    }
-
-    @PutMapping("/{id}")
-    public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody User user) {
-        return ResponseEntity.ok(userService.update(id, user));
-    }
-
-    @PutMapping("/{id}/deactivate")
-    public ResponseEntity<User> deactivateUser(@PathVariable Long id) {
-        return ResponseEntity.ok(userService.deactivateUser(id));
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
-        userService.delete(id);
-        return ResponseEntity.noContent().build();
+   
+    @GetMapping("/search")
+    public ResponseEntity<List<User>> search(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) Role role) {
+        return ResponseEntity.ok(userService.search(name, email, role));
     }
 }
