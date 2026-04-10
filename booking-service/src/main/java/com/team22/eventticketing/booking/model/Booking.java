@@ -50,7 +50,9 @@ public class Booking {
     public Booking() {
     }
 
-    public Booking(Long id, Long userId, Long eventId, String contactEmail, BookingStatus status, Double totalAmount, Map<String, Object> metadata, LocalDateTime bookingDate, LocalDateTime confirmedAt, List<BookingItem> bookingItems) {
+    public Booking(Long id, Long userId, Long eventId, String contactEmail, BookingStatus status, Double totalAmount,
+            Map<String, Object> metadata, LocalDateTime bookingDate, LocalDateTime confirmedAt,
+            List<BookingItem> bookingItems) {
         this.id = id;
         this.userId = userId;
         this.eventId = eventId;
