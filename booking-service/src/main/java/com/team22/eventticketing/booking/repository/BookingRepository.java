@@ -10,7 +10,10 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
 import java.time.LocalDateTime;
-
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Repository
@@ -69,4 +72,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     """, nativeQuery = true)
     double sumRevenueInRange(@Param("start") LocalDateTime start,
                              @Param("end") LocalDateTime end);
+    @Modifying
+    @Transactional
+    @Query(value = """
+    UPDATE tickets SET status = 'CANCELLED'
+    WHERE booking_id = :bookingId AND status = 'VALID'
+    """, nativeQuery = true)
+    void cancelValidTicketsForBooking(@Param("bookingId") Long bookingId);
 }
