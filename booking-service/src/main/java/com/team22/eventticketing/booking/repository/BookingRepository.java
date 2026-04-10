@@ -71,7 +71,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query(value = """
 SELECT 
     COUNT(*) as totalBookings,
-    COALESCE(SUM(total_amount), 0) as totalRevenue
+    COALESCE(SUM(total_amount), 0) as totalRevenue,
+    COALESCE(AVG(total_amount), 0) as averageBookingAmount
 FROM bookings
 WHERE event_id = :eventId
 AND status = 'COMPLETED'
@@ -80,4 +81,6 @@ AND booking_date BETWEEN :start AND :end
     Object[] getEventRevenueStats(Long eventId,
                                   LocalDateTime start,
                                   LocalDateTime end);
+
+
 }

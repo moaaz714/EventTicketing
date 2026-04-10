@@ -81,6 +81,8 @@ public class eventController {
 
         return ResponseEntity.ok(eventService.getEventRevenue(id, start, end));
     }
+
+
     @GetMapping("/test")
     public String test() {
         return "CONTROLLER OK";
