@@ -88,4 +88,14 @@ public class userController {
     public ResponseEntity<UserProfileDTO> getProfile(@PathVariable Long id) {
         return ResponseEntity.ok(userService.getProfile(id));
     }
+
+    // ─── [S1-F9] Filter by Favorite Category ─────────────────────────────────────
+
+    @GetMapping("/preferences/category")
+    public ResponseEntity<List<User>> findByCategory(
+            @RequestParam String category,
+            @RequestParam(defaultValue = "0") int minBookings) {
+        return ResponseEntity.ok(
+                userService.findByFavoriteCategoryAndMinBookings(category, minBookings));
+    }
 }
