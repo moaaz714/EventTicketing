@@ -1,8 +1,10 @@
 package com.team22.eventticketing.booking.controller;
 
 import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
+import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
 import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
 import com.team22.eventticketing.booking.dto.BookingItemRequest;
+import com.team22.eventticketing.booking.dto.CostEstimateRequest;
 import com.team22.eventticketing.booking.model.Booking;
 import com.team22.eventticketing.booking.model.BookingStatus;
 import com.team22.eventticketing.booking.service.BookingService;
@@ -20,7 +22,7 @@ public class bookingController {
 
     private final BookingService bookingService;
 
-    // Added constructor for dependency injection
+    // Constructor for dependency injection
     public bookingController(BookingService bookingService) {
         this.bookingService = bookingService;
     }
@@ -47,6 +49,16 @@ public class bookingController {
 
         Booking confirmedBooking = bookingService.confirmBooking(bookingId, eventId);
         return ResponseEntity.ok(confirmedBooking);
+    }
+
+    @PostMapping("/estimate")
+    public ResponseEntity<BookingCostEstimateDTO> getBookingCostEstimate(@RequestBody CostEstimateRequest request) {
+        BookingCostEstimateDTO estimate = bookingService.estimateCost(
+                request.getEventId(),
+                request.getTicketCount(),
+                request.getTicketTier()
+        );
+        return ResponseEntity.ok(estimate);
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────

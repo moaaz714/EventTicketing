@@ -1,6 +1,7 @@
 package com.team22.eventticketing.booking.service;
 
 import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
+import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
 import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
 import com.team22.eventticketing.booking.dto.BookingItemDTO;
 import com.team22.eventticketing.booking.dto.BookingItemRequest;
@@ -244,17 +245,14 @@ public class BookingService {
 
     @Transactional
     public Booking confirmBooking(Long bookingId, Long eventId) {
-        // 1. Find booking -> throw 404 if not found
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
 
-        // 3. Verify event exists and is UPCOMING -> throw 404 or 400
         String eventStatus = bookingRepository.findEventStatusById(eventId);
         if (eventStatus == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event with ID " + eventId + " not found");
         }
 
-        // 2. Validate booking status is PENDING -> throw 400 if not
         if (booking.getStatus() != BookingStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking is not PENDING. Current status: " + booking.getStatus());
         }
@@ -263,12 +261,47 @@ public class BookingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event is not UPCOMING. Current status: " + eventStatus);
         }
 
-        // 4. Update booking fields
         booking.setEventId(eventId);
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setConfirmedAt(LocalDateTime.now());
 
-        // 5. Save and return
         return bookingRepository.save(booking);
+    }
+
+    // ─── S3-F3: Get Booking Cost Estimate ─────────────────────────────────────────
+
+    public BookingCostEstimateDTO estimateCost(Long eventId, Integer ticketCount, String ticketTier) {
+        // 1. Get Average Capacity
+        Double avgCapacity = bookingRepository.getAverageSessionCapacity(eventId);
+        if (avgCapacity == null) {
+            avgCapacity = 0.0;
+        }
+
+        // 2. Calculate Base Price and Tier Multiplier
+        double basePrice = avgCapacity / 10.0;
+        double tierMultiplier = "VIP".equalsIgnoreCase(ticketTier) ? 2.5 : 1.0;
+
+        // 3. Calculate Ticket Cost
+        double ticketCost = basePrice * tierMultiplier * ticketCount;
+
+        // 4. Calculate Service Fee (15%)
+        double serviceFee = ticketCost * 0.15;
+
+        // 5. Determine Demand Multiplier
+        Long activeBookings = bookingRepository.countActiveBookingsForEvent(eventId);
+        double demandMultiplier = 1.0;
+        if (activeBookings != null) {
+            if (activeBookings > 200) {
+                demandMultiplier = 1.5;
+            } else if (activeBookings > 50) {
+                demandMultiplier = 1.25;
+            }
+        }
+
+        // 6. Calculate Estimated Total
+        double estimatedTotal = (ticketCost + serviceFee) * demandMultiplier;
+
+        // Return the mapped DTO
+        return new BookingCostEstimateDTO(ticketCost, serviceFee, estimatedTotal, demandMultiplier);
     }
 }
