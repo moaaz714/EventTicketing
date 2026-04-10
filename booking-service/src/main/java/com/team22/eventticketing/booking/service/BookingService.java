@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
 import java.time.LocalDateTime;
+import org.springframework.transaction.annotation.Transactional;
 @Service
 public class BookingService {
 
@@ -123,5 +124,21 @@ public class BookingService {
         double rate    = total > 0 ? (completed * 100.0) / total : 0.0;
 
         return new BookingAnalyticsDTO(total, completed, cancelled, revenue, avg, rate);
+    }
+    @Transactional
+    public void cancelBooking(Long id) {
+        Booking booking = bookingRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Booking not found with id: " + id));
+
+        if (booking.getStatus() != BookingStatus.PENDING &&
+                booking.getStatus() != BookingStatus.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only PENDING or CONFIRMED bookings can be cancelled");
+        }
+
+        booking.setStatus(BookingStatus.CANCELLED);
+        bookingRepository.save(booking);
+        bookingRepository.cancelValidTicketsForBooking(id);
     }
 }
