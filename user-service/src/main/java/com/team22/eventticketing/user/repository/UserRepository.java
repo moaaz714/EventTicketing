@@ -11,6 +11,19 @@ import java.util.List;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
 
+    // S1-F3: aggregate booking stats for a user from the shared bookings table
+    @Query(value = """
+        SELECT
+            COUNT(b.id)                                                          AS totalBookings,
+            COALESCE(SUM(CASE WHEN b.status = 'COMPLETED' THEN 1 ELSE 0 END), 0) AS completedBookings,
+            COALESCE(SUM(CASE WHEN b.status = 'CANCELLED' THEN 1 ELSE 0 END), 0) AS cancelledBookings,
+            COALESCE(SUM(CASE WHEN b.status = 'COMPLETED' THEN b.total_amount ELSE 0 END), 0) AS totalSpent,
+            COALESCE(AVG(CASE WHEN b.status = 'COMPLETED' THEN b.total_amount END), 0)        AS averageBookingAmount
+        FROM bookings b
+        WHERE b.user_id = :userId
+        """, nativeQuery = true)
+    List<Object[]> getBookingSummaryByUserId(@Param("userId") Long userId);
+
     // S1-F4: count active (non-terminal) bookings for a user in the shared bookings table
     @Query(value = """
         SELECT COUNT(*) FROM bookings
