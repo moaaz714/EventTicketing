@@ -1,5 +1,6 @@
 package com.team22.eventticketing.sales.controller;
 
+import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.service.TicketSaleService;
 import org.springframework.http.HttpStatus;
@@ -57,6 +58,13 @@ public class salesController {
     @PutMapping("/{id}/refund")
     public TicketSale refund(@PathVariable Long id, @RequestBody Map<String, String> body) {
         return ticketSaleService.refund(id, body.get("reason"));
+    }
+
+    // ─── [S5-F3] User Ticket Sale Summary ────────────────────────────────────────
+
+    @GetMapping("/user/{userId}/summary")
+    public UserSaleSummaryDTO getUserSummary(@PathVariable Long userId) {
+        return ticketSaleService.getUserSummary(userId);
     }
 
     // ─── [S5-F1] Search by optional status and date range ────────────────────────
