@@ -93,7 +93,7 @@ public class SalesService {
         }
 
         // 5. Check for duplicate
-        boolean alreadyApplied = salePromotionRepository.existsByTicketSaleAndPromotion(ticketSale, promotion);
+        boolean alreadyApplied = salePromotionRepository.existsByTicketSaleIdAndPromotionId(saleId, promotionId);
         if (alreadyApplied) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "promotion already applied");
         }
@@ -108,6 +108,7 @@ public class SalesService {
         // 8. Save
         salePromotionRepository.save(salePromo);
         promotionRepository.save(promotion);
+        ticketSale.getSalePromotions().add(salePromo);
 
         return ticketSale;
     }
