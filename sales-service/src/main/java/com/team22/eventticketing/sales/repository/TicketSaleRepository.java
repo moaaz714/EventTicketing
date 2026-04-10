@@ -26,6 +26,9 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
 
     List<TicketSale> findAllByBookingId(Long bookingId);
 
+    @Query(value = "SELECT status FROM bookings WHERE id = :bookingId", nativeQuery = true)
+    String findBookingStatus(@Param("bookingId") Long bookingId);
+
     // =========================
     // S5-F1 (Filter sales)
     // =========================
