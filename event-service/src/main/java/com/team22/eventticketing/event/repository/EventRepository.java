@@ -16,4 +16,8 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     // Check if it is completed and matches the event
     @Query(value = "SELECT COUNT(*) FROM bookings b WHERE b.id = :bookingId AND b.event_id = :eventId AND b.status = 'COMPLETED'", nativeQuery = true)
     long countCompletedBookingForEvent(@Param("bookingId") Long bookingId, @Param("eventId") Long eventId);
+
+    //  check if the user is an ADMIN
+    @Query(value = "SELECT COUNT(*) FROM users u WHERE u.id = :userId AND u.role = 'ADMIN'", nativeQuery = true)
+    long checkUserIsAdmin(@Param("userId") Long userId);
 }
