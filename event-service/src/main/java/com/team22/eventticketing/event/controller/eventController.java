@@ -4,8 +4,10 @@ import com.team22.eventticketing.event.dto.EventRatingRequestDTO;
 import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.service.EventService;
+import jakarta.annotation.PostConstruct;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.Map;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,6 +34,14 @@ public class eventController {
         return ResponseEntity.ok().build();
     }
 
+    @PutMapping("/{id}/details")
+    public ResponseEntity<Void> updateEventDetails(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> request) {
+
+        eventService.updateEventDetails(id, request);
+        return ResponseEntity.ok().build();
+    }
     // [S2-F8] Verify Event Session
     @PutMapping("/{eventId}/sessions/{sessionId}/verify")
     public ResponseEntity<Event> verifySession(
@@ -51,5 +61,25 @@ public class eventController {
         return ResponseEntity.ok(
                 eventService.searchEvents(category, startDate, endDate)
         );
+
+
     }
+
+    @GetMapping("/test")
+    public String test() {
+        return "CONTROLLER OK";
+    }
+
+
+    @PostConstruct
+    public void init() {
+        System.out.println("EVENT CONTROLLER LOADED");
+    }
+
+//    @PutMapping("/{id}/details")
+//    public ResponseEntity<Event> updateEventDetails(
+//            @PathVariable Long id,
+//            @RequestBody Map details) {
+//        return ResponseEntity.ok(eventService.updateEventDetails(id, details));
+//    }
 }
