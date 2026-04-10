@@ -2,7 +2,11 @@ package com.team22.eventticketing.ticket.controller;
 
 import org.springframework.web.bind.annotation.*;
 
+import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
+import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.service.TicketService;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/tickets") // Requirement 4.a [cite: 98]
@@ -27,5 +31,21 @@ public class ticketController {
 
         // Return the count with a 200 OK status as per requirements
         return deletedCount;
+    }
+
+    // [S4-F8] Event Attendance Summary
+
+    @GetMapping("/event/{eventId}/summary")
+    public EventAttendanceSummaryDTO getEventAttendanceSummary(@PathVariable Long eventId) {
+        // Delegate to service layer
+        EventAttendanceSummaryDTO summary = ticketService.getSummary(eventId);
+
+        // Return 200 OK with the DTO body
+        return summary;
+    }
+
+    @GetMapping("/unused-upcoming")
+    public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
+        return ticketService.getUnusedUpcomingTickets();
     }
 }
