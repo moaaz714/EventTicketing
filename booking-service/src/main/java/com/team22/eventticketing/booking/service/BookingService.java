@@ -10,7 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-
+import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
+import java.time.LocalDateTime;
 @Service
 public class BookingService {
 
@@ -111,5 +112,16 @@ public class BookingService {
                     "Key and value must not be blank");
         }
         return bookingRepository.findByMetadataField(key, value);
+    }
+    // ─── S3-F6: Booking Analytics ─────────────────────────────────────────────────
+    public BookingAnalyticsDTO getAnalytics(LocalDateTime start, LocalDateTime end) {
+        long total     = bookingRepository.countInRange(start, end);
+        long completed = bookingRepository.countCompletedInRange(start, end);
+        long cancelled = bookingRepository.countCancelledInRange(start, end);
+        double revenue = bookingRepository.sumRevenueInRange(start, end);
+        double avg     = completed > 0 ? revenue / completed : 0.0;
+        double rate    = total > 0 ? (completed * 100.0) / total : 0.0;
+
+        return new BookingAnalyticsDTO(total, completed, cancelled, revenue, avg, rate);
     }
 }
