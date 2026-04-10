@@ -44,3 +44,4 @@ target/
 .env
 *.class
 .DS_Store
+milestone__desc.pdf
