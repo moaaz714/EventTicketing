@@ -1,17 +1,41 @@
 package com.team22.eventticketing.booking.controller;
 
+
+import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
+import com.team22.eventticketing.booking.dto.CostEstimateRequest;
 import com.team22.eventticketing.booking.model.Booking;
 import com.team22.eventticketing.booking.service.BookingService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
+import com.team22.eventticketing.booking.model.Booking;
+import com.team22.eventticketing.booking.model.BookingStatus;
+import com.team22.eventticketing.booking.service.BookingService;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
+import java.time.LocalDateTime;
+import java.util.List;
+import com.team22.eventticketing.booking.dto.BookingItemRequest;
+import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
 @RestController
 @RequestMapping("/api/bookings")
 public class bookingController {
+    private final BookingService bookingService;
+
+    public bookingController(BookingService bookingService) {
+        this.bookingService = bookingService;
+    }
 
     private final BookingService bookingService;
 
@@ -26,6 +50,39 @@ public class bookingController {
         return "OK";
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<List<Booking>> searchBookings(
+            @RequestParam(required = false) BookingStatus status,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+
+        List<Booking> results = bookingService.searchBookings(status, startDate, endDate);
+        return ResponseEntity.ok(results);
+    }
+
+    @PutMapping("/{bookingId}/confirm")
+    public ResponseEntity<Booking> confirmBooking(
+            @PathVariable Long bookingId,
+            @RequestParam Long eventId) {
+
+        Booking confirmedBooking = bookingService.confirmBooking(bookingId, eventId);
+        return ResponseEntity.ok(confirmedBooking);
+    }
+
+
+
+    @PostMapping("/estimate")
+    public ResponseEntity<BookingCostEstimateDTO> getBookingCostEstimate(@RequestBody CostEstimateRequest request) {
+        BookingCostEstimateDTO estimate = bookingService.estimateCost(
+                request.getEventId(),
+                request.getTicketCount(),
+                request.getTicketTier()
+        );
+        return ResponseEntity.ok(estimate);
+    }
+}
+}
+}
     // ─── Create ──────────────────────────────────────────────────────────────────
 
     @PostMapping
@@ -87,5 +144,22 @@ public class bookingController {
         LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
         LocalDateTime end   = LocalDateTime.parse(endDate + "T23:59:59");
         return ResponseEntity.ok(bookingService.getAnalytics(start, end));
+    }
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
+        bookingService.cancelBooking(id);
+        return ResponseEntity.ok().build();
+    }
+    @PostMapping("/{bookingId}/items")
+    public ResponseEntity<Booking> addItems(
+            @PathVariable Long bookingId,
+            @RequestBody List<BookingItemRequest> items) {
+        return ResponseEntity.ok(bookingService.addItemsToBooking(bookingId, items));
+    }
+
+    @GetMapping("/{bookingId}/details")
+    public ResponseEntity<BookingDetailsDTO> getBookingDetails(
+            @PathVariable Long bookingId) {
+        return ResponseEntity.ok(bookingService.getBookingDetails(bookingId));
     }
 }

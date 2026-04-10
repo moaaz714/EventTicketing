@@ -1,6 +1,9 @@
 package com.team22.eventticketing.event.controller;
+import com.team22.eventticketing.event.dto.TopEventDTO;
+
 
 import com.team22.eventticketing.event.dto.EventRatingRequestDTO;
+import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
 import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.service.EventService;
@@ -10,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 import java.time.LocalDateTime;
+import java.util.List;
+
 import java.util.List;
 
 @RestController
@@ -25,6 +30,25 @@ public class eventController {
     @GetMapping("/health")
     public String statusCheck() {
         return "OK";
+    }
+
+    // [S2-F4] Update Event Status
+    @PutMapping("/{id}/status")
+    public ResponseEntity<Void> updateEventStatus(
+            @PathVariable Long id,
+            @RequestBody UpdateEventStatusRequest request
+    ) {
+        eventService.updateEventStatus(id, request);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/details/search")
+    public ResponseEntity<List<Event>> filterEvents(
+            @RequestParam String key,
+            @RequestParam String value,
+            @RequestParam(required = false) String status
+    ) {
+        return ResponseEntity.ok(eventService.filterEventsByDetail(key, value, status));
     }
 
     // [S2-F7] Rate an Event
@@ -43,6 +67,7 @@ public class eventController {
         return ResponseEntity.ok().build();
     }
     // [S2-F8] Verify Event Session
+
     @PutMapping("/{eventId}/sessions/{sessionId}/verify")
     public ResponseEntity<Event> verifySession(
             @PathVariable Long eventId,
@@ -68,6 +93,16 @@ public class eventController {
     @GetMapping("/test")
     public String test() {
         return "CONTROLLER OK";
+    }
+
+    // [S2-F9] Get Events with Unverified Sessions Report
+    @GetMapping("/sessions/unverified")
+    public ResponseEntity<java.util.List<com.team22.eventticketing.event.dto.EventSessionAlertDTO>> getUnverifiedSessions() {
+        return ResponseEntity.ok(eventService.getUnverifiedSessionsReport());
+    }
+    @GetMapping("/reports/top-rated")
+    public ResponseEntity<List<TopEventDTO>> getTopRatedEvents(@RequestParam int limit) {
+        return ResponseEntity.ok(eventService.getTopRatedEvents(limit));
     }
 
 
