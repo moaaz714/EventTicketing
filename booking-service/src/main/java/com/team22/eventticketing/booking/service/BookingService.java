@@ -104,4 +104,12 @@ public class BookingService {
 
         return saved;
     }
+    // ─── S3-F5: Filter Bookings by Metadata ──────────────────────────────────────
+    public List<Booking> filterByMetadata(String key, String value) {
+        if (key == null || key.isBlank() || value == null || value.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Key and value must not be blank");
+        }
+        return bookingRepository.findByMetadataField(key, value);
+    }
 }
