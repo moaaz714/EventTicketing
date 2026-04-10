@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
 import java.time.LocalDateTime;
 import java.util.List;
+import com.team22.eventticketing.booking.dto.BookingItemRequest;
 
 @RestController
 @RequestMapping("/api/bookings")
@@ -92,5 +93,11 @@ public class bookingController {
     public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
         bookingService.cancelBooking(id);
         return ResponseEntity.ok().build();
+    }
+    @PostMapping("/{bookingId}/items")
+    public ResponseEntity<Booking> addItems(
+            @PathVariable Long bookingId,
+            @RequestBody List<BookingItemRequest> items) {
+        return ResponseEntity.ok(bookingService.addItemsToBooking(bookingId, items));
     }
 }
