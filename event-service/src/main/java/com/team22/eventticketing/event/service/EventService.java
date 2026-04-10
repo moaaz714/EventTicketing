@@ -14,8 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class EventService {
@@ -72,6 +74,25 @@ public class EventService {
         }
         return eventRepository.findByDetailAttributeAndStatus(key, value, status);
     }
+
+    public void updateEventDetails(Long id, Map<String, Object> newDetails) {
+
+        Event event = eventRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Event not found"));
+
+        Map<String, Object> existingDetails = event.getDetails();
+
+        if (existingDetails == null) {
+            existingDetails = new HashMap<>();
+        }
+
+        existingDetails.putAll(newDetails);
+
+        event.setDetails(existingDetails);
+
+        eventRepository.save(event);
+    }
+
 
     // [S2-F4] Update Event Status
     @Transactional
