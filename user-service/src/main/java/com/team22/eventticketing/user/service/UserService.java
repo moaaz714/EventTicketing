@@ -1,5 +1,6 @@
 package com.team22.eventticketing.user.service;
 
+import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.dto.UserBookingSummaryDTO;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.repository.UserRepository;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class UserService {
@@ -54,6 +56,18 @@ public class UserService {
         return userRepository.save(existing);
     }
 
+    // ─── Update Preferences ───────────────────────────────────────────────────────
+
+    public User updatePreferences(Long id, Map<String, Object> incoming) {
+        User user = findById(id);
+        user.getPreferences().putAll(incoming);
+        return userRepository.save(user);
+    }
+
+    // ─── Search ───────────────────────────────────────────────────────────────────
+
+    public List<User> search(String name, String email, Role role) {
+        return userRepository.searchUsers(name, email, role == null ? null : role.name());
     // ─── Filter by Preference (JSONB) ────────────────────────────────────────────
 
     /**
