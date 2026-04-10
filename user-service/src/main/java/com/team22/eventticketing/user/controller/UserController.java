@@ -1,5 +1,6 @@
 package com.team22.eventticketing.user.controller;
 
+import com.team22.eventticketing.user.dto.UserBookingSummaryDTO;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.service.UserService;
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,11 @@ public class UserController {
         return new ResponseEntity<>(userService.create(user), HttpStatus.CREATED);
     }
 
+    @GetMapping("/health")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("OK");
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<User> getUserById(@PathVariable Long id) {
         return ResponseEntity.ok(userService.findById(id));
@@ -38,6 +44,13 @@ public class UserController {
             @RequestParam String key,
             @RequestParam String value) {
         return ResponseEntity.ok(userService.findByPreference(key, value));
+    }
+
+    // ─── [S1-F3] Get User Booking Summary ────────────────────────────────────────
+
+    @GetMapping("/{id}/booking-summary")
+    public ResponseEntity<UserBookingSummaryDTO> getBookingSummary(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.getBookingSummary(id));
     }
 
     @PutMapping("/{id}")
