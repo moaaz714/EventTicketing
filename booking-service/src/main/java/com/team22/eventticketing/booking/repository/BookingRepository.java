@@ -32,4 +32,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     void insertTicketSale(@Param("bookingId") Long bookingId,
                           @Param("userId") Long userId,
                           @Param("amount") Double amount);
+    // S3-F5: filter bookings by JSONB metadata key-value pair
+    @Query(value = "SELECT * FROM bookings WHERE metadata->>:key = :value",
+            nativeQuery = true)
+    List<Booking> findByMetadataField(@Param("key") String key,
+                                      @Param("value") String value);
 }
