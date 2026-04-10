@@ -1,6 +1,8 @@
 package com.team22.eventticketing.booking.controller;
 
 
+import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
+import com.team22.eventticketing.booking.dto.CostEstimateRequest;
 import org.springframework.web.bind.annotation.*;
 import com.team22.eventticketing.booking.model.Booking;
 import com.team22.eventticketing.booking.model.BookingStatus;
@@ -10,6 +12,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
+
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -45,5 +50,17 @@ public class bookingController {
 
         Booking confirmedBooking = bookingService.confirmBooking(bookingId, eventId);
         return ResponseEntity.ok(confirmedBooking);
+    }
+
+
+
+    @PostMapping("/estimate")
+    public ResponseEntity<BookingCostEstimateDTO> getBookingCostEstimate(@RequestBody CostEstimateRequest request) {
+        BookingCostEstimateDTO estimate = bookingService.estimateCost(
+                request.getEventId(),
+                request.getTicketCount(),
+                request.getTicketTier()
+        );
+        return ResponseEntity.ok(estimate);
     }
 }
