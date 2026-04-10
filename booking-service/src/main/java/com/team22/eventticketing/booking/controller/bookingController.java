@@ -1,52 +1,31 @@
 package com.team22.eventticketing.booking.controller;
 
 import com.team22.eventticketing.booking.model.Booking;
-import com.team22.eventticketing.booking.model.BookingStatus;
 import com.team22.eventticketing.booking.service.BookingService;
-import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
-import com.team22.eventticketing.booking.dto.BookingItemRequest;
-import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
-
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
 import java.time.LocalDateTime;
 import java.util.List;
-
+import com.team22.eventticketing.booking.dto.BookingItemRequest;
+import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
 @RestController
-@RequestMapping("/api/bookings") // Requirement 4.a
-public class BookingController {
+@RequestMapping("/api/bookings")
+public class bookingController {
 
     private final BookingService bookingService;
 
-    public BookingController(BookingService bookingService) {
+    public bookingController(BookingService bookingService) {
         this.bookingService = bookingService;
     }
 
+    // ─── Health ───────────────────────────────────────────────────────────────────
+
     @GetMapping("/health")
-    public String statusCheck(){
+    public String statusCheck() {
         return "OK";
     }
-
-    // ==========================================
-    // YOUR CODE (S3-F1)
-    // ==========================================
-
-    @GetMapping("/search")
-    public ResponseEntity<List<Booking>> searchBookings(
-            @RequestParam(required = false) BookingStatus status,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
-
-        List<Booking> results = bookingService.searchBookings(status, startDate, endDate);
-        return ResponseEntity.ok(results);
-    }
-
-    // ==========================================
-    // TEAMMATES' CODE (Main Branch)
-    // ==========================================
 
     // ─── Create ──────────────────────────────────────────────────────────────────
 
@@ -89,13 +68,11 @@ public class BookingController {
         bookingService.delete(id);
         return ResponseEntity.noContent().build();
     }
-
     // ─── S3-F4: Complete Booking ──────────────────────────────────────────────────
     @PutMapping("/{id}/complete")
     public ResponseEntity<Booking> completeBooking(@PathVariable Long id) {
         return ResponseEntity.ok(bookingService.completeBooking(id));
     }
-
     // ─── S3-F5: Filter by Metadata ────────────────────────────────────────────────
     @GetMapping("/metadata/search")
     public ResponseEntity<List<Booking>> searchByMetadata(
@@ -103,7 +80,6 @@ public class BookingController {
             @RequestParam String value) {
         return ResponseEntity.ok(bookingService.filterByMetadata(key, value));
     }
-
     // ─── S3-F6: Booking Analytics ─────────────────────────────────────────────────
     @GetMapping("/analytics")
     public ResponseEntity<BookingAnalyticsDTO> getAnalytics(
@@ -113,15 +89,11 @@ public class BookingController {
         LocalDateTime end   = LocalDateTime.parse(endDate + "T23:59:59");
         return ResponseEntity.ok(bookingService.getAnalytics(start, end));
     }
-
-    // ─── S3-F7: Cancel Booking ────────────────────────────────────────────────────
     @PutMapping("/{id}/cancel")
     public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
         bookingService.cancelBooking(id);
         return ResponseEntity.ok().build();
     }
-
-    // ─── S3-F8: Add Items ─────────────────────────────────────────────────────────
     @PostMapping("/{bookingId}/items")
     public ResponseEntity<Booking> addItems(
             @PathVariable Long bookingId,
@@ -129,7 +101,9 @@ public class BookingController {
         return ResponseEntity.ok(bookingService.addItemsToBooking(bookingId, items));
     }
 
-    // ─── S3-F9: Get Booking Details ───────────────────────────────────────────────
     @GetMapping("/{bookingId}/details")
     public ResponseEntity<BookingDetailsDTO> getBookingDetails(
             @PathVariable Long bookingId) {
+        return ResponseEntity.ok(bookingService.getBookingDetails(bookingId));
+    }
+}
