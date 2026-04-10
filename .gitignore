@@ -44,6 +44,3 @@ target/
 .env
 *.class
 .DS_Store
-CLAUDE.md
-milestone__desc.pdf
-/.claude
