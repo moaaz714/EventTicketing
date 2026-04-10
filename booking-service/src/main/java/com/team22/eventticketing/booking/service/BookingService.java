@@ -18,6 +18,9 @@ import com.team22.eventticketing.booking.model.BookingItem;
 import com.team22.eventticketing.booking.model.BookingItemStatus;
 import com.team22.eventticketing.booking.repository.BookingItemRepository;
 import java.util.List;
+import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
+import com.team22.eventticketing.booking.dto.BookingItemDTO;
+import java.util.stream.Collectors;
 @Service
 public class BookingService {
 
@@ -188,5 +191,42 @@ public class BookingService {
         }
 
         return bookingRepository.findByIdWithItems(bookingId).get();
+    }
+
+    public BookingDetailsDTO getBookingDetails(Long bookingId) {
+        Booking booking = bookingRepository.findByIdWithItems(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId));
+
+        List<BookingItemDTO> itemDTOs = booking.getBookingItems() == null
+                ? List.of()
+                : booking.getBookingItems().stream()
+                .sorted((a, b) -> Integer.compare(a.getEventOrder(), b.getEventOrder()))
+                .map(item -> new BookingItemDTO(
+                        item.getId(),
+                        item.getEventOrder(),
+                        item.getSessionTitle(),
+                        item.getQuantity(),
+                        item.getUnitPrice(),
+                        item.getStatus().name(),
+                        item.getMetadata()
+                ))
+                .collect(Collectors.toList());
+
+        long confirmedItems = itemDTOs.stream()
+                .filter(i -> i.getStatus().equals("CONFIRMED"))
+                .count();
+
+        return new BookingDetailsDTO(
+                booking.getId(),
+                booking.getUserId(),
+                booking.getEventId(),
+                booking.getStatus().name(),
+                booking.getTotalAmount(),
+                booking.getMetadata(),
+                itemDTOs,
+                itemDTOs.size(),
+                confirmedItems
+        );
     }
 }

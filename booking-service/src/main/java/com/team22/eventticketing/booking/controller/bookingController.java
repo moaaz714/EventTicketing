@@ -9,7 +9,7 @@ import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
 import java.time.LocalDateTime;
 import java.util.List;
 import com.team22.eventticketing.booking.dto.BookingItemRequest;
-
+import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
 @RestController
 @RequestMapping("/api/bookings")
 public class bookingController {
@@ -99,5 +99,11 @@ public class bookingController {
             @PathVariable Long bookingId,
             @RequestBody List<BookingItemRequest> items) {
         return ResponseEntity.ok(bookingService.addItemsToBooking(bookingId, items));
+    }
+
+    @GetMapping("/{bookingId}/details")
+    public ResponseEntity<BookingDetailsDTO> getBookingDetails(
+            @PathVariable Long bookingId) {
+        return ResponseEntity.ok(bookingService.getBookingDetails(bookingId));
     }
 }
