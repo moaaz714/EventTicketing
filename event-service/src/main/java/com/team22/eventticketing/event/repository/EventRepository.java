@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface EventRepository extends JpaRepository<Event, Long> {
 
@@ -19,6 +21,26 @@ public interface EventRepository extends JpaRepository<Event, Long> {
             )
             """, nativeQuery = true)
     boolean existsActiveBookingsForEvent(@Param("eventId") Long eventId);
+
+
+    @Query(value = """
+            SELECT * FROM events e
+            WHERE e.details ->> :key = :value
+            """, nativeQuery = true)
+    List<Event> findByDetailAttribute(
+            @Param("key") String key,
+            @Param("value") String value
+    );
+    @Query(value = """
+        SELECT * FROM events e
+        WHERE e.details ->> :key = :value
+          AND e.status = :status
+        """, nativeQuery = true)
+    List<Event> findByDetailAttributeAndStatus(
+            @Param("key") String key,
+            @Param("value") String value,
+            @Param("status") String status
+    );
     // Check if booking exists at all
     @Query(value = "SELECT COUNT(*) FROM bookings WHERE id = :bookingId", nativeQuery = true)
     long checkBookingExists(@Param("bookingId") Long bookingId);

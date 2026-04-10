@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
+
 @Service
 public class EventService {
 
@@ -139,5 +141,21 @@ public class EventService {
                     unverifiedSessions.size()
             );
         }).toList();
+    }
+
+    public List<Event> filterEventsByDetail(String key, String value, String status) {
+
+        if (key == null || key.isBlank() || value == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Key and value are required"
+            );
+        }
+
+        if (status == null || status.isBlank()) {
+            return eventRepository.findByDetailAttribute(key, value);
+        }
+
+        return eventRepository.findByDetailAttributeAndStatus(key, value, status);
     }
 }
