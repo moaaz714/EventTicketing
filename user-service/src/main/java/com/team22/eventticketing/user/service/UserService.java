@@ -68,6 +68,8 @@ public class UserService {
 
     public List<User> search(String name, String email, Role role) {
         return userRepository.searchUsers(name, email, role == null ? null : role.name());
+    }
+
     // ─── Filter by Preference (JSONB) ────────────────────────────────────────────
 
     /**

@@ -1,12 +1,15 @@
 package com.team22.eventticketing.user.controller;
 
 import com.team22.eventticketing.user.dto.UserBookingSummaryDTO;
+import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
@@ -38,6 +41,27 @@ public class UserController {
         return ResponseEntity.ok(userService.findAll());
     }
 
+    // ─── [S1-F1] Search users by name / email / role ──────────────────────────────
+
+    @GetMapping("/search")
+    public ResponseEntity<List<User>> search(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) Role role) {
+        return ResponseEntity.ok(userService.search(name, email, role));
+    }
+
+    // ─── [S1-F2] Update User Preferences ─────────────────────────────────────────
+
+    @PutMapping("/{id}/preferences")
+    public ResponseEntity<User> updatePreferences(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> preferences) {
+        return ResponseEntity.ok(userService.updatePreferences(id, preferences));
+    }
+
+    // ─── [S1-F5] Filter by Preference (JSONB) ────────────────────────────────────
+
     @GetMapping("/preferences/search")
     public ResponseEntity<List<User>> findByPreference(
             @RequestParam String key,
@@ -56,6 +80,8 @@ public class UserController {
     public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody User user) {
         return ResponseEntity.ok(userService.update(id, user));
     }
+
+    // ─── [S1-F4] Deactivate ───────────────────────────────────────────────────────
 
     @PutMapping("/{id}/deactivate")
     public ResponseEntity<User> deactivateUser(@PathVariable Long id) {
