@@ -2,14 +2,17 @@ package com.team22.eventticketing.user.service;
 
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.dto.UserBookingSummaryDTO;
+import com.team22.eventticketing.user.dto.TopAttendeeDTO;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -68,14 +71,10 @@ public class UserService {
 
     public List<User> search(String name, String email, Role role) {
         return userRepository.searchUsers(name, email, role == null ? null : role.name());
+    }
+
     // ─── Filter by Preference (JSONB) ────────────────────────────────────────────
 
-    /**
-     * Returns all users whose {@code preferences} JSONB column contains an entry
-     * where the given {@code key} maps to the given {@code value}.
-     *
-     * Throws 400 Bad Request if either {@code key} or {@code value} is blank.
-     */
     public List<User> findByPreference(String key, String value) {
         if (key == null || key.isBlank()) {
             throw new ResponseStatusException(
@@ -95,10 +94,10 @@ public class UserService {
 
         Object[] row = userRepository.getBookingSummaryByUserId(id).get(0);
 
-        long totalBookings        = ((Number) row[0]).longValue();
-        long completedBookings    = ((Number) row[1]).longValue();
-        long cancelledBookings    = ((Number) row[2]).longValue();
-        double totalSpent         = ((Number) row[3]).doubleValue();
+        long totalBookings          = ((Number) row[0]).longValue();
+        long completedBookings      = ((Number) row[1]).longValue();
+        long cancelledBookings      = ((Number) row[2]).longValue();
+        double totalSpent           = ((Number) row[3]).doubleValue();
         double averageBookingAmount = ((Number) row[4]).doubleValue();
 
         return new UserBookingSummaryDTO(
@@ -110,6 +109,25 @@ public class UserService {
                 totalSpent,
                 averageBookingAmount
         );
+    }
+
+    // ─── S1-F6: Top attendees by spending ────────────────────────────────────────
+
+    public List<TopAttendeeDTO> getTopAttendees(String startDate, String endDate, int limit) {
+        LocalDate start = LocalDate.parse(startDate);
+        LocalDate end   = LocalDate.parse(endDate);
+        if (start.isAfter(end)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate must not be after endDate");
+        }
+        return userRepository.findTopAttendees(start.atStartOfDay(), end.atTime(23, 59, 59), limit)
+                .stream()
+                .map(row -> new TopAttendeeDTO(
+                        ((Number) row[0]).longValue(),
+                        (String)  row[1],
+                        ((Number) row[2]).doubleValue(),
+                        ((Number) row[3]).longValue()
+                ))
+                .collect(Collectors.toList());
     }
 
     // ─── Delete ───────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -19,6 +20,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> searchUsers(@Param("name") String name,
                            @Param("email") String email,
                            @Param("role") String role);
+
     // S1-F3: aggregate booking stats for a user from the shared bookings table
     @Query(value = """
         SELECT
@@ -45,4 +47,21 @@ public interface UserRepository extends JpaRepository<User, Long> {
            nativeQuery = true)
     List<User> findByPreference(@Param("key") String key,
                                 @Param("value") String value);
+
+    // S1-F6: top N attendees by total spending in a date range
+    @Query(value = """
+        SELECT u.id AS userId, u.name AS name,
+               COALESCE(SUM(b.total_amount), 0) AS totalSpent,
+               COUNT(b.id) AS bookingCount
+        FROM users u
+        JOIN bookings b ON b.user_id = u.id
+        WHERE b.booking_date BETWEEN :start AND :end
+          AND b.status = 'COMPLETED'
+        GROUP BY u.id, u.name
+        ORDER BY totalSpent DESC
+        LIMIT :limit
+        """, nativeQuery = true)
+    List<Object[]> findTopAttendees(@Param("start") LocalDateTime start,
+                                    @Param("end") LocalDateTime end,
+                                    @Param("limit") int limit);
 }
