@@ -7,6 +7,8 @@ import com.team22.eventticketing.event.service.EventService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/events")
 public class eventController {
@@ -30,6 +32,15 @@ public class eventController {
     ) {
         eventService.updateEventStatus(id, request);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/details/search")
+    public ResponseEntity<List<Event>> filterEvents(
+            @RequestParam String key,
+            @RequestParam String value,
+            @RequestParam(required = false) String status
+    ) {
+        return ResponseEntity.ok(eventService.filterEventsByDetail(key, value, status));
     }
 
     // [S2-F7] Rate an Event (Your Feature)
