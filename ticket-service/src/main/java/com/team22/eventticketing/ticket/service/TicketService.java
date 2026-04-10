@@ -60,6 +60,13 @@ public class TicketService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
         }
 
+        if (ticketRepository.existsByTicketCode(ticketCode)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ticket code already exists"
+            );
+        }
+
         Ticket ticket = new Ticket();
         ticket.setBookingId(bookingId);
         ticket.setAttendeeName(attendeeName);

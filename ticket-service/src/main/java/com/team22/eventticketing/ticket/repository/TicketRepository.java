@@ -22,6 +22,8 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
         @Query(value = "SELECT COUNT(*) > 0 FROM bookings WHERE id = :bookingId", nativeQuery = true)
         boolean existsBookingById(@Param("bookingId") Long bookingId);
 
+        boolean existsByTicketCode(String ticketCode);
+
         @Query(value = """
             SELECT 
                 t.id AS ticketId,
