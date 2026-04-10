@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/sales")
@@ -49,6 +50,13 @@ public class salesController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {
         ticketSaleService.delete(id);
+    }
+
+    // ─── [S5-F2] Process Refund ───────────────────────────────────────────────────
+
+    @PutMapping("/{id}/refund")
+    public TicketSale refund(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        return ticketSaleService.refund(id, body.get("reason"));
     }
 
     // ─── [S5-F1] Search by optional status and date range ────────────────────────
