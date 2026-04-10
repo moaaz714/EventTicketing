@@ -1,5 +1,7 @@
 package com.team22.eventticketing.user.service;
 
+import com.team22.eventticketing.user.entity.Role;
+import com.team22.eventticketing.user.dto.UserBookingSummaryDTO;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -7,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class UserService {
@@ -53,6 +56,18 @@ public class UserService {
         return userRepository.save(existing);
     }
 
+    // ─── Update Preferences ───────────────────────────────────────────────────────
+
+    public User updatePreferences(Long id, Map<String, Object> incoming) {
+        User user = findById(id);
+        user.getPreferences().putAll(incoming);
+        return userRepository.save(user);
+    }
+
+    // ─── Search ───────────────────────────────────────────────────────────────────
+
+    public List<User> search(String name, String email, Role role) {
+        return userRepository.searchUsers(name, email, role == null ? null : role.name());
     // ─── Filter by Preference (JSONB) ────────────────────────────────────────────
 
     /**
@@ -71,6 +86,30 @@ public class UserService {
                     HttpStatus.BAD_REQUEST, "Query parameter 'value' must not be blank");
         }
         return userRepository.findByPreference(key, value);
+    }
+
+    // ─── [S1-F3] Get User Booking Summary (DTO) ──────────────────────────────────
+
+    public UserBookingSummaryDTO getBookingSummary(Long id) {
+        User user = findById(id); // throws 404 if not found
+
+        Object[] row = userRepository.getBookingSummaryByUserId(id).get(0);
+
+        long totalBookings        = ((Number) row[0]).longValue();
+        long completedBookings    = ((Number) row[1]).longValue();
+        long cancelledBookings    = ((Number) row[2]).longValue();
+        double totalSpent         = ((Number) row[3]).doubleValue();
+        double averageBookingAmount = ((Number) row[4]).doubleValue();
+
+        return new UserBookingSummaryDTO(
+                user.getId(),
+                user.getName(),
+                totalBookings,
+                completedBookings,
+                cancelledBookings,
+                totalSpent,
+                averageBookingAmount
+        );
     }
 
     // ─── Delete ───────────────────────────────────────────────────────────────────
