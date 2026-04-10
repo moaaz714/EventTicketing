@@ -1,4 +1,5 @@
 package com.team22.eventticketing.event.repository;
+import com.team22.eventticketing.event.dto.TopEventDTO;
 
 
 import com.team22.eventticketing.event.model.Event;
@@ -6,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import java.util.List;
 
 import java.util.List;
 
@@ -56,4 +59,17 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     //  Find events that have at least one unverified session
     @Query("SELECT DISTINCT e FROM Event e JOIN e.eventSessions s WHERE s.verified = false")
     java.util.List<Event> findEventsWithUnverifiedSessions();
+    @Query(value = """
+        SELECT 
+            e.id AS eventId,
+            e.name AS name,
+            e.rating AS rating,
+            COUNT(b.id) AS totalBookings
+        FROM events e
+        LEFT JOIN bookings b ON b.event_id = e.id
+        GROUP BY e.id, e.name, e.rating
+        ORDER BY e.rating DESC
+        LIMIT :limit
+        """, nativeQuery = true)
+    List<Object[]> findTopRatedEvents(@Param("limit") int limit);
 }
