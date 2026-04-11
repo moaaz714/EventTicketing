@@ -1,5 +1,6 @@
 package com.team22.eventticketing.ticket.controller;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import com.team22.eventticketing.ticket.model.Ticket;
@@ -13,6 +14,7 @@ import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.service.TicketService;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -133,5 +135,16 @@ public class ticketController {
             @RequestParam String value
     ) {
         return ticketService.filterByMetadata(key, operator, value);
+    }
+
+    // ==================== S4-F6: Get Tickets in Date Range ====================
+
+    @GetMapping("/history")
+    public List<Ticket> getTicketHistory(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) String status
+    ) {
+        return ticketService.getTicketHistory(startDate, endDate, status);
     }
 }
