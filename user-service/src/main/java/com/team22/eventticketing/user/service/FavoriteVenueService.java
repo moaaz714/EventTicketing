@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class FavoriteVenueService {
@@ -78,5 +79,28 @@ public class FavoriteVenueService {
                     HttpStatus.NOT_FOUND, "FavoriteVenue not found with id: " + id);
         }
         favoriteVenueRepository.deleteById(id);
+    }
+
+
+    // (S1-F7)
+    @Transactional
+    public User setDefault(Long userId, Long venueId) {
+        User user = userService.findById(userId); // 404 if user missing
+
+        FavoriteVenue venue = findById(venueId); // 404 if venue missing
+
+        // 400 if the venue doesn't belong to this user
+        if (!venue.getUser().getId().equals(userId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Venue " + venueId + " does not belong to user " + userId);
+        }
+
+        favoriteVenueRepository.clearDefaultsByUserId(userId); // clear all defaults
+        venue.setIsDefault(true);
+        favoriteVenueRepository.save(venue);
+
+        // Return a fresh copy of the user so favoriteVenues list reflects the changes
+        return userService.findById(userId);
     }
 }
