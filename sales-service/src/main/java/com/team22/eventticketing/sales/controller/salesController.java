@@ -2,6 +2,7 @@ package com.team22.eventticketing.sales.controller;
 
 import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
 import com.team22.eventticketing.sales.dto.RevenueReportDTO;
+import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
@@ -113,6 +114,10 @@ public class salesController {
         return ticketSaleService.getUserSummary(userId);
     }
 
+    // ─── S5-F8: Get Sale Details with Applied Promotions ──────────
+    @GetMapping("/{saleId}/details")
+    public SaleDetailsDTO getSaleDetails(@PathVariable Long saleId) {
+        return ticketSaleService.getSaleDetails(saleId);
     // ─── S5-F9: Top Used Promotions Report ────────
     @GetMapping("/promotions/top-used")
     public List<PromotionUsageDTO> getTopUsedPromotions(@RequestParam int limit) {
