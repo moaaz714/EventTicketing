@@ -12,9 +12,13 @@ import java.util.Optional;
 @Repository
 public interface PromotionRepository extends JpaRepository<Promotion, Long> {
 
+    // Find promotion by unique code
     Optional<Promotion> findByCode(String code);
 
-    // [S5-F9] Join with sale_promotions, group, order, limit
+<<<<<<< HEAD
+    // [S5-F9] Top used promotions analytics
+=======
+>>>>>>> origin/main
     @Query(value = """
             SELECT p.id, p.code, p.discount_type, p.discount_value,
                    p.current_uses, SUM(sp.discount_applied) as totalDiscountGiven,

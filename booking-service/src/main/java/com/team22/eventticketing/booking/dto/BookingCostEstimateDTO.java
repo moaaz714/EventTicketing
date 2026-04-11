@@ -13,20 +13,15 @@ public class BookingCostEstimateDTO {
         this.demandMultiplier = demandMultiplier;
     }
 
-    public Double getTicketCost() {
-        return ticketCost;
+    // TODO: Add standard Getters and Setters
+
+
+    public Double getDemandMultiplier() {
+        return demandMultiplier;
     }
 
-    public void setTicketCost(Double ticketCost) {
-        this.ticketCost = ticketCost;
-    }
-
-    public Double getServiceFee() {
-        return serviceFee;
-    }
-
-    public void setServiceFee(Double serviceFee) {
-        this.serviceFee = serviceFee;
+    public void setDemandMultiplier(Double demandMultiplier) {
+        this.demandMultiplier = demandMultiplier;
     }
 
     public Double getEstimatedTotal() {
@@ -37,11 +32,19 @@ public class BookingCostEstimateDTO {
         this.estimatedTotal = estimatedTotal;
     }
 
-    public Double getDemandMultiplier() {
-        return demandMultiplier;
+    public Double getServiceFee() {
+        return serviceFee;
     }
 
-    public void setDemandMultiplier(Double demandMultiplier) {
-        this.demandMultiplier = demandMultiplier;
+    public void setServiceFee(Double serviceFee) {
+        this.serviceFee = serviceFee;
+    }
+
+    public Double getTicketCost() {
+        return ticketCost;
+    }
+
+    public void setTicketCost(Double ticketCost) {
+        this.ticketCost = ticketCost;
     }
 }

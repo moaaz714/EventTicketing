@@ -5,9 +5,15 @@ import com.team22.eventticketing.event.dto.TopEventDTO;
 import com.team22.eventticketing.event.dto.EventRatingRequestDTO;
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
 import com.team22.eventticketing.event.model.Event;
+import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.service.EventService;
+import jakarta.annotation.PostConstruct;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.Map;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 import java.util.List;
 
@@ -26,7 +32,7 @@ public class eventController {
         return "OK";
     }
 
-    // [S2-F4] Update Event Status (Teammate's Feature)
+    // [S2-F4] Update Event Status
     @PutMapping("/{id}/status")
     public ResponseEntity<Void> updateEventStatus(
             @PathVariable Long id,
@@ -45,14 +51,23 @@ public class eventController {
         return ResponseEntity.ok(eventService.filterEventsByDetail(key, value, status));
     }
 
-    // [S2-F7] Rate an Event (Your Feature)
+    // [S2-F7] Rate an Event
     @PostMapping("/{id}/rate")
     public ResponseEntity<Void> rateEvent(@PathVariable Long id, @RequestBody EventRatingRequestDTO request) {
         eventService.rateEvent(id, request.bookingId(), request.rating());
         return ResponseEntity.ok().build();
     }
 
-    // [S2-F8] Verify Event Session (Your Feature)
+    @PutMapping("/{id}/details")
+    public ResponseEntity<Void> updateEventDetails(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> request) {
+
+        eventService.updateEventDetails(id, request);
+        return ResponseEntity.ok().build();
+    }
+    // [S2-F8] Verify Event Session
+
     @PutMapping("/{eventId}/sessions/{sessionId}/verify")
     public ResponseEntity<Event> verifySession(
             @PathVariable Long eventId,
@@ -62,8 +77,25 @@ public class eventController {
         Event updatedEvent = eventService.verifyEventSession(eventId, sessionId, request.verifiedBy());
         return ResponseEntity.ok(updatedEvent);
     }
+    @GetMapping("/search")
+    public ResponseEntity<List<Event>> searchEvents(
+            @RequestParam(required = false) EventCategory category,
+            @RequestParam(required = false) LocalDateTime startDate,
+            @RequestParam(required = false) LocalDateTime endDate) {
 
-    // [S2-F9] Get Events with Unverified Sessions Report (Your Feature)
+        return ResponseEntity.ok(
+                eventService.searchEvents(category, startDate, endDate)
+        );
+
+
+    }
+
+    @GetMapping("/test")
+    public String test() {
+        return "CONTROLLER OK";
+    }
+
+    // [S2-F9] Get Events with Unverified Sessions Report
     @GetMapping("/sessions/unverified")
     public ResponseEntity<java.util.List<com.team22.eventticketing.event.dto.EventSessionAlertDTO>> getUnverifiedSessions() {
         return ResponseEntity.ok(eventService.getUnverifiedSessionsReport());
@@ -72,4 +104,17 @@ public class eventController {
     public ResponseEntity<List<TopEventDTO>> getTopRatedEvents(@RequestParam int limit) {
         return ResponseEntity.ok(eventService.getTopRatedEvents(limit));
     }
+
+
+    @PostConstruct
+    public void init() {
+        System.out.println("EVENT CONTROLLER LOADED");
+    }
+
+//    @PutMapping("/{id}/details")
+//    public ResponseEntity<Event> updateEventDetails(
+//            @PathVariable Long id,
+//            @RequestBody Map details) {
+//        return ResponseEntity.ok(eventService.updateEventDetails(id, details));
+//    }
 }

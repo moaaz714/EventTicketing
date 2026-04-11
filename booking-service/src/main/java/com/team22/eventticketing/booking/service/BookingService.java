@@ -1,45 +1,34 @@
 package com.team22.eventticketing.booking.service;
 
-import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
-import com.team22.eventticketing.booking.model.Booking;
-import com.team22.eventticketing.booking.model.BookingStatus;
-import com.team22.eventticketing.booking.repository.BookingRepository;
-import org.springframework.stereotype.Service;
-
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
-
-import java.time.LocalDateTime;
-import java.util.List;
-
-import com.team22.eventticketing.booking.repository.BookingRepository;
-import com.team22.eventticketing.booking.model.BookingStatus;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.List;
 import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
-import java.time.LocalDateTime;
-import org.springframework.transaction.annotation.Transactional;
-import com.team22.eventticketing.booking.dto.BookingItemRequest;
-import com.team22.eventticketing.booking.model.BookingItem;
-import com.team22.eventticketing.booking.model.BookingItemStatus;
-import com.team22.eventticketing.booking.repository.BookingItemRepository;
-import java.util.List;
+import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
 import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
 import com.team22.eventticketing.booking.dto.BookingItemDTO;
+import com.team22.eventticketing.booking.dto.BookingItemRequest;
+import com.team22.eventticketing.booking.model.Booking;
+import com.team22.eventticketing.booking.model.BookingItem;
+import com.team22.eventticketing.booking.model.BookingItemStatus;
+import com.team22.eventticketing.booking.model.BookingStatus;
+import com.team22.eventticketing.booking.repository.BookingItemRepository;
+import com.team22.eventticketing.booking.repository.BookingRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.stream.Collectors;
+
 @Service
 public class BookingService {
 
     private final BookingRepository bookingRepository;
+    private final BookingItemRepository bookingItemRepository;
 
-    public BookingService(BookingRepository bookingRepository) {
+    public BookingService(BookingRepository bookingRepository, BookingItemRepository bookingItemRepository) {
         this.bookingRepository = bookingRepository;
+        this.bookingItemRepository = bookingItemRepository;
     }
 
     public List<Booking> searchBookings(BookingStatus status, LocalDateTime startDate, LocalDateTime endDate) {
@@ -48,10 +37,6 @@ public class BookingService {
         } else {
             return bookingRepository.findByBookingDateBetweenOrderByBookingDateDesc(startDate, endDate);
         }
-    private final BookingItemRepository bookingItemRepository;
-    public BookingService(BookingRepository bookingRepository,BookingItemRepository bookingItemRepository) {
-        this.bookingRepository = bookingRepository;
-        this.bookingItemRepository = bookingItemRepository;
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────
@@ -107,7 +92,9 @@ public class BookingService {
         }
         bookingRepository.deleteById(id);
     }
+
     // ─── S3-F4: Complete Booking ──────────────────────────────────────────────────
+
     @Transactional
     public Booking completeBooking(Long id) {
         Booking booking = bookingRepository.findByIdWithItems(id)
@@ -138,7 +125,9 @@ public class BookingService {
 
         return saved;
     }
+
     // ─── S3-F5: Filter Bookings by Metadata ──────────────────────────────────────
+
     public List<Booking> filterByMetadata(String key, String value) {
         if (key == null || key.isBlank() || value == null || value.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -146,7 +135,9 @@ public class BookingService {
         }
         return bookingRepository.findByMetadataField(key, value);
     }
+
     // ─── S3-F6: Booking Analytics ─────────────────────────────────────────────────
+
     public BookingAnalyticsDTO getAnalytics(LocalDateTime start, LocalDateTime end) {
         long total     = bookingRepository.countInRange(start, end);
         long completed = bookingRepository.countCompletedInRange(start, end);
@@ -157,6 +148,7 @@ public class BookingService {
 
         return new BookingAnalyticsDTO(total, completed, cancelled, revenue, avg, rate);
     }
+
     @Transactional
     public void cancelBooking(Long id) {
         Booking booking = bookingRepository.findById(id)
@@ -172,8 +164,6 @@ public class BookingService {
         booking.setStatus(BookingStatus.CANCELLED);
         bookingRepository.save(booking);
         bookingRepository.cancelValidTicketsForBooking(id);
-
-
     }
 
     @Transactional
@@ -255,40 +245,36 @@ public class BookingService {
 
     @Transactional
     public Booking confirmBooking(Long bookingId, Long eventId) {
-        // 1. Find booking -> throw 404 if not found
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
 
-        // 2. Validate booking status is PENDING -> throw 400 if not
-        if (booking.getStatus() != BookingStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking is not PENDING. Current status: " + booking.getStatus());
-        }
-
-        // 3. Verify event exists and is UPCOMING -> throw 404 or 400
         String eventStatus = bookingRepository.findEventStatusById(eventId);
         if (eventStatus == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event with ID " + eventId + " not found");
         }
+
+        if (booking.getStatus() != BookingStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking is not PENDING. Current status: " + booking.getStatus());
+        }
+
         if (!"UPCOMING".equals(eventStatus)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event is not UPCOMING. Current status: " + eventStatus);
         }
 
-        // 4. Update booking fields
         booking.setEventId(eventId);
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setConfirmedAt(LocalDateTime.now());
 
-        // 5. Save and return
         return bookingRepository.save(booking);
     }
 
-    // Make sure to import com.teamXX.eventticketing.booking.dto.BookingCostEstimateDTO;
+    // ─── S3-F3: Get Booking Cost Estimate ─────────────────────────────────────────
 
     public BookingCostEstimateDTO estimateCost(Long eventId, Integer ticketCount, String ticketTier) {
         // 1. Get Average Capacity
         Double avgCapacity = bookingRepository.getAverageSessionCapacity(eventId);
         if (avgCapacity == null) {
-            avgCapacity = 0.0; // Fallback if the event has no sessions yet
+            avgCapacity = 0.0;
         }
 
         // 2. Calculate Base Price and Tier Multiplier
@@ -304,10 +290,12 @@ public class BookingService {
         // 5. Determine Demand Multiplier
         Long activeBookings = bookingRepository.countActiveBookingsForEvent(eventId);
         double demandMultiplier = 1.0;
-        if (activeBookings > 200) {
-            demandMultiplier = 1.5;
-        } else if (activeBookings > 50) {
-            demandMultiplier = 1.25;
+        if (activeBookings != null) {
+            if (activeBookings > 200) {
+                demandMultiplier = 1.5;
+            } else if (activeBookings > 50) {
+                demandMultiplier = 1.25;
+            }
         }
 
         // 6. Calculate Estimated Total
@@ -316,6 +304,4 @@ public class BookingService {
         // Return the mapped DTO
         return new BookingCostEstimateDTO(ticketCost, serviceFee, estimatedTotal, demandMultiplier);
     }
-
-
 }

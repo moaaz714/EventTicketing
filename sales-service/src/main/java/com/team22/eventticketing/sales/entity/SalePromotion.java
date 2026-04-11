@@ -1,6 +1,12 @@
 package com.team22.eventticketing.sales.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import java.time.LocalDateTime;
+
+
+
 
 import java.time.LocalDateTime;
 
@@ -42,6 +48,8 @@ public class SalePromotion {
      * Many SalePromotions belong to One TicketSale.
      * LAZY fetch avoids loading the full TicketSale unless needed.
      */
+    @JsonBackReference
+    //@JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ticket_sale_id", nullable = false)
     private TicketSale ticketSale;
