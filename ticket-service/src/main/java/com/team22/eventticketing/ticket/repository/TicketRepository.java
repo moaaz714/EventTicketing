@@ -73,7 +73,7 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
          */
         Optional<Ticket> findByTicketCode(String ticketCode);
 
-        boolean existsByTicketCode(String ticketCode);
+
 
         @Query(value = "SELECT COUNT(*) > 0 FROM bookings WHERE id = :bookingId", nativeQuery = true)
         boolean bookingExistsById(@Param("bookingId") Long bookingId);

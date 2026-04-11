@@ -52,8 +52,7 @@ public class ticketController {
 
 
     @GetMapping("/nearby")
-    public List<
-      > getNearbyTickets(
+    public List<NearbyTicketDTO> getNearbyTickets(
             @RequestParam double lat,
             @RequestParam double lon,
             @RequestParam double radiusKm
