@@ -233,4 +233,48 @@ public class EventService {
             );
         }).toList();
     }
+
+
+    // CRUD: EVENT
+
+    public Event createEvent(Event event) {
+        return eventRepository.save(event);
+    }
+
+    public Event getEventById(Long id) {
+        return eventRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found with id: " + id));
+    }
+
+    public List<Event> getAllEvents() {
+        return eventRepository.findAll();
+    }
+
+    public void deleteEvent(Long id) {
+        if (!eventRepository.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found with id: " + id);
+        }
+        eventRepository.deleteById(id);
+    }
+
+
+    //CRUD: EVENT SESSION
+
+    public EventSession createEventSession(Long eventId, EventSession session) {
+        Event event = getEventById(eventId); // Reuse existing method to ensure event exists
+        session.setEvent(event);
+        return eventSessionRepository.save(session);
+    }
+
+    public EventSession getEventSessionById(Long sessionId) {
+        return eventSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found with id: " + sessionId));
+    }
+
+    public void deleteEventSession(Long sessionId) {
+        if (!eventSessionRepository.existsById(sessionId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found with id: " + sessionId);
+        }
+        eventSessionRepository.deleteById(sessionId);
+    }
 }
