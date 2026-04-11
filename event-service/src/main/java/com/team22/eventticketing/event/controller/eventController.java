@@ -6,6 +6,7 @@ import com.team22.eventticketing.event.dto.EventRatingRequestDTO;
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
 import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.model.EventCategory;
+import com.team22.eventticketing.event.model.EventSession;
 import com.team22.eventticketing.event.service.EventService;
 import jakarta.annotation.PostConstruct;
 import org.springframework.http.ResponseEntity;
@@ -104,6 +105,55 @@ public class eventController {
     public ResponseEntity<List<TopEventDTO>> getTopRatedEvents(@RequestParam int limit) {
         return ResponseEntity.ok(eventService.getTopRatedEvents(limit));
     }
+
+
+    // CRUD ENDPOINTS: EVENT
+
+    @PostMapping
+    public ResponseEntity<Event> createEvent(@RequestBody Event event) {
+        Event createdEvent = eventService.createEvent(event);
+        return new ResponseEntity<>(createdEvent, org.springframework.http.HttpStatus.CREATED);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Event>> getAllEvents() {
+        return ResponseEntity.ok(eventService.getAllEvents());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Event> getEventById(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.getEventById(id));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteEvent(@PathVariable Long id) {
+        eventService.deleteEvent(id);
+        return ResponseEntity.noContent().build();
+    }
+
+
+    // CRUD ENDPOINTS: EVENT SESSION
+
+    @PostMapping("/{eventId}/sessions")
+    public ResponseEntity<EventSession> createEventSession(
+            @PathVariable Long eventId,
+            @RequestBody EventSession session) {
+        EventSession createdSession = eventService.createEventSession(eventId, session);
+        return new ResponseEntity<>(createdSession, org.springframework.http.HttpStatus.CREATED);
+    }
+
+    @GetMapping("/sessions/{sessionId}")
+    public ResponseEntity<EventSession> getEventSessionById(@PathVariable Long sessionId) {
+        return ResponseEntity.ok(eventService.getEventSessionById(sessionId));
+    }
+
+    @DeleteMapping("/sessions/{sessionId}")
+    public ResponseEntity<Void> deleteEventSession(@PathVariable Long sessionId) {
+        eventService.deleteEventSession(sessionId);
+        return ResponseEntity.noContent().build();
+    }
+
+
 
 
     @PostConstruct
