@@ -215,4 +215,20 @@ public class TicketService {
                 ((java.sql.Timestamp) row.get("eventDate")).toLocalDateTime())).toList();
     }
 
+    // ==================== S4-F5: Filter Tickets by Metadata ====================
+
+    public List<Ticket> filterByMetadata(String key, String operator, String value) {
+        if (key == null || key.isBlank() || operator == null || value == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "key, operator, and value are required");
+        }
+
+        return switch (operator) {
+            case "eq" -> ticketRepository.findByMetadataEquals(key, value);
+            case "gt" -> ticketRepository.findByMetadataGreaterThan(key, value);
+            case "lt" -> ticketRepository.findByMetadataLessThan(key, value);
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid operator: " + operator + ". Allowed: eq, gt, lt");
+        };
+    }
+
 }
