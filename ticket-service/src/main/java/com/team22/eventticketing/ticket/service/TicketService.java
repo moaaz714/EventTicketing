@@ -11,10 +11,6 @@ import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketStatus;
 import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
 
-
-
-
-
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,7 +40,8 @@ public class TicketService {
 
     public Ticket getTicketById(Long id) {
         return ticketRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found with id: " + id));
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found with id: " + id));
     }
 
     public List<Ticket> getAllTickets() {
@@ -53,12 +50,26 @@ public class TicketService {
 
     public Ticket updateTicket(Long id, Ticket updated) {
         Ticket existing = getTicketById(id);
-        existing.setBookingId(updated.getBookingId());
-        existing.setAttendeeName(updated.getAttendeeName());
-        existing.setTicketCode(updated.getTicketCode());
-        existing.setStatus(updated.getStatus());
-        existing.setIssuedAt(updated.getIssuedAt());
-        existing.setMetadata(updated.getMetadata());
+
+        if (updated.getBookingId() != null) {
+            existing.setBookingId(updated.getBookingId());
+        }
+        if (updated.getAttendeeName() != null) {
+            existing.setAttendeeName(updated.getAttendeeName());
+        }
+        if (updated.getTicketCode() != null) {
+            existing.setTicketCode(updated.getTicketCode());
+        }
+        if (updated.getStatus() != null) {
+            existing.setStatus(updated.getStatus());
+        }
+        if (updated.getIssuedAt() != null) {
+            existing.setIssuedAt(updated.getIssuedAt());
+        }
+        if (updated.getMetadata() != null) {
+            existing.setMetadata(updated.getMetadata());
+        }
+
         return ticketRepository.save(existing);
     }
 
@@ -83,7 +94,8 @@ public class TicketService {
         Set<String> codesInBatch = new HashSet<>();
         for (TicketItemDTO item : items) {
             if (!codesInBatch.add(item.getTicketCode())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate ticket code in batch: " + item.getTicketCode());
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Duplicate ticket code in batch: " + item.getTicketCode());
             }
         }
 
@@ -102,36 +114,34 @@ public class TicketService {
                 item.getTicketCode(),
                 TicketStatus.VALID,
                 now,
-                item.getMetadata()
-        )).toList();
+                item.getMetadata())).toList();
 
         ticketRepository.saveAll(tickets);
         return tickets.size();
     }
 
-    //Get ticket S4-F1
+    // Get ticket S4-F1
     public Ticket getLatestTicketByBooking(Long bookingId) {
 
-        //Check if booking exists using SQL
+        // Check if booking exists using SQL
         boolean bookingExists = ticketRepository.existsBookingById(bookingId);
 
         if (!bookingExists) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
         }
 
-        //Get the latest ticket
+        // Get the latest ticket
         return ticketRepository
                 .findTopByBookingIdOrderByIssuedAtDesc(bookingId)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                "No tickets found for this booking"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "No tickets found for this booking"));
     }
 
-    //Create ticket S4-F2
+    // Create ticket S4-F2
     public Ticket issueTicket(Long bookingId,
-                              String attendeeName,
-                              String ticketCode,
-                              Map<String, Object> metadata) {
+            String attendeeName,
+            String ticketCode,
+            Map<String, Object> metadata) {
 
         boolean exists = ticketRepository.existsBookingById(bookingId);
 
@@ -142,8 +152,7 @@ public class TicketService {
         if (ticketRepository.existsByTicketCode(ticketCode)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Ticket code already exists"
-            );
+                    "Ticket code already exists");
         }
 
         Ticket ticket = new Ticket();
@@ -157,25 +166,20 @@ public class TicketService {
         return ticketRepository.save(ticket);
     }
 
-    //Find event according to distance of event S4-F3
+    // Find event according to distance of event S4-F3
     public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double radiusKm) {
 
         List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon, radiusKm);
 
-        return results.stream().map(r ->
-                new NearbyTicketDTO(
-                        ((Number) r[0]).longValue(),
-                        (String) r[1],
-                        ((Number) r[2]).longValue(),
-                        (String) r[3],
-                        r[4] != null ? ((Number) r[4]).doubleValue() : null,
-                        r[5] != null ? ((Number) r[5]).doubleValue() : null,
-                        ((Number) r[6]).doubleValue()
-                )
-        ).collect(Collectors.toList());
+        return results.stream().map(r -> new NearbyTicketDTO(
+                ((Number) r[0]).longValue(),
+                (String) r[1],
+                ((Number) r[2]).longValue(),
+                (String) r[3],
+                r[4] != null ? ((Number) r[4]).doubleValue() : null,
+                r[5] != null ? ((Number) r[5]).doubleValue() : null,
+                ((Number) r[6]).doubleValue())).collect(Collectors.toList());
     }
-
-
 
     @Transactional
     public int purgeExpiredTickets(int olderThanDays) {
