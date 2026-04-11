@@ -15,6 +15,12 @@ import java.util.Optional;
 public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
 
     // =========================
+    // S5-F8 (Sale Details with Promotions)
+    // =========================
+    @Query("SELECT ts FROM TicketSale ts LEFT JOIN FETCH ts.salePromotions sp LEFT JOIN FETCH sp.promotion WHERE ts.id = :id")
+    Optional<TicketSale> findByIdWithPromotions(@Param("id") Long id);
+
+    // =========================
     // S5-F4 (Booking Payment Flow)
     // =========================
     Optional<TicketSale> findByBookingId(Long bookingId);

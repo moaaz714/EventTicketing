@@ -1,5 +1,7 @@
 package com.team22.eventticketing.sales.service;
 
+import com.team22.eventticketing.sales.dto.AppliedPromotionDTO;
+import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.entity.enums.SaleStatus;
@@ -127,6 +129,41 @@ public class TicketSaleService {
 
         return ticketSaleRepository.findByStatusAndDateRange(status, start, end);
     }
+    // ─── [S5-F8] Get Sale Details with Applied Promotions ────────────────────────
+
+    @Transactional(readOnly = true)
+    public SaleDetailsDTO getSaleDetails(Long saleId) {
+        TicketSale sale = ticketSaleRepository.findByIdWithPromotions(saleId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "TicketSale not found with id: " + saleId));
+
+        List<AppliedPromotionDTO> appliedPromotions = sale.getSalePromotions().stream()
+                .map(sp -> new AppliedPromotionDTO(
+                        sp.getPromotion().getCode(),
+                        sp.getPromotion().getDiscountType(),
+                        sp.getDiscountApplied(),
+                        sp.getAppliedAt()))
+                .toList();
+
+        double totalDiscount = appliedPromotions.stream()
+                .mapToDouble(AppliedPromotionDTO::getDiscountApplied)
+                .sum();
+
+        double finalAmount = sale.getAmount() - totalDiscount;
+
+        return new SaleDetailsDTO(
+                sale.getId(),
+                sale.getBookingId(),
+                sale.getUserId(),
+                sale.getAmount(),
+                sale.getMethod(),
+                sale.getStatus(),
+                sale.getTransactionDetails(),
+                appliedPromotions,
+                totalDiscount,
+                finalAmount);
+    }
+
     @Transactional
     public TicketSale processBookingPayment(Long bookingId, PaymentMethod method, String cardLastFour) {
 
