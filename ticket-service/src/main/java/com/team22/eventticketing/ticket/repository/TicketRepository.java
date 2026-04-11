@@ -110,4 +110,15 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
                         "WHERE t.status = 'VALID' AND e.status = 'UPCOMING'", nativeQuery = true)
         List<Map<String, Object>> findUnusedUpcomingTicketsNative();
 
+        // [S4-F5] Filter Tickets by Metadata (JSONB Query).
+
+        @Query(value = "SELECT * FROM tickets WHERE metadata ->> :key = :value", nativeQuery = true)
+        List<Ticket> findByMetadataEquals(@Param("key") String key, @Param("value") String value);
+
+        @Query(value = "SELECT * FROM tickets WHERE (metadata ->> :key)::numeric > CAST(:value AS numeric)", nativeQuery = true)
+        List<Ticket> findByMetadataGreaterThan(@Param("key") String key, @Param("value") String value);
+
+        @Query(value = "SELECT * FROM tickets WHERE (metadata ->> :key)::numeric < CAST(:value AS numeric)", nativeQuery = true)
+        List<Ticket> findByMetadataLessThan(@Param("key") String key, @Param("value") String value);
+
 }
