@@ -37,16 +37,34 @@ public class SalesService {
     }
 
     // ─── S5-F4: Process booking payment (From HEAD) ──────────────────────────────
+    // ─── S5-F4: Process booking payment ──────────────────────────────────────────
     @Transactional
     public TicketSale processBookingPayment(Long bookingId, PaymentMethod method, String cardLastFour) {
+
+        // 1. Verify booking exists — 404 if not found
+        String bookingStatus = ticketSaleRepository.findBookingStatus(bookingId);
+        if (bookingStatus == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "Booking not found: " + bookingId);
+        }
+
+        // 2. Verify booking is COMPLETED — 400 if different status
+        if (!"COMPLETED".equals(bookingStatus)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Booking is not COMPLETED");
+        }
+
+        // 3. Check if already paid
         if (ticketSaleRepository.existsByBookingIdAndStatus(bookingId, SaleStatus.COMPLETED)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
         }
 
-        Optional<TicketSale> pendingSale = ticketSaleRepository.findByBookingIdAndStatus(bookingId, SaleStatus.PENDING);
-        TicketSale ticketSale = pendingSale.orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+        // 4. Find the PENDING ticket sale
+        TicketSale ticketSale = ticketSaleRepository.findByBookingIdAndStatus(bookingId, SaleStatus.PENDING)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "TicketSale not found for booking: " + bookingId));
 
+        // 5. Update status and transaction details
         ticketSale.setStatus(SaleStatus.COMPLETED);
 
         Map<String, Object> transactionDetails = new HashMap<>();
