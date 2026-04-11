@@ -14,7 +14,33 @@ import java.util.Optional;
 @Repository
 public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
 
-    // [S5-F1] Filter by optional status and date range, ordered most recent first
+    // =========================
+    // S5-F8 (Sale Details with Promotions)
+    // =========================
+    @Query("SELECT ts FROM TicketSale ts LEFT JOIN FETCH ts.salePromotions sp LEFT JOIN FETCH sp.promotion WHERE ts.id = :id")
+    Optional<TicketSale> findByIdWithPromotions(@Param("id") Long id);
+
+    // =========================
+    // S5-F4 (Booking Payment Flow)
+    // =========================
+    Optional<TicketSale> findByBookingId(Long bookingId);
+
+    Optional<TicketSale> findByBookingIdAndStatus(Long bookingId, SaleStatus status);
+
+    boolean existsByBookingIdAndStatus(Long bookingId, SaleStatus status);
+
+    List<TicketSale> findAllByBookingId(Long bookingId);
+
+    @Query(value = "SELECT status FROM bookings WHERE id = :bookingId", nativeQuery = true)
+    String findBookingStatus(@Param("bookingId") Long bookingId);
+
+    // =========================
+    // S5-F1 & S5-F6 (Filter & Revenue)
+    // =========================
+    List<TicketSale> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    List<TicketSale> findByStatusAndCreatedAtBetween(SaleStatus status, LocalDateTime start, LocalDateTime end);
+
     @Query(value = """
             SELECT * FROM ticket_sales
             WHERE (:status IS NULL OR status = :status)
@@ -27,7 +53,12 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             @Param("endDate") LocalDateTime endDate
     );
 
-    // [S5-F3] Group by payment method for a specific user (COMPLETED only)
+    // =========================
+    // S5-F3 (User Summary)
+    // =========================
+    @Query(value = "SELECT COUNT(*) FROM users WHERE id = :userId", nativeQuery = true)
+    Long countUserById(@Param("userId") Long userId);
+
     @Query(value = """
             SELECT method, COUNT(*) as count, SUM(amount) as total
             FROM ticket_sales
@@ -36,13 +67,9 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             """, nativeQuery = true)
     List<Object[]> findSalesSummaryByUserId(@Param("userId") Long userId);
 
-    // [S5-F4] Check if COMPLETED sale exists for this booking
-    Optional<TicketSale> findByBookingIdAndStatus(Long bookingId, SaleStatus status);
-
-    // [S5-F4 / S5-F7] Find PENDING sale for a booking
-    Optional<TicketSale> findByBookingId(Long bookingId);
-
-    // [S5-F6] Revenue report aggregation by date range
+    // =========================
+    // S5-F6 (Revenue report)
+    // =========================
     @Query(value = """
             SELECT
               COALESCE(SUM(CASE WHEN status = 'COMPLETED' THEN amount ELSE 0 END), 0) as totalRevenue,

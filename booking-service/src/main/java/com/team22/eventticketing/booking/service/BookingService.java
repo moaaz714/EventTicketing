@@ -1,24 +1,42 @@
 package com.team22.eventticketing.booking.service;
 
+import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
+import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
+import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
+import com.team22.eventticketing.booking.dto.BookingItemDTO;
+import com.team22.eventticketing.booking.dto.BookingItemRequest;
 import com.team22.eventticketing.booking.model.Booking;
-import com.team22.eventticketing.booking.repository.BookingRepository;
+import com.team22.eventticketing.booking.model.BookingItem;
+import com.team22.eventticketing.booking.model.BookingItemStatus;
 import com.team22.eventticketing.booking.model.BookingStatus;
+import com.team22.eventticketing.booking.repository.BookingItemRepository;
+import com.team22.eventticketing.booking.repository.BookingRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
-import java.time.LocalDateTime;
+import java.util.stream.Collectors;
+
 @Service
 public class BookingService {
 
     private final BookingRepository bookingRepository;
+    private final BookingItemRepository bookingItemRepository;
 
-    public BookingService(BookingRepository bookingRepository) {
+    public BookingService(BookingRepository bookingRepository, BookingItemRepository bookingItemRepository) {
         this.bookingRepository = bookingRepository;
+        this.bookingItemRepository = bookingItemRepository;
+    }
+
+    public List<Booking> searchBookings(BookingStatus status, LocalDateTime startDate, LocalDateTime endDate) {
+        if (status != null) {
+            return bookingRepository.findByStatusAndBookingDateBetweenOrderByBookingDateDesc(status, startDate, endDate);
+        } else {
+            return bookingRepository.findByBookingDateBetweenOrderByBookingDateDesc(startDate, endDate);
+        }
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────
@@ -74,7 +92,9 @@ public class BookingService {
         }
         bookingRepository.deleteById(id);
     }
+
     // ─── S3-F4: Complete Booking ──────────────────────────────────────────────────
+
     @Transactional
     public Booking completeBooking(Long id) {
         Booking booking = bookingRepository.findByIdWithItems(id)
@@ -105,7 +125,9 @@ public class BookingService {
 
         return saved;
     }
+
     // ─── S3-F5: Filter Bookings by Metadata ──────────────────────────────────────
+
     public List<Booking> filterByMetadata(String key, String value) {
         if (key == null || key.isBlank() || value == null || value.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -113,7 +135,9 @@ public class BookingService {
         }
         return bookingRepository.findByMetadataField(key, value);
     }
+
     // ─── S3-F6: Booking Analytics ─────────────────────────────────────────────────
+
     public BookingAnalyticsDTO getAnalytics(LocalDateTime start, LocalDateTime end) {
         long total     = bookingRepository.countInRange(start, end);
         long completed = bookingRepository.countCompletedInRange(start, end);
@@ -123,5 +147,161 @@ public class BookingService {
         double rate    = total > 0 ? (completed * 100.0) / total : 0.0;
 
         return new BookingAnalyticsDTO(total, completed, cancelled, revenue, avg, rate);
+    }
+
+    @Transactional
+    public void cancelBooking(Long id) {
+        Booking booking = bookingRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Booking not found with id: " + id));
+
+        if (booking.getStatus() != BookingStatus.PENDING &&
+                booking.getStatus() != BookingStatus.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only PENDING or CONFIRMED bookings can be cancelled");
+        }
+
+        booking.setStatus(BookingStatus.CANCELLED);
+        bookingRepository.save(booking);
+        bookingRepository.cancelValidTicketsForBooking(id);
+    }
+
+    @Transactional
+    public Booking addItemsToBooking(Long bookingId, List<BookingItemRequest> requests) {
+        Booking booking = bookingRepository.findByIdWithItems(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId));
+
+        if (booking.getStatus() != BookingStatus.PENDING &&
+                booking.getStatus() != BookingStatus.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot add items to a booking that is not PENDING or CONFIRMED");
+        }
+
+        for (BookingItemRequest req : requests) {
+            if (req.getSessionId() == null || req.getSessionTitle() == null ||
+                    req.getSessionTitle().isBlank() || req.getQuantity() == null ||
+                    req.getUnitPrice() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Each item must have sessionId, sessionTitle, quantity, and unitPrice");
+            }
+        }
+
+        int currentMax = bookingRepository.findMaxEventOrderByBookingId(bookingId);
+
+        for (BookingItemRequest req : requests) {
+            currentMax++;
+            BookingItem item = new BookingItem();
+            item.setEventOrder(currentMax);
+            item.setSessionId(req.getSessionId());
+            item.setSessionTitle(req.getSessionTitle());
+            item.setQuantity(req.getQuantity());
+            item.setUnitPrice(req.getUnitPrice());
+            item.setStatus(BookingItemStatus.RESERVED);
+            item.setMetadata(req.getMetadata());
+            item.setBooking(booking);
+            bookingItemRepository.save(item);
+        }
+
+        return bookingRepository.findByIdWithItems(bookingId).get();
+    }
+
+    public BookingDetailsDTO getBookingDetails(Long bookingId) {
+        Booking booking = bookingRepository.findByIdWithItems(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId));
+
+        List<BookingItemDTO> itemDTOs = booking.getBookingItems() == null
+                ? List.of()
+                : booking.getBookingItems().stream()
+                .sorted((a, b) -> Integer.compare(a.getEventOrder(), b.getEventOrder()))
+                .map(item -> new BookingItemDTO(
+                        item.getId(),
+                        item.getEventOrder(),
+                        item.getSessionTitle(),
+                        item.getQuantity(),
+                        item.getUnitPrice(),
+                        item.getStatus().name(),
+                        item.getMetadata()
+                ))
+                .collect(Collectors.toList());
+
+        long confirmedItems = itemDTOs.stream()
+                .filter(i -> i.getStatus().equals("CONFIRMED"))
+                .count();
+
+        return new BookingDetailsDTO(
+                booking.getId(),
+                booking.getUserId(),
+                booking.getEventId(),
+                booking.getStatus().name(),
+                booking.getTotalAmount(),
+                booking.getMetadata(),
+                itemDTOs,
+                itemDTOs.size(),
+                confirmedItems
+        );
+    }
+
+    @Transactional
+    public Booking confirmBooking(Long bookingId, Long eventId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+
+        String eventStatus = bookingRepository.findEventStatusById(eventId);
+        if (eventStatus == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event with ID " + eventId + " not found");
+        }
+
+        if (booking.getStatus() != BookingStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking is not PENDING. Current status: " + booking.getStatus());
+        }
+
+        if (!"UPCOMING".equals(eventStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Event is not UPCOMING. Current status: " + eventStatus);
+        }
+
+        booking.setEventId(eventId);
+        booking.setStatus(BookingStatus.CONFIRMED);
+        booking.setConfirmedAt(LocalDateTime.now());
+
+        return bookingRepository.save(booking);
+    }
+
+    // ─── S3-F3: Get Booking Cost Estimate ─────────────────────────────────────────
+
+    public BookingCostEstimateDTO estimateCost(Long eventId, Integer ticketCount, String ticketTier) {
+        // 1. Get Average Capacity
+        Double avgCapacity = bookingRepository.getAverageSessionCapacity(eventId);
+        if (avgCapacity == null) {
+            avgCapacity = 0.0;
+        }
+
+        // 2. Calculate Base Price and Tier Multiplier
+        double basePrice = avgCapacity / 10.0;
+        double tierMultiplier = "VIP".equalsIgnoreCase(ticketTier) ? 2.5 : 1.0;
+
+        // 3. Calculate Ticket Cost
+        double ticketCost = basePrice * tierMultiplier * ticketCount;
+
+        // 4. Calculate Service Fee (15%)
+        double serviceFee = ticketCost * 0.15;
+
+        // 5. Determine Demand Multiplier
+        Long activeBookings = bookingRepository.countActiveBookingsForEvent(eventId);
+        double demandMultiplier = 1.0;
+        if (activeBookings != null) {
+            if (activeBookings > 200) {
+                demandMultiplier = 1.5;
+            } else if (activeBookings > 50) {
+                demandMultiplier = 1.25;
+            }
+        }
+
+        // 6. Calculate Estimated Total
+        double estimatedTotal = (ticketCost + serviceFee) * demandMultiplier;
+
+        // Return the mapped DTO
+        return new BookingCostEstimateDTO(ticketCost, serviceFee, estimatedTotal, demandMultiplier);
     }
 }
