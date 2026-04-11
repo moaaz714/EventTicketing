@@ -45,8 +45,8 @@ class UserDeactivateIT {
 
         // Scenario a: create a PENDING booking for this user
         jdbcTemplate.update("""
-                INSERT INTO bookings (user_id, total_amount, status, booking_date)
-                VALUES (?, 100.0, 'PENDING', NOW())
+                INSERT INTO bookings (user_id, total_amount, status, booking_date, contact_email)
+                VALUES (?, 100.0, 'PENDING', NOW(), 'test@test.com')
                 """, userId);
     }
 

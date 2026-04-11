@@ -1,9 +1,6 @@
 package com.team22.eventticketing.user;
 
-import com.team22.eventticketing.user.entity.Role;
-import com.team22.eventticketing.user.entity.User;
-import com.team22.eventticketing.user.entity.UserStatus;
-import com.team22.eventticketing.user.repository.UserRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,15 +23,16 @@ class UserReportControllerTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    private void cleanUp() {
+        jdbcTemplate.execute("DELETE FROM bookings WHERE user_id IN (SELECT id FROM users WHERE email LIKE 'test-s1f6-%')");
+        jdbcTemplate.execute("DELETE FROM users WHERE email LIKE 'test-s1f6-%'");
+    }
 
     @BeforeEach
     void setUp() {
-        jdbcTemplate.execute("DELETE FROM bookings WHERE user_id IN (SELECT id FROM users WHERE email LIKE 'test-s1f6-%')");
-        jdbcTemplate.execute("DELETE FROM users WHERE email LIKE 'test-s1f6-%'");
+        cleanUp();
 
         Long userA = createUser("User A", "test-s1f6-a@test.com");
         Long userB = createUser("User B", "test-s1f6-b@test.com");
@@ -85,23 +83,26 @@ class UserReportControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @AfterEach
+    void tearDown() {
+        cleanUp();
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────────
 
     private Long createUser(String name, String email) {
-        User user = new User();
-        user.setName(name);
-        user.setEmail(email);
-        user.setPassword("password");
-        user.setPhone("0000000000");
-        user.setRole(Role.ATTENDEE);
-        user.setStatus(UserStatus.ACTIVE);
-        return userRepository.save(user).getId();
+        String phone = String.valueOf(Math.abs(email.hashCode() % 9_000_000_000L) + 1_000_000_000L);
+        jdbcTemplate.update(
+            "INSERT INTO users (name, email, password, phone, role, status, created_at) VALUES (?, ?, 'password', ?, 'ATTENDEE', 'ACTIVE', NOW())",
+            name, email, phone
+        );
+        return jdbcTemplate.queryForObject("SELECT id FROM users WHERE email = ?", Long.class, email);
     }
 
     private void insertCompletedBooking(Long userId, Double amount, String date) {
         jdbcTemplate.update("""
-                INSERT INTO bookings (user_id, total_amount, status, booking_date)
-                VALUES (?, ?, 'COMPLETED', ?::timestamp)
+                INSERT INTO bookings (user_id, total_amount, status, booking_date, contact_email)
+                VALUES (?, ?, 'COMPLETED', ?::timestamp, 'test@test.com')
                 """, userId, amount, date + "T12:00:00");
     }
 }
