@@ -143,4 +143,26 @@ public class bookingController {
 
         return ResponseEntity.ok(result);
     }
+
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
+        bookingService.cancelBooking(id);
+        return ResponseEntity.ok().build();
+    }
+
+    // ─── Add Items to Booking ─────────────────────────────────────────────────────
+    @PostMapping("/{bookingId}/items")
+    public ResponseEntity<Booking> addItemsToBooking(
+            @PathVariable Long bookingId,
+            @RequestBody List<BookingItemRequest> requests) {
+
+        Booking updatedBooking = bookingService.addItemsToBooking(bookingId, requests);
+        return ResponseEntity.ok(updatedBooking);
+    }
+
+    // ─── Get Booking Details ──────────────────────────────────────────────────────
+    @GetMapping("/{id}/details")
+    public ResponseEntity<BookingDetailsDTO> getBookingDetails(@PathVariable Long id) {
+        return ResponseEntity.ok(bookingService.getBookingDetails(id));
+    }
 }
