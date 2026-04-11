@@ -5,12 +5,15 @@ public class CostEstimateRequest {
     private Integer ticketCount;
     private String ticketTier;
 
-    public Long getEventId() {
-        return eventId;
+    // TODO: Add standard Getters and Setters (or use Lombok @Data)
+
+
+    public String getTicketTier() {
+        return ticketTier;
     }
 
-    public void setEventId(Long eventId) {
-        this.eventId = eventId;
+    public void setTicketTier(String ticketTier) {
+        this.ticketTier = ticketTier;
     }
 
     public Integer getTicketCount() {
@@ -21,11 +24,11 @@ public class CostEstimateRequest {
         this.ticketCount = ticketCount;
     }
 
-    public String getTicketTier() {
-        return ticketTier;
+    public Long getEventId() {
+        return eventId;
     }
 
-    public void setTicketTier(String ticketTier) {
-        this.ticketTier = ticketTier;
+    public void setEventId(Long eventId) {
+        this.eventId = eventId;
     }
 }

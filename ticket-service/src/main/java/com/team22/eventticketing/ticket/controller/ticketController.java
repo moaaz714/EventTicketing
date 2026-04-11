@@ -2,7 +2,10 @@ package com.team22.eventticketing.ticket.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import com.team22.eventticketing.ticket.model.Ticket;
+import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpStatus;
 
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
@@ -22,6 +25,42 @@ public class ticketController {
     public ticketController(TicketService ticketService) {
         this.ticketService = ticketService;
     }
+
+    //[S4-F1]
+    @GetMapping("/booking/{bookingId}/latest")
+    public Ticket getLatestTicket(@PathVariable Long bookingId) {
+        return ticketService.getLatestTicketByBooking(bookingId);
+    }
+    @PostMapping("/booking/{bookingId}")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Ticket issueTicket(
+            @PathVariable Long bookingId,
+            @RequestBody Map<String, Object> request
+    ) {
+
+        String attendeeName = (String) request.get("attendeeName");
+        String ticketCode = (String) request.get("ticketCode");
+        Map<String, Object> metadata = (Map<String, Object>) request.get("metadata");
+
+        return ticketService.issueTicket(
+                bookingId,
+                attendeeName,
+                ticketCode,
+                metadata
+        );
+    }
+
+
+    @GetMapping("/nearby")
+    public List<
+      > getNearbyTickets(
+            @RequestParam double lat,
+            @RequestParam double lon,
+            @RequestParam double radiusKm
+    ) {
+        return ticketService.findNearbyTickets(lat, lon, radiusKm);
+    }
+
 
     @GetMapping("/health")
     public String statusCheck() {

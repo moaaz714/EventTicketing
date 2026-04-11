@@ -7,6 +7,13 @@ import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
+import com.team22.eventticketing.ticket.model.Ticket;
+import com.team22.eventticketing.ticket.model.TicketStatus;
+import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
+
+
+
+
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -15,6 +22,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class TicketService {
@@ -97,6 +106,74 @@ public class TicketService {
         ticketRepository.saveAll(tickets);
         return tickets.size();
     }
+
+    //Get ticket S4-F1
+    public Ticket getLatestTicketByBooking(Long bookingId) {
+
+        //Check if booking exists using SQL
+        boolean bookingExists = ticketRepository.existsBookingById(bookingId);
+
+        if (!bookingExists) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
+        }
+
+        //Get the latest ticket
+        return ticketRepository
+                .findTopByBookingIdOrderByIssuedAtDesc(bookingId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "No tickets found for this booking"));
+    }
+
+    //Create ticket S4-F2
+    public Ticket issueTicket(Long bookingId,
+                              String attendeeName,
+                              String ticketCode,
+                              Map<String, Object> metadata) {
+
+        boolean exists = ticketRepository.existsBookingById(bookingId);
+
+        if (!exists) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
+        }
+
+        if (ticketRepository.existsByTicketCode(ticketCode)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ticket code already exists"
+            );
+        }
+
+        Ticket ticket = new Ticket();
+        ticket.setBookingId(bookingId);
+        ticket.setAttendeeName(attendeeName);
+        ticket.setTicketCode(ticketCode);
+        ticket.setMetadata(metadata);
+        ticket.setIssuedAt(LocalDateTime.now());
+        ticket.setStatus(TicketStatus.VALID);
+
+        return ticketRepository.save(ticket);
+    }
+
+    //Find event according to distance of event S4-F3
+    public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double radiusKm) {
+
+        List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon, radiusKm);
+
+        return results.stream().map(r ->
+                new NearbyTicketDTO(
+                        ((Number) r[0]).longValue(),
+                        (String) r[1],
+                        ((Number) r[2]).longValue(),
+                        (String) r[3],
+                        r[4] != null ? ((Number) r[4]).doubleValue() : null,
+                        r[5] != null ? ((Number) r[5]).doubleValue() : null,
+                        ((Number) r[6]).doubleValue()
+                )
+        ).collect(Collectors.toList());
+    }
+
+
 
     @Transactional
     public int purgeExpiredTickets(int olderThanDays) {

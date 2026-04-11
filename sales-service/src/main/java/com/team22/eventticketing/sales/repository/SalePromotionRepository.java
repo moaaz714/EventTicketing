@@ -9,8 +9,9 @@ import java.util.List;
 @Repository
 public interface SalePromotionRepository extends JpaRepository<SalePromotion, Long> {
 
+    // Get all promotions applied to a sale
     List<SalePromotion> findByTicketSaleId(Long ticketSaleId);
 
-    // [S5-F5] Duplicate check — has this promotion already been applied to this sale?
+    // Check if a promotion is already applied to a sale (S5-F5)
     boolean existsByTicketSaleIdAndPromotionId(Long ticketSaleId, Long promotionId);
 }
