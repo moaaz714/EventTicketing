@@ -17,13 +17,9 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
     // =========================
     // S5-F4 (Booking Payment Flow)
     // =========================
-
     Optional<TicketSale> findByBookingId(Long bookingId);
-
     Optional<TicketSale> findByBookingIdAndStatus(Long bookingId, SaleStatus status);
-
     boolean existsByBookingIdAndStatus(Long bookingId, SaleStatus status);
-
     List<TicketSale> findAllByBookingId(Long bookingId);
 
     @Query(value = "SELECT status FROM bookings WHERE id = :bookingId", nativeQuery = true)
@@ -32,6 +28,8 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
     // =========================
     // S5-F1 (Filter sales)
     // =========================
+    List<TicketSale> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+    List<TicketSale> findByStatusAndCreatedAtBetween(SaleStatus status, LocalDateTime start, LocalDateTime end);
 
     @Query(value = """
             SELECT * FROM ticket_sales
@@ -45,12 +43,11 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             @Param("endDate") LocalDateTime endDate
     );
 
-
-    // [S5-F3] Cross-service: check user exists in the users table
+    // =========================
+    // S5-F3 (User Summary)
+    // =========================
     @Query(value = "SELECT COUNT(*) FROM users WHERE id = :userId", nativeQuery = true)
     Long countUserById(@Param("userId") Long userId);
-
-    // [S5-F3] Group by payment method for a specific user (COMPLETED only)
 
     @Query(value = """
             SELECT method, COUNT(*) as count, SUM(amount) as total
@@ -63,7 +60,6 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
     // =========================
     // S5-F6 (Revenue report)
     // =========================
-
     @Query(value = """
             SELECT
               COALESCE(SUM(CASE WHEN status = 'COMPLETED' THEN amount ELSE 0 END), 0) as totalRevenue,
