@@ -21,7 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -213,6 +215,34 @@ public class TicketService {
                 ((Number) row.get("bookingId")).longValue(),
                 (String) row.get("eventName"),
                 ((java.sql.Timestamp) row.get("eventDate")).toLocalDateTime())).toList();
+    }
+
+    // ==================== S4-F6: Get Tickets in Date Range ====================
+
+    public List<Ticket> getTicketHistory(LocalDate startDate, LocalDate endDate, String status) {
+        if (startDate == null || endDate == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate and endDate are required");
+        }
+        if (endDate.isBefore(startDate)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "endDate must be on or after startDate");
+        }
+
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        if (status == null || status.isBlank()) {
+            return ticketRepository.findByIssuedAtBetween(start, end);
+        }
+
+        String normalized = status.toUpperCase();
+        try {
+            TicketStatus.valueOf(normalized);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid status: " + status + ". Allowed: VALID, USED, EXPIRED, CANCELLED");
+        }
+
+        return ticketRepository.findByIssuedAtBetweenAndStatus(start, end, normalized);
     }
 
     // ==================== S4-F5: Filter Tickets by Metadata ====================
