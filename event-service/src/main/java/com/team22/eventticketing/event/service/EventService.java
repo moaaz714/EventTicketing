@@ -1,27 +1,31 @@
 package com.team22.eventticketing.event.service;
 
+import com.team22.eventticketing.event.dto.EventRevenueDTO;
+import com.team22.eventticketing.event.dto.EventSessionAlertDTO;
 import com.team22.eventticketing.event.dto.TopEventDTO;
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
 import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.model.EventCategory;
-import com.team22.eventticketing.event.model.EventStatus;
 import com.team22.eventticketing.event.model.EventSession;
+import com.team22.eventticketing.event.model.EventStatus;
 import com.team22.eventticketing.event.repository.EventRepository;
 import com.team22.eventticketing.event.repository.EventSessionRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class EventService {
 
+    private final RestTemplate restTemplate = new RestTemplate();
     private final EventRepository eventRepository;
     private final EventSessionRepository eventSessionRepository;
 
@@ -76,7 +80,6 @@ public class EventService {
     }
 
     public void updateEventDetails(Long id, Map<String, Object> newDetails) {
-
         Event event = eventRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
 
@@ -92,7 +95,6 @@ public class EventService {
 
         eventRepository.save(event);
     }
-
 
     // [S2-F4] Update Event Status
     @Transactional
@@ -135,6 +137,39 @@ public class EventService {
         return result;
     }
 
+    // [S2-F7] Get Event Revenue
+    public EventRevenueDTO getEventRevenue(Long eventId,
+                                           LocalDateTime start,
+                                           LocalDateTime end) {
+
+        // 1. Check event exists
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Event not found"));
+
+        // 2. Call booking-service
+        String url = "http://localhost:8081/api/bookings/event/" + eventId +
+                "/revenue?startDate=" + start.toLocalDate() +
+                "&endDate=" + end.toLocalDate();
+
+        // Array of arrays handling
+        Object[][] response = restTemplate.getForObject(url, Object[][].class);
+
+        Object[] stats = response[0];
+
+        long totalBookings = ((Number) stats[0]).longValue();
+        double totalRevenue = ((Number) stats[1]).doubleValue();
+        double avg = ((Number) stats[2]).doubleValue(); // already computed in DB
+
+        return new EventRevenueDTO(
+                eventId,
+                event.getName(),
+                totalBookings,
+                totalRevenue,
+                avg
+        );
+    }
+
     // [S2-F7] Rate an Event
     @Transactional
     public void rateEvent(Long eventId, Long bookingId, Double newRating) {
@@ -173,7 +208,6 @@ public class EventService {
     // [S2-F8] Verify Event Session
     @Transactional
     public Event verifyEventSession(Long eventId, Long sessionId, Long verifiedByUserId) {
-
         // 1. Find Event (404)
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
@@ -188,7 +222,7 @@ public class EventService {
         }
 
         // 4. Check if startTime is in the future (400)
-        if (session.getStartTime().isBefore(java.time.LocalDateTime.now())) {
+        if (session.getStartTime().isBefore(LocalDateTime.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot verify a session that has already started");
         }
 
@@ -200,9 +234,9 @@ public class EventService {
         // 6. Update the session properties
         session.setVerified(true);
         if (session.getMetadata() == null) {
-            session.setMetadata(new java.util.HashMap<>());
+            session.setMetadata(new HashMap<>());
         }
-        session.getMetadata().put("verifiedAt", java.time.LocalDateTime.now().toString());
+        session.getMetadata().put("verifiedAt", LocalDateTime.now().toString());
         session.getMetadata().put("verifiedBy", verifiedByUserId);
 
         // Save session
@@ -213,18 +247,16 @@ public class EventService {
     }
 
     // [S2-F9] Get Events with Unverified Sessions
-    public java.util.List<com.team22.eventticketing.event.dto.EventSessionAlertDTO> getUnverifiedSessionsReport() {
-
-        java.util.List<Event> events = eventRepository.findEventsWithUnverifiedSessions();
+    public List<EventSessionAlertDTO> getUnverifiedSessionsReport() {
+        List<Event> events = eventRepository.findEventsWithUnverifiedSessions();
 
         return events.stream().map(event -> {
-
-            java.util.List<com.team22.eventticketing.event.model.EventSession> unverifiedSessions =
+            List<EventSession> unverifiedSessions =
                     event.getEventSessions().stream()
                             .filter(session -> session.getVerified() != null && !session.getVerified())
                             .toList();
 
-            return new com.team22.eventticketing.event.dto.EventSessionAlertDTO(
+            return new EventSessionAlertDTO(
                     event.getId(),
                     event.getName(),
                     event.getStatus(),
@@ -234,9 +266,7 @@ public class EventService {
         }).toList();
     }
 
-
     // CRUD: EVENT
-
     public Event createEvent(Event event) {
         return eventRepository.save(event);
     }
@@ -257,9 +287,7 @@ public class EventService {
         eventRepository.deleteById(id);
     }
 
-
-    //CRUD: EVENT SESSION
-
+    // CRUD: EVENT SESSION
     public EventSession createEventSession(Long eventId, EventSession session) {
         Event event = getEventById(eventId); // Reuse existing method to ensure event exists
         session.setEvent(event);
