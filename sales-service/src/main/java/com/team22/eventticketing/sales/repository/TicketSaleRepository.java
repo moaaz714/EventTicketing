@@ -18,17 +18,21 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
     // S5-F4 (Booking Payment Flow)
     // =========================
     Optional<TicketSale> findByBookingId(Long bookingId);
+
     Optional<TicketSale> findByBookingIdAndStatus(Long bookingId, SaleStatus status);
+
     boolean existsByBookingIdAndStatus(Long bookingId, SaleStatus status);
+
     List<TicketSale> findAllByBookingId(Long bookingId);
 
     @Query(value = "SELECT status FROM bookings WHERE id = :bookingId", nativeQuery = true)
     String findBookingStatus(@Param("bookingId") Long bookingId);
 
     // =========================
-    // S5-F1 (Filter sales)
+    // S5-F1 & S5-F6 (Filter & Revenue)
     // =========================
     List<TicketSale> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
     List<TicketSale> findByStatusAndCreatedAtBetween(SaleStatus status, LocalDateTime start, LocalDateTime end);
 
     @Query(value = """

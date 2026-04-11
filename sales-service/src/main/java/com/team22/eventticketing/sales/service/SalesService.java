@@ -36,7 +36,30 @@ public class SalesService {
         this.salePromotionRepository = salePromotionRepository;
     }
 
-    // ─── S5-F6: Revenue Report ───────────────────────────────────────────────────
+    // ─── S5-F4: Process booking payment (From HEAD) ──────────────────────────────
+    @Transactional
+    public TicketSale processBookingPayment(Long bookingId, PaymentMethod method, String cardLastFour) {
+        if (ticketSaleRepository.existsByBookingIdAndStatus(bookingId, SaleStatus.COMPLETED)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
+        }
+
+        Optional<TicketSale> pendingSale = ticketSaleRepository.findByBookingIdAndStatus(bookingId, SaleStatus.PENDING);
+        TicketSale ticketSale = pendingSale.orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+
+        ticketSale.setStatus(SaleStatus.COMPLETED);
+
+        Map<String, Object> transactionDetails = new HashMap<>();
+        transactionDetails.put("method", method.name());
+        if (cardLastFour != null) transactionDetails.put("cardLastFour", cardLastFour);
+        transactionDetails.put("gatewayResponse", "approved");
+        transactionDetails.put("paidAt", LocalDateTime.now().toString());
+
+        ticketSale.setTransactionDetails(transactionDetails);
+        return ticketSaleRepository.save(ticketSale);
+    }
+
+    // ─── S5-F6: Revenue Report (From origin/main) ────────────────────────────────
     public RevenueReportDTO getRevenueReport(LocalDateTime startDate, LocalDateTime endDate) {
         if (startDate.isAfter(endDate)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate cannot be after endDate");
@@ -56,7 +79,7 @@ public class SalesService {
         return new RevenueReportDTO(totalRevenue, totalTransactions, averageSale, refundedAmount, refundCount);
     }
 
-    // ─── S5-F5: Apply Promotion ──────────────────────────────────────────────────
+    // ─── S5-F5: Apply Promotion (Merged) ─────────────────────────────────────────
     @Transactional
     public TicketSale applyPromotionToSale(Long saleId, Long promotionId) {
         TicketSale ticketSale = ticketSaleRepository.findById(saleId)
@@ -97,6 +120,7 @@ public class SalesService {
         return ticketSale;
     }
 
+    // ─── Helper method to create SalePromotion and calculate discount ──────────
     private SalePromotion createSalePromotion(TicketSale sale, Promotion promotion) {
         double discount;
         if (promotion.getDiscountType() == DiscountType.PERCENTAGE) {
@@ -104,6 +128,7 @@ public class SalesService {
         } else {
             discount = promotion.getDiscountValue();
         }
+
         if (discount > sale.getAmount()) discount = sale.getAmount();
 
         SalePromotion salePromo = new SalePromotion();
