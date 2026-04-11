@@ -1,9 +1,11 @@
 package com.team22.eventticketing.sales.controller;
 
+import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
 import com.team22.eventticketing.sales.dto.RevenueReportDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
+import com.team22.eventticketing.sales.service.PromotionService;
 import com.team22.eventticketing.sales.service.SalesService;
 import com.team22.eventticketing.sales.service.TicketSaleService;
 import org.springframework.http.HttpStatus;
@@ -21,10 +23,13 @@ public class salesController {
 
     private final SalesService salesService;
     private final TicketSaleService ticketSaleService;
+    private final PromotionService promotionService;
 
-    public salesController(SalesService salesService, TicketSaleService ticketSaleService) {
+    public salesController(SalesService salesService, TicketSaleService ticketSaleService,
+                           PromotionService promotionService) {
         this.salesService = salesService;
         this.ticketSaleService = ticketSaleService;
+        this.promotionService = promotionService;
     }
 
     // ─── Health Check ─────────────────────────────
@@ -106,6 +111,12 @@ public class salesController {
     @GetMapping("/user/{userId}/summary")
     public UserSaleSummaryDTO getUserSummary(@PathVariable Long userId) {
         return ticketSaleService.getUserSummary(userId);
+    }
+
+    // ─── S5-F9: Top Used Promotions Report ────────
+    @GetMapping("/promotions/top-used")
+    public List<PromotionUsageDTO> getTopUsedPromotions(@RequestParam int limit) {
+        return promotionService.getTopUsedPromotions(limit);
     }
 
     // ─── S5-F1: Search ────────────────────────────
