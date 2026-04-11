@@ -22,8 +22,7 @@ public class salesController {
     private final SalesService salesService;
     private final TicketSaleService ticketSaleService;
 
-    public salesController(SalesService salesService,
-                           TicketSaleService ticketSaleService) {
+    public salesController(SalesService salesService, TicketSaleService ticketSaleService) {
         this.salesService = salesService;
         this.ticketSaleService = ticketSaleService;
     }
@@ -34,15 +33,17 @@ public class salesController {
         return "OK";
     }
 
-    // ─── S5-F4: Process Ticket Sale for Booking ───
+    // ─── S5-F4: Process Ticket Sale for Booking (Merged Logic) ───
     @PostMapping("/booking/{bookingId}")
     public ResponseEntity<TicketSale> payBooking(
             @PathVariable Long bookingId,
             @RequestBody Map<String, String> body
     ) {
-        PaymentMethod method = PaymentMethod.valueOf(body.get("method"));
+        // We use the SalesService version since that's where we merged the transactional logic
+        PaymentMethod method = PaymentMethod.valueOf(body.get("method").toUpperCase());
         String cardLastFour = body.get("cardLastFour");
-        TicketSale sale = ticketSaleService.processBookingPayment(bookingId, method, cardLastFour);
+
+        TicketSale sale = salesService.processBookingPayment(bookingId, method, cardLastFour);
         return new ResponseEntity<>(sale, HttpStatus.CREATED);
     }
 
@@ -56,7 +57,7 @@ public class salesController {
         return new ResponseEntity<>(updatedSale, HttpStatus.OK);
     }
 
-    // ─── S5-F6: Revenue Report ────────────────────
+    // ─── S5-F6: Revenue Report (From origin/main) ────────────────────
     @GetMapping("/reports/revenue")
     public RevenueReportDTO getRevenueReport(
             @RequestParam String startDate,
