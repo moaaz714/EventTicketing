@@ -1,22 +1,23 @@
 package com.team22.eventticketing.event.controller;
-import com.team22.eventticketing.event.dto.TopEventDTO;
-
 
 import com.team22.eventticketing.event.dto.EventRatingRequestDTO;
+import com.team22.eventticketing.event.dto.EventRevenueDTO;
+import com.team22.eventticketing.event.dto.EventSessionAlertDTO;
+import com.team22.eventticketing.event.dto.TopEventDTO;
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
+import com.team22.eventticketing.event.dto.VerifySessionRequestDTO;
 import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.model.EventSession;
 import com.team22.eventticketing.event.service.EventService;
 import jakarta.annotation.PostConstruct;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.Map;
 
 import java.time.LocalDateTime;
 import java.util.List;
-
-import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/events")
@@ -67,17 +68,18 @@ public class eventController {
         eventService.updateEventDetails(id, request);
         return ResponseEntity.ok().build();
     }
-    // [S2-F8] Verify Event Session
 
+    // [S2-F8] Verify Event Session
     @PutMapping("/{eventId}/sessions/{sessionId}/verify")
     public ResponseEntity<Event> verifySession(
             @PathVariable Long eventId,
             @PathVariable Long sessionId,
-            @RequestBody com.team22.eventticketing.event.dto.VerifySessionRequestDTO request) {
+            @RequestBody VerifySessionRequestDTO request) {
 
         Event updatedEvent = eventService.verifyEventSession(eventId, sessionId, request.verifiedBy());
         return ResponseEntity.ok(updatedEvent);
     }
+
     @GetMapping("/search")
     public ResponseEntity<List<Event>> searchEvents(
             @RequestParam(required = false) EventCategory category,
@@ -87,8 +89,18 @@ public class eventController {
         return ResponseEntity.ok(
                 eventService.searchEvents(category, startDate, endDate)
         );
+    }
 
+    @GetMapping("/{id}/revenue")
+    public ResponseEntity<EventRevenueDTO> getRevenue(
+            @PathVariable Long id,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
 
+        LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
+        LocalDateTime end   = LocalDateTime.parse(endDate + "T23:59:59");
+
+        return ResponseEntity.ok(eventService.getEventRevenue(id, start, end));
     }
 
     @GetMapping("/test")
@@ -98,21 +110,21 @@ public class eventController {
 
     // [S2-F9] Get Events with Unverified Sessions Report
     @GetMapping("/sessions/unverified")
-    public ResponseEntity<java.util.List<com.team22.eventticketing.event.dto.EventSessionAlertDTO>> getUnverifiedSessions() {
+    public ResponseEntity<List<EventSessionAlertDTO>> getUnverifiedSessions() {
         return ResponseEntity.ok(eventService.getUnverifiedSessionsReport());
     }
+
     @GetMapping("/reports/top-rated")
     public ResponseEntity<List<TopEventDTO>> getTopRatedEvents(@RequestParam int limit) {
         return ResponseEntity.ok(eventService.getTopRatedEvents(limit));
     }
-
 
     // CRUD ENDPOINTS: EVENT
 
     @PostMapping
     public ResponseEntity<Event> createEvent(@RequestBody Event event) {
         Event createdEvent = eventService.createEvent(event);
-        return new ResponseEntity<>(createdEvent, org.springframework.http.HttpStatus.CREATED);
+        return new ResponseEntity<>(createdEvent, HttpStatus.CREATED);
     }
 
     @GetMapping
@@ -131,7 +143,6 @@ public class eventController {
         return ResponseEntity.noContent().build();
     }
 
-
     // CRUD ENDPOINTS: EVENT SESSION
 
     @PostMapping("/{eventId}/sessions")
@@ -139,7 +150,7 @@ public class eventController {
             @PathVariable Long eventId,
             @RequestBody EventSession session) {
         EventSession createdSession = eventService.createEventSession(eventId, session);
-        return new ResponseEntity<>(createdSession, org.springframework.http.HttpStatus.CREATED);
+        return new ResponseEntity<>(createdSession, HttpStatus.CREATED);
     }
 
     @GetMapping("/sessions/{sessionId}")
@@ -153,18 +164,8 @@ public class eventController {
         return ResponseEntity.noContent().build();
     }
 
-
-
-
     @PostConstruct
     public void init() {
         System.out.println("EVENT CONTROLLER LOADED");
     }
-
-//    @PutMapping("/{id}/details")
-//    public ResponseEntity<Event> updateEventDetails(
-//            @PathVariable Long id,
-//            @RequestBody Map details) {
-//        return ResponseEntity.ok(eventService.updateEventDetails(id, details));
-//    }
 }

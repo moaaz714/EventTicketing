@@ -8,6 +8,7 @@ import com.team22.eventticketing.booking.dto.CostEstimateRequest;
 import com.team22.eventticketing.booking.model.Booking;
 import com.team22.eventticketing.booking.model.BookingStatus;
 import com.team22.eventticketing.booking.service.BookingService;
+import com.team22.eventticketing.booking.repository.BookingRepository;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,11 +21,13 @@ import java.util.List;
 @RequestMapping("/api/bookings") // Requirement 4.a
 public class bookingController {
 
+    private final BookingRepository bookingRepository;
     private final BookingService bookingService;
 
-    // Constructor for dependency injection
-    public bookingController(BookingService bookingService) {
+    // Fixed constructor for dependency injection
+    public bookingController(BookingService bookingService, BookingRepository bookingRepository) {
         this.bookingService = bookingService;
+        this.bookingRepository = bookingRepository;
     }
 
     @GetMapping("/health")
@@ -86,4 +89,58 @@ public class bookingController {
         return ResponseEntity.ok(bookingService.findAll());
     }
 
+    // ─── Update ───────────────────────────────────────────────────────────────────
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Booking> update(
+            @PathVariable Long id,
+            @RequestBody Booking patch) {
+        return ResponseEntity.ok(bookingService.update(id, patch));
+    }
+
+    // ─── Delete ───────────────────────────────────────────────────────────────────
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        bookingService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ─── S3-F4: Complete Booking ──────────────────────────────────────────────────
+    @PutMapping("/{id}/complete")
+    public ResponseEntity<Booking> completeBooking(@PathVariable Long id) {
+        return ResponseEntity.ok(bookingService.completeBooking(id));
+    }
+
+    // ─── S3-F5: Filter by Metadata ────────────────────────────────────────────────
+    @GetMapping("/metadata/search")
+    public ResponseEntity<List<Booking>> searchByMetadata(
+            @RequestParam String key,
+            @RequestParam String value) {
+        return ResponseEntity.ok(bookingService.filterByMetadata(key, value));
+    }
+
+    // ─── S3-F6: Booking Analytics ─────────────────────────────────────────────────
+    @GetMapping("/analytics")
+    public ResponseEntity<BookingAnalyticsDTO> getAnalytics(
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
+        LocalDateTime end   = LocalDateTime.parse(endDate + "T23:59:59");
+        return ResponseEntity.ok(bookingService.getAnalytics(start, end));
+    }
+
+    @GetMapping("/event/{eventId}/revenue")
+    public ResponseEntity<?> getEventRevenue(
+            @PathVariable Long eventId,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+
+        LocalDateTime start = LocalDateTime.parse(startDate + "T00:00:00");
+        LocalDateTime end   = LocalDateTime.parse(endDate + "T23:59:59");
+
+        Object[] result = bookingRepository.getEventRevenueStats(eventId, start, end);
+
+        return ResponseEntity.ok(result);
+    }
 }

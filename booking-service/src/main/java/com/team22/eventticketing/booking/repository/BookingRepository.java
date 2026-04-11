@@ -93,6 +93,20 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     double sumRevenueInRange(@Param("start") LocalDateTime start,
                              @Param("end") LocalDateTime end);
 
+    @Query(value = """
+    SELECT 
+        COUNT(*) as totalBookings,
+        COALESCE(SUM(total_amount), 0) as totalRevenue,
+        COALESCE(AVG(total_amount), 0) as averageBookingAmount
+    FROM bookings
+    WHERE event_id = :eventId
+    AND status = 'COMPLETED'
+    AND booking_date BETWEEN :start AND :end
+    """, nativeQuery = true)
+    Object[] getEventRevenueStats(@Param("eventId") Long eventId,
+                                  @Param("start") LocalDateTime start,
+                                  @Param("end") LocalDateTime end);
+
     @Modifying
     @Transactional
     @Query(value = """
