@@ -129,6 +129,34 @@ public class TicketSaleService {
 
         return ticketSaleRepository.findByStatusAndDateRange(status, start, end);
     }
+    // ─── [S5-F7] Retry Failed Ticket Sale ────────────────────────────────────────
+
+    @Transactional
+    public TicketSale retry(Long id) {
+        TicketSale sale = findById(id);
+
+        if (sale.getStatus() != SaleStatus.FAILED) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Only FAILED sales can be retried");
+        }
+
+        sale.setStatus(SaleStatus.COMPLETED);
+
+        Map<String, Object> details = sale.getTransactionDetails();
+        if (details == null) {
+            details = new HashMap<>();
+            sale.setTransactionDetails(details);
+        }
+
+        int retryAttempt = details.containsKey("retryAttempt")
+                ? ((Number) details.get("retryAttempt")).intValue() + 1
+                : 1;
+        details.put("retryAttempt", retryAttempt);
+        details.put("gatewayResponse", "approved");
+
+        return ticketSaleRepository.save(sale);
+    }
+
     // ─── [S5-F8] Get Sale Details with Applied Promotions ────────────────────────
 
     @Transactional(readOnly = true)
