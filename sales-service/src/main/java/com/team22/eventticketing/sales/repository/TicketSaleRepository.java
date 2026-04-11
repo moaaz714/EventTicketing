@@ -17,7 +17,6 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
     // =========================
     // S5-F4 (Booking Payment Flow)
     // =========================
-
     Optional<TicketSale> findByBookingId(Long bookingId);
 
     Optional<TicketSale> findByBookingIdAndStatus(Long bookingId, SaleStatus status);
@@ -26,9 +25,15 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
 
     List<TicketSale> findAllByBookingId(Long bookingId);
 
+    @Query(value = "SELECT status FROM bookings WHERE id = :bookingId", nativeQuery = true)
+    String findBookingStatus(@Param("bookingId") Long bookingId);
+
     // =========================
-    // S5-F1 (Filter sales)
+    // S5-F1 & S5-F6 (Filter & Revenue)
     // =========================
+    List<TicketSale> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    List<TicketSale> findByStatusAndCreatedAtBetween(SaleStatus status, LocalDateTime start, LocalDateTime end);
 
     @Query(value = """
             SELECT * FROM ticket_sales
@@ -45,7 +50,6 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
     // =========================
     // S5-F3 (User Summary)
     // =========================
-
     @Query(value = "SELECT COUNT(*) FROM users WHERE id = :userId", nativeQuery = true)
     Long countUserById(@Param("userId") Long userId);
 
@@ -58,9 +62,8 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
     List<Object[]> findSalesSummaryByUserId(@Param("userId") Long userId);
 
     // =========================
-    // S5-F6 (Revenue Report)
+    // S5-F6 (Revenue report)
     // =========================
-
     @Query(value = """
             SELECT
               COALESCE(SUM(CASE WHEN status = 'COMPLETED' THEN amount ELSE 0 END), 0) as totalRevenue,
