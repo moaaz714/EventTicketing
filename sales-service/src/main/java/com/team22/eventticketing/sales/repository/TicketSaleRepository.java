@@ -15,18 +15,21 @@ import java.util.Optional;
 public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
 
     // =========================
-    // BASIC DATE FILTERS (HEAD kept)
+    // S5-F4 (Booking Payment Flow)
     // =========================
+    Optional<TicketSale> findByBookingId(Long bookingId);
+    Optional<TicketSale> findByBookingIdAndStatus(Long bookingId, SaleStatus status);
+    boolean existsByBookingIdAndStatus(Long bookingId, SaleStatus status);
+    List<TicketSale> findAllByBookingId(Long bookingId);
 
-    // Get all ticket sales created between two dates
+    @Query(value = "SELECT status FROM bookings WHERE id = :bookingId", nativeQuery = true)
+    String findBookingStatus(@Param("bookingId") Long bookingId);
+
+    // =========================
+    // S5-F1 (Filter sales)
+    // =========================
     List<TicketSale> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
-
-    // Get ticket sales of a specific status between two dates
     List<TicketSale> findByStatusAndCreatedAtBetween(SaleStatus status, LocalDateTime start, LocalDateTime end);
-
-    // =========================
-    // S5-F1 (MAIN FEATURE - advanced filtering)
-    // =========================
 
     @Query(value = """
             SELECT * FROM ticket_sales
@@ -41,9 +44,8 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
     );
 
     // =========================
-    // S5-F3 (USER SUMMARY)
+    // S5-F3 (User Summary)
     // =========================
-
     @Query(value = "SELECT COUNT(*) FROM users WHERE id = :userId", nativeQuery = true)
     Long countUserById(@Param("userId") Long userId);
 
@@ -56,17 +58,8 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
     List<Object[]> findSalesSummaryByUserId(@Param("userId") Long userId);
 
     // =========================
-    // S5-F4 (BOOKING)
+    // S5-F6 (Revenue report)
     // =========================
-
-    Optional<TicketSale> findByBookingIdAndStatus(Long bookingId, SaleStatus status);
-
-    Optional<TicketSale> findByBookingId(Long bookingId);
-
-    // =========================
-    // S5-F6 (REVENUE REPORT)
-    // =========================
-
     @Query(value = """
             SELECT
               COALESCE(SUM(CASE WHEN status = 'COMPLETED' THEN amount ELSE 0 END), 0) as totalRevenue,

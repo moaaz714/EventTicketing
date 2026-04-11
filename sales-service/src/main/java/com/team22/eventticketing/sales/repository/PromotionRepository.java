@@ -14,7 +14,6 @@ public interface PromotionRepository extends JpaRepository<Promotion, Long> {
 
     Optional<Promotion> findByCode(String code);
 
-    // [S5-F9] Join with sale_promotions, group, order, limit
     @Query(value = """
             SELECT p.id, p.code, p.discount_type, p.discount_value,
                    p.current_uses, SUM(sp.discount_applied) as totalDiscountGiven,
