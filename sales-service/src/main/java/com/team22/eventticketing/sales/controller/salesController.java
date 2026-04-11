@@ -1,6 +1,7 @@
 package com.team22.eventticketing.sales.controller;
 
 import com.team22.eventticketing.sales.dto.RevenueReportDTO;
+import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
@@ -106,6 +107,12 @@ public class salesController {
     @GetMapping("/user/{userId}/summary")
     public UserSaleSummaryDTO getUserSummary(@PathVariable Long userId) {
         return ticketSaleService.getUserSummary(userId);
+    }
+
+    // ─── S5-F8: Get Sale Details with Applied Promotions ──────────
+    @GetMapping("/{saleId}/details")
+    public SaleDetailsDTO getSaleDetails(@PathVariable Long saleId) {
+        return ticketSaleService.getSaleDetails(saleId);
     }
 
     // ─── S5-F1: Search ────────────────────────────
