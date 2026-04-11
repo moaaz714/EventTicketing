@@ -59,7 +59,7 @@ public class TicketService {
                 (String) row.get("ticketCode"),
                 ((Number) row.get("bookingId")).longValue(),
                 (String) row.get("eventName"),
-                ((java.sql.Timestamp) row.get("eventDate")).toLocalDateTime())).toList();
+                (LocalDateTime) row.get("eventDate"))).toList();
     }
 
 }
