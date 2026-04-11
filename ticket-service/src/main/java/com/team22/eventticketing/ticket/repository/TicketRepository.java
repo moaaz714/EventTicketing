@@ -121,4 +121,18 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
         @Query(value = "SELECT * FROM tickets WHERE (metadata ->> :key)::numeric < CAST(:value AS numeric)", nativeQuery = true)
         List<Ticket> findByMetadataLessThan(@Param("key") String key, @Param("value") String value);
 
+        // [S4-F6] Get Tickets in Date Range.
+
+        @Query(value = "SELECT * FROM tickets WHERE issued_at BETWEEN :start AND :end " +
+                        "ORDER BY issued_at ASC", nativeQuery = true)
+        List<Ticket> findByIssuedAtBetween(@Param("start") LocalDateTime start,
+                                           @Param("end") LocalDateTime end);
+
+        @Query(value = "SELECT * FROM tickets WHERE issued_at BETWEEN :start AND :end " +
+                        "AND status::text = :status " +
+                        "ORDER BY issued_at ASC", nativeQuery = true)
+        List<Ticket> findByIssuedAtBetweenAndStatus(@Param("start") LocalDateTime start,
+                                                    @Param("end") LocalDateTime end,
+                                                    @Param("status") String status);
+
 }
