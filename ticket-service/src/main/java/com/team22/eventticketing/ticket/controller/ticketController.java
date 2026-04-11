@@ -123,4 +123,15 @@ public class ticketController {
     public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
         return ticketService.getUnusedUpcomingTickets();
     }
+
+    // ==================== S4-F5: Filter Tickets by Metadata ====================
+
+    @GetMapping("/metadata/search")
+    public List<Ticket> filterTicketsByMetadata(
+            @RequestParam String key,
+            @RequestParam String operator,
+            @RequestParam String value
+    ) {
+        return ticketService.filterByMetadata(key, operator, value);
+    }
 }
