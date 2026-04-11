@@ -118,10 +118,18 @@ public class salesController {
     @GetMapping("/{saleId}/details")
     public SaleDetailsDTO getSaleDetails(@PathVariable Long saleId) {
         return ticketSaleService.getSaleDetails(saleId);
+    }
+
     // ─── S5-F9: Top Used Promotions Report ────────
     @GetMapping("/promotions/top-used")
     public List<PromotionUsageDTO> getTopUsedPromotions(@RequestParam int limit) {
         return promotionService.getTopUsedPromotions(limit);
+    }
+
+    // ─── S5-F7: Retry Failed Ticket Sale ──────────
+    @PutMapping("/{id}/retry")
+    public TicketSale retry(@PathVariable Long id) {
+        return ticketSaleService.retry(id);
     }
 
     // ─── S5-F1: Search ────────────────────────────
