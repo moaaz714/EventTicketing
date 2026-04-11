@@ -1,11 +1,15 @@
 package com.team22.eventticketing.sales.service;
 
+import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
 import com.team22.eventticketing.sales.entity.Promotion;
+import com.team22.eventticketing.sales.entity.enums.DiscountType;
 import com.team22.eventticketing.sales.repository.PromotionRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -52,6 +56,26 @@ public class PromotionService {
         if (patch.getMetadata() != null)      existing.setMetadata(patch.getMetadata());
 
         return promotionRepository.save(existing);
+    }
+
+    // ─── [S5-F9] Top Used Promotions Report ──────────────────────────────────────
+
+    public List<PromotionUsageDTO> getTopUsedPromotions(int limit) {
+        List<Object[]> rows = promotionRepository.findTopUsedPromotions(limit);
+        return rows.stream().map(row -> {
+            Long promotionId       = ((Number) row[0]).longValue();
+            String code            = (String) row[1];
+            DiscountType discType  = DiscountType.valueOf((String) row[2]);
+            Double discountValue   = ((Number) row[3]).doubleValue();
+            int timesUsed          = ((Number) row[4]).intValue();
+            Double totalDiscount   = row[5] != null ? ((Number) row[5]).doubleValue() : 0.0;
+            Boolean active         = (Boolean) row[6];
+            LocalDateTime expiry   = ((Timestamp) row[7]).toLocalDateTime();
+            boolean expired        = expiry.isBefore(LocalDateTime.now());
+
+            return new PromotionUsageDTO(promotionId, code, discType, discountValue,
+                    timesUsed, totalDiscount, active, expired);
+        }).toList();
     }
 
     // ─── Delete ───────────────────────────────────────────────────────────────────
