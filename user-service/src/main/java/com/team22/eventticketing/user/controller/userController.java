@@ -31,6 +31,37 @@ public class userController {
         return ResponseEntity.status(HttpStatus.CREATED).body(userService.create(user));
     }
 
+    // ─── Read all ─────────────────────────────────────────────────────────────────
+
+    @GetMapping
+    public ResponseEntity<List<User>> findAll() {
+        return ResponseEntity.ok(userService.findAll());
+    }
+
+// ─── Read by ID ───────────────────────────────────────────────────────────────
+
+    @GetMapping("/{id}")
+    public ResponseEntity<User> findById(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.findById(id));
+    }
+
+// ─── Update ───────────────────────────────────────────────────────────────────
+
+    @PutMapping("/{id}")
+    public ResponseEntity<User> update(
+            @PathVariable Long id,
+            @RequestBody User patch) {
+        return ResponseEntity.ok(userService.update(id, patch));
+    }
+
+// ─── Delete ───────────────────────────────────────────────────────────────────
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        userService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // ─── [S1-F2] Update User Preferences ─────────────────────────────────────────
 
     @PutMapping("/{id}/preferences")
