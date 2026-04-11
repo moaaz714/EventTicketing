@@ -1,8 +1,12 @@
 package com.team22.eventticketing.ticket.service;
 
+import com.team22.eventticketing.ticket.model.Ticket;
+import com.team22.eventticketing.ticket.model.TicketStatus;
+import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
-import com.team22.eventticketing.ticket.repository.TicketRepository;
+import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
+import com.team22.eventticketing.ticket.repository.TicketRepository;
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketStatus;
 import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
@@ -16,7 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Map;
+import java.util.*;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -28,6 +32,79 @@ public class TicketService {
 
     public TicketService(TicketRepository ticketRepository) {
         this.ticketRepository = ticketRepository;
+    }
+
+    // ==================== CRUD ====================
+
+    public Ticket createTicket(Ticket ticket) {
+        return ticketRepository.save(ticket);
+    }
+
+    public Ticket getTicketById(Long id) {
+        return ticketRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found with id: " + id));
+    }
+
+    public List<Ticket> getAllTickets() {
+        return ticketRepository.findAll();
+    }
+
+    public Ticket updateTicket(Long id, Ticket updated) {
+        Ticket existing = getTicketById(id);
+        existing.setBookingId(updated.getBookingId());
+        existing.setAttendeeName(updated.getAttendeeName());
+        existing.setTicketCode(updated.getTicketCode());
+        existing.setStatus(updated.getStatus());
+        existing.setIssuedAt(updated.getIssuedAt());
+        existing.setMetadata(updated.getMetadata());
+        return ticketRepository.save(existing);
+    }
+
+    public void deleteTicket(Long id) {
+        Ticket existing = getTicketById(id);
+        ticketRepository.delete(existing);
+    }
+
+    // ==================== S4-F4: Batch Ticket Issuance ====================
+
+    @Transactional
+    public int batchIssueTickets(BatchTicketRequestDTO request) {
+        Long bookingId = request.getBookingId();
+        List<TicketItemDTO> items = request.getTickets();
+
+        // 1. Verify booking exists
+        if (!ticketRepository.bookingExistsById(bookingId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId);
+        }
+
+        // 2. Check for duplicate ticket codes within the batch
+        Set<String> codesInBatch = new HashSet<>();
+        for (TicketItemDTO item : items) {
+            if (!codesInBatch.add(item.getTicketCode())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate ticket code in batch: " + item.getTicketCode());
+            }
+        }
+
+        // 3. Check for duplicate ticket codes against the database
+        for (String code : codesInBatch) {
+            if (ticketRepository.existsByTicketCode(code)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket code already exists: " + code);
+            }
+        }
+
+        // 4. Build and save all tickets
+        LocalDateTime now = LocalDateTime.now();
+        List<Ticket> tickets = items.stream().map(item -> new Ticket(
+                bookingId,
+                item.getAttendeeName(),
+                item.getTicketCode(),
+                TicketStatus.VALID,
+                now,
+                item.getMetadata()
+        )).toList();
+
+        ticketRepository.saveAll(tickets);
+        return tickets.size();
     }
 
     //Get ticket S4-F1
