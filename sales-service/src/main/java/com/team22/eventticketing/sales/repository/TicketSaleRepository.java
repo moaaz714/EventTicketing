@@ -14,7 +14,20 @@ import java.util.Optional;
 @Repository
 public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
 
-    // [S5-F1] Filter by optional status and date range, ordered most recent first
+    // =========================
+    // BASIC DATE FILTERS (HEAD kept)
+    // =========================
+
+    // Get all ticket sales created between two dates
+    List<TicketSale> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    // Get ticket sales of a specific status between two dates
+    List<TicketSale> findByStatusAndCreatedAtBetween(SaleStatus status, LocalDateTime start, LocalDateTime end);
+
+    // =========================
+    // S5-F1 (MAIN FEATURE - advanced filtering)
+    // =========================
+
     @Query(value = """
             SELECT * FROM ticket_sales
             WHERE (:status IS NULL OR status = :status)
@@ -27,11 +40,13 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             @Param("endDate") LocalDateTime endDate
     );
 
-    // [S5-F3] Cross-service: check user exists in the users table
+    // =========================
+    // S5-F3 (USER SUMMARY)
+    // =========================
+
     @Query(value = "SELECT COUNT(*) FROM users WHERE id = :userId", nativeQuery = true)
     Long countUserById(@Param("userId") Long userId);
 
-    // [S5-F3] Group by payment method for a specific user (COMPLETED only)
     @Query(value = """
             SELECT method, COUNT(*) as count, SUM(amount) as total
             FROM ticket_sales
@@ -40,13 +55,18 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             """, nativeQuery = true)
     List<Object[]> findSalesSummaryByUserId(@Param("userId") Long userId);
 
-    // [S5-F4] Check if COMPLETED sale exists for this booking
+    // =========================
+    // S5-F4 (BOOKING)
+    // =========================
+
     Optional<TicketSale> findByBookingIdAndStatus(Long bookingId, SaleStatus status);
 
-    // [S5-F4 / S5-F7] Find PENDING sale for a booking
     Optional<TicketSale> findByBookingId(Long bookingId);
 
-    // [S5-F6] Revenue report aggregation by date range
+    // =========================
+    // S5-F6 (REVENUE REPORT)
+    // =========================
+
     @Query(value = """
             SELECT
               COALESCE(SUM(CASE WHEN status = 'COMPLETED' THEN amount ELSE 0 END), 0) as totalRevenue,
