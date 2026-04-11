@@ -22,8 +22,8 @@ services:
       - "8081:8080"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
       - postgres
 
@@ -35,8 +35,8 @@ services:
       - "8082:8080"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
       - postgres
 
@@ -48,8 +48,8 @@ services:
       - "8083:8080"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
       - postgres
 
@@ -61,8 +61,8 @@ services:
       - "8084:8080"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
       - postgres
 
@@ -74,8 +74,8 @@ services:
       - "8085:8080"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
       - postgres
 
