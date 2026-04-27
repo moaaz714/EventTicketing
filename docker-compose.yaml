@@ -11,12 +11,8 @@ services:
       - POSTGRES_DB=eventticketingdb
     volumes:
       - pgdata:/var/lib/postgresql/data
+
     restart: always
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d eventticketingdb"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
   # User Service (Port 8081)
   user-service:
@@ -29,8 +25,7 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
 
   # Event Service (Port 8082)
   event-service:
@@ -43,8 +38,7 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
 
   # Booking Service (Port 8083)
   booking-service:
@@ -57,8 +51,7 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
 
   # Ticket Service (Port 8084)
   ticket-service:
@@ -71,8 +64,7 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
 
   # Sales Service (Port 8085)
   sales-service:
@@ -85,8 +77,7 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
 
 volumes:
   pgdata:
