@@ -2,7 +2,6 @@ package com.team22.eventticketing.user.controller;
 
 import com.team22.eventticketing.user.dto.UserBookingSummaryDTO;
 import com.team22.eventticketing.user.dto.UserProfileDTO;
-import com.team22.eventticketing.user.entity.FavoriteVenue;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.service.FavoriteVenueService;
@@ -137,30 +136,5 @@ public class userController {
             @RequestParam(defaultValue = "0") int minBookings) {
         return ResponseEntity.ok(
                 userService.findByFavoriteCategoryAndMinBookings(category, minBookings));
-    }
-
-    // ─── User Venues (nested routes) ─────────────────────────────────────────────
-
-    @PostMapping("/{userId}/venues")
-    public ResponseEntity<FavoriteVenue> createVenue(
-            @PathVariable Long userId,
-            @RequestBody FavoriteVenue favoriteVenue) {
-        FavoriteVenue created =
-                favoriteVenueService.create(userId, favoriteVenue);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
-    }
-
-    @GetMapping("/{userId}/venues")
-    public ResponseEntity<List<FavoriteVenue>> getVenuesByUser(
-            @PathVariable Long userId) {
-        return ResponseEntity.ok(favoriteVenueService.findByUserId(userId));
-    }
-
-    @DeleteMapping("/{userId}/venues/{venueId}")
-    public ResponseEntity<Void> deleteVenue(
-            @PathVariable Long userId,
-            @PathVariable Long venueId) {
-        favoriteVenueService.delete(venueId);
-        return ResponseEntity.noContent().build();
     }
 }
