@@ -1,7 +1,7 @@
 package com.team22.eventticketing.sales.dto;
 
-import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
-import com.team22.eventticketing.sales.entity.enums.SaleStatus;
+import com.team22.eventticketing.sales.entity.PaymentMethod;
+import com.team22.eventticketing.sales.entity.SaleStatus;
 
 import java.util.List;
 import java.util.Map;

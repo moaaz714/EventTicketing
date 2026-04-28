@@ -1,4 +1,4 @@
-package com.team22.eventticketing.sales.entity.enums;
+package com.team22.eventticketing.sales.entity;
 
 public enum PaymentMethod {
     CREDIT_CARD,

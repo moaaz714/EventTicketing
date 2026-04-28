@@ -4,9 +4,9 @@ import com.team22.eventticketing.sales.dto.RevenueReportDTO;
 import com.team22.eventticketing.sales.entity.Promotion;
 import com.team22.eventticketing.sales.entity.SalePromotion;
 import com.team22.eventticketing.sales.entity.TicketSale;
-import com.team22.eventticketing.sales.entity.enums.DiscountType;
-import com.team22.eventticketing.sales.entity.enums.SaleStatus;
-import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
+import com.team22.eventticketing.sales.entity.DiscountType;
+import com.team22.eventticketing.sales.entity.SaleStatus;
+import com.team22.eventticketing.sales.entity.PaymentMethod;
 import com.team22.eventticketing.sales.repository.PromotionRepository;
 import com.team22.eventticketing.sales.repository.SalePromotionRepository;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
@@ -39,6 +39,11 @@ public class SalesService {
     // ─── S5-F4: Process booking payment (From HEAD) ──────────────────────────────
     @Transactional
     public TicketSale processBookingPayment(Long bookingId, PaymentMethod method, String cardLastFour) {
+        String bookingStatus = ticketSaleRepository.findBookingStatus(bookingId);
+        if (bookingStatus != null && !"COMPLETED".equals(bookingStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking is not COMPLETED");
+        }
+
         if (ticketSaleRepository.existsByBookingIdAndStatus(bookingId, SaleStatus.COMPLETED)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
         }

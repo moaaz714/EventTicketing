@@ -1,13 +1,11 @@
 package com.team22.eventticketing.sales.entity;
 
 import com.fasterxml.jackson.annotation.JsonManagedReference;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
-import com.team22.eventticketing.sales.entity.enums.SaleStatus;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-// You can remove the JsonIgnore import now
+import com.team22.eventticketing.sales.entity.PaymentMethod;
+import com.team22.eventticketing.sales.entity.SaleStatus;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;

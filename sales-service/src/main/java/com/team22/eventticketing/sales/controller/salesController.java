@@ -5,7 +5,7 @@ import com.team22.eventticketing.sales.dto.RevenueReportDTO;
 import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
-import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
+import com.team22.eventticketing.sales.entity.PaymentMethod;
 import com.team22.eventticketing.sales.service.PromotionService;
 import com.team22.eventticketing.sales.service.SalesService;
 import com.team22.eventticketing.sales.service.TicketSaleService;
@@ -122,7 +122,7 @@ public class salesController {
 
     // ─── S5-F9: Top Used Promotions Report ────────
     @GetMapping("/promotions/top-used")
-    public List<PromotionUsageDTO> getTopUsedPromotions(@RequestParam int limit) {
+    public List<PromotionUsageDTO> getTopUsedPromotions(@RequestParam(defaultValue = "10") int limit) {
         return promotionService.getTopUsedPromotions(limit);
     }
 

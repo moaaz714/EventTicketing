@@ -1,10 +1,10 @@
 package com.team22.eventticketing.sales.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.team22.eventticketing.sales.entity.enums.DiscountType;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import com.team22.eventticketing.sales.entity.DiscountType;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;

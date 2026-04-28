@@ -1,6 +1,6 @@
 package com.team22.eventticketing.sales.dto;
 
-import com.team22.eventticketing.sales.entity.enums.DiscountType;
+import com.team22.eventticketing.sales.entity.DiscountType;
 
 public class PromotionUsageDTO {
 
