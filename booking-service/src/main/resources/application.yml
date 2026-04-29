@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/eventticketingdb
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: redispass
+    mongodb:
+      uri: mongodb://root:rootpass@mongo:27017/eventticketingmongo?authSource=admin
+  neo4j:
+    uri: bolt://neo4j:7687
+    authentication:
+      username: neo4j
+      password: neo4jpass
+
+jwt:
+  secret: ${JWT_SECRET:24966c8a763b3a3f7f264cefb93d95159184e8c5e2af5c94e05387371d47a3fd=}
+  expiration: ${JWT_EXPIRATION_MS:3600000}

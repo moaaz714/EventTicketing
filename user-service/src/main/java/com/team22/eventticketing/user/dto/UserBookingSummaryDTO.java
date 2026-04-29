@@ -10,16 +10,40 @@ public class UserBookingSummaryDTO {
     private Double totalSpent;
     private Double averageBookingAmount;
 
-    public UserBookingSummaryDTO(Long userId, String name, Long totalBookings,
-                                  Long completedBookings, Long cancelledBookings,
-                                  Double totalSpent, Double averageBookingAmount) {
-        this.userId = userId;
-        this.name = name;
-        this.totalBookings = totalBookings;
-        this.completedBookings = completedBookings;
-        this.cancelledBookings = cancelledBookings;
-        this.totalSpent = totalSpent;
-        this.averageBookingAmount = averageBookingAmount;
+    public UserBookingSummaryDTO(Builder builder) {
+        this.userId = builder.userId;
+        this.name = builder.name;
+        this.totalBookings = builder.totalBookings;
+        this.completedBookings = builder.completedBookings;
+        this.cancelledBookings = builder.cancelledBookings;
+        this.totalSpent = builder.totalSpent;
+        this.averageBookingAmount = builder.averageBookingAmount;
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private Long userId;
+        private String name;
+        private Long totalBookings;
+        private Long completedBookings;
+        private Long cancelledBookings;
+        private Double totalSpent;
+        private Double averageBookingAmount;
+
+        public Builder userId(Long userId) { this.userId = userId; return this; }
+        public Builder name(String name) { this.name = name; return this; }
+        public Builder totalBookings(Long totalBookings) { this.totalBookings = totalBookings; return this; }
+        public Builder completedBookings(Long completedBookings) { this.completedBookings = completedBookings; return this; }
+        public Builder cancelledBookings(Long cancelledBookings) { this.cancelledBookings = cancelledBookings; return this; }
+        public Builder totalSpent(Double totalSpent) { this.totalSpent = totalSpent; return this; }
+        public Builder averageBookingAmount(Double averageBookingAmount) { this.averageBookingAmount = averageBookingAmount; return this; }
+
+        public UserBookingSummaryDTO build() {
+            return new UserBookingSummaryDTO(this);
+        }
     }
 
     public Long getUserId() { return userId; }
