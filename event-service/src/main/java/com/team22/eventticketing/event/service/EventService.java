@@ -161,13 +161,13 @@ public class EventService {
         double totalRevenue = ((Number) stats[1]).doubleValue();
         double avg = ((Number) stats[2]).doubleValue(); // already computed in DB
 
-        return new EventRevenueDTO(
-                eventId,
-                event.getName(),
-                totalBookings,
-                totalRevenue,
-                avg
-        );
+        return EventRevenueDTO.builder()
+                .eventId(eventId)
+                .name(event.getName())
+                .totalBookings(totalBookings)
+                .totalRevenue(totalRevenue)
+                .averageBookingAmount(avg)
+                .build();
     }
 
     // [S2-F7] Rate an Event
