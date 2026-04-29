@@ -3,6 +3,7 @@ package com.team22.eventticketing.user.service;
 import com.team22.eventticketing.user.entity.FavoriteVenue;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.repository.FavoriteVenueRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -15,48 +16,45 @@ public class FavoriteVenueService {
 
     private final FavoriteVenueRepository favoriteVenueRepository;
     private final UserService userService;
+    private final CacheEvictionService cacheEviction;
 
     public FavoriteVenueService(FavoriteVenueRepository favoriteVenueRepository,
-                                UserService userService) {
+                                UserService userService,
+                                CacheEvictionService cacheEviction) {
         this.favoriteVenueRepository = favoriteVenueRepository;
         this.userService = userService;
+        this.cacheEviction = cacheEviction;
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────
 
-    /**
-     * Creates a FavoriteVenue linked to the given userId.
-     * Validates the user exists (throws 404 via UserService) before saving.
-     */
     public FavoriteVenue create(Long userId, FavoriteVenue favoriteVenue) {
-        User user = userService.findById(userId); // throws 404 if user missing
+        User user = userService.findById(userId);
         favoriteVenue.setUser(user);
         return favoriteVenueRepository.save(favoriteVenue);
     }
 
-    // ─── Read by ID ───────────────────────────────────────────────────────────────
+    // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
 
+    @Cacheable(cacheNames = "user-service::favorite-venue", key = "#id")
     public FavoriteVenue findById(Long id) {
         return favoriteVenueRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "FavoriteVenue not found with id: " + id));
     }
 
-    // ─── Read all ─────────────────────────────────────────────────────────────────
+    // ─── Read all (NOT cached) ────────────────────────────────────────────────────
 
     public List<FavoriteVenue> findAll() {
         return favoriteVenueRepository.findAll();
     }
 
-    // ─── Read all by User ─────────────────────────────────────────────────────────
-
     public List<FavoriteVenue> findByUserId(Long userId) {
-        // Ensure user exists first (throws 404 if not)
         userService.findById(userId);
         return favoriteVenueRepository.findByUserId(userId);
     }
 
-    // ─── Update ───────────────────────────────────────────────────────────────────
+    // ─── [CRUD] Update ────────────────────────────────────────────────────────────
 
     public FavoriteVenue update(Long id, FavoriteVenue patch) {
         FavoriteVenue existing = findById(id);
@@ -68,10 +66,12 @@ public class FavoriteVenueService {
         if (patch.getIsDefault() != null) existing.setIsDefault(patch.getIsDefault());
         if (patch.getMetadata() != null)  existing.setMetadata(patch.getMetadata());
 
-        return favoriteVenueRepository.save(existing);
+        FavoriteVenue saved = favoriteVenueRepository.save(existing);
+        cacheEviction.evictEntityAndFeatures("favorite-venue", id, "S1-F8", "S1-F9");
+        return saved;
     }
 
-    // ─── Delete ───────────────────────────────────────────────────────────────────
+    // ─── [CRUD] Delete ────────────────────────────────────────────────────────────
 
     public void delete(Long id) {
         if (!favoriteVenueRepository.existsById(id)) {
@@ -79,28 +79,31 @@ public class FavoriteVenueService {
                     HttpStatus.NOT_FOUND, "FavoriteVenue not found with id: " + id);
         }
         favoriteVenueRepository.deleteById(id);
+        cacheEviction.evictEntityAndFeatures("favorite-venue", id, "S1-F8", "S1-F9");
     }
 
+    // ─── [S1-F7] Set Default Venue ────────────────────────────────────────────────
 
-    // (S1-F7)
     @Transactional
     public User setDefault(Long userId, Long venueId) {
-        User user = userService.findById(userId); // 404 if user missing
+        userService.findById(userId); // 404 if user does not exist
 
-        FavoriteVenue venue = findById(venueId); // 404 if venue missing
+        FavoriteVenue venue = findById(venueId);
 
-        // 400 if the venue doesn't belong to this user
         if (!venue.getUser().getId().equals(userId)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Venue " + venueId + " does not belong to user " + userId);
         }
 
-        favoriteVenueRepository.clearDefaultsByUserId(userId); // clear all defaults
+        favoriteVenueRepository.clearDefaultsByUserId(userId);
         venue.setIsDefault(true);
         favoriteVenueRepository.save(venue);
 
-        // Return a fresh copy of the user so favoriteVenues list reflects the changes
+        // Evict: venue detail, user profile (S1-F8 includes venues), category filter (S1-F9)
+        cacheEviction.evictEntityAndFeatures("favorite-venue", venueId, "S1-F8", "S1-F9");
+        cacheEviction.evictDetail("user", userId);
+
         return userService.findById(userId);
     }
 }

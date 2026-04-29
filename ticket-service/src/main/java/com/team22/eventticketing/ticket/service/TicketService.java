@@ -4,93 +4,84 @@ import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketStatus;
 import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
+import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
-import com.team22.eventticketing.ticket.model.Ticket;
-import com.team22.eventticketing.ticket.model.TicketStatus;
-import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
-
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class TicketService {
 
     private final TicketRepository ticketRepository;
+    private final CacheEvictionService cacheEviction;
 
-    public TicketService(TicketRepository ticketRepository) {
+    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction) {
         this.ticketRepository = ticketRepository;
+        this.cacheEviction = cacheEviction;
     }
 
-    // ==================== CRUD ====================
+    // ─── CRUD ─────────────────────────────────────────────────────────────────────
 
     public Ticket createTicket(Ticket ticket) {
         return ticketRepository.save(ticket);
     }
 
+    @Cacheable(cacheNames = "ticket-service::ticket", key = "#id")
     public Ticket getTicketById(Long id) {
         return ticketRepository.findById(id)
-                .orElseThrow(
-                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found with id: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found with id: " + id));
     }
 
     public List<Ticket> getAllTickets() {
-        return ticketRepository.findAll();
+        return ticketRepository.findAll(); // list — NOT cached
     }
 
     public Ticket updateTicket(Long id, Ticket updated) {
         Ticket existing = getTicketById(id);
 
-        if (updated.getBookingId() != null) {
-            existing.setBookingId(updated.getBookingId());
-        }
-        if (updated.getAttendeeName() != null) {
-            existing.setAttendeeName(updated.getAttendeeName());
-        }
-        if (updated.getTicketCode() != null) {
-            existing.setTicketCode(updated.getTicketCode());
-        }
-        if (updated.getStatus() != null) {
-            existing.setStatus(updated.getStatus());
-        }
-        if (updated.getIssuedAt() != null) {
-            existing.setIssuedAt(updated.getIssuedAt());
-        }
-        if (updated.getMetadata() != null) {
-            existing.setMetadata(updated.getMetadata());
-        }
+        if (updated.getBookingId() != null)    existing.setBookingId(updated.getBookingId());
+        if (updated.getAttendeeName() != null) existing.setAttendeeName(updated.getAttendeeName());
+        if (updated.getTicketCode() != null)   existing.setTicketCode(updated.getTicketCode());
+        if (updated.getStatus() != null)       existing.setStatus(updated.getStatus());
+        if (updated.getIssuedAt() != null)     existing.setIssuedAt(updated.getIssuedAt());
+        if (updated.getMetadata() != null)     existing.setMetadata(updated.getMetadata());
 
-        return ticketRepository.save(existing);
+        Ticket saved = ticketRepository.save(existing);
+        cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9", "S4-F10");
+        return saved;
     }
 
     public void deleteTicket(Long id) {
         Ticket existing = getTicketById(id);
         ticketRepository.delete(existing);
+        cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9", "S4-F10");
     }
 
-    // ==================== S4-F4: Batch Ticket Issuance ====================
+    // ─── [S4-F4] Batch Ticket Issuance (write — invalidates) ─────────────────────
 
     @Transactional
     public int batchIssueTickets(BatchTicketRequestDTO request) {
         Long bookingId = request.getBookingId();
         List<TicketItemDTO> items = request.getTickets();
 
-        // 1. Verify booking exists
         if (!ticketRepository.bookingExistsById(bookingId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId);
         }
 
-        // 2. Check for duplicate ticket codes within the batch
         Set<String> codesInBatch = new HashSet<>();
         for (TicketItemDTO item : items) {
             if (!codesInBatch.add(item.getTicketCode())) {
@@ -99,14 +90,12 @@ public class TicketService {
             }
         }
 
-        // 3. Check for duplicate ticket codes against the database
         for (String code : codesInBatch) {
             if (ticketRepository.existsByTicketCode(code)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket code already exists: " + code);
             }
         }
 
-        // 4. Build and save all tickets
         LocalDateTime now = LocalDateTime.now();
         List<Ticket> tickets = items.stream().map(item -> new Ticket(
                 bookingId,
@@ -117,42 +106,40 @@ public class TicketService {
                 item.getMetadata())).toList();
 
         ticketRepository.saveAll(tickets);
+
+        // Batch write invalidates search/filter/analytics caches
+        cacheEviction.evictPattern("S4-F1");
+        cacheEviction.evictPattern("S4-F6");
+        cacheEviction.evictPattern("S4-F9");
+        cacheEviction.evictPattern("S4-F10");
+
         return tickets.size();
     }
 
-    // Get ticket S4-F1
+    // ─── [S4-F1] Get Latest Ticket by Booking ────────────────────────────────────
+
+    @Cacheable(cacheNames = "ticket-service::S4-F1", key = "#bookingId")
     public Ticket getLatestTicketByBooking(Long bookingId) {
-
-        // Check if booking exists using SQL
         boolean bookingExists = ticketRepository.existsBookingById(bookingId);
-
         if (!bookingExists) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
         }
-
-        // Get the latest ticket
         return ticketRepository
                 .findTopByBookingIdOrderByIssuedAtDesc(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "No tickets found for this booking"));
     }
 
-    // Create ticket S4-F2
-    public Ticket issueTicket(Long bookingId,
-            String attendeeName,
-            String ticketCode,
-            Map<String, Object> metadata) {
+    // ─── [S4-F2] Issue Ticket (write) ────────────────────────────────────────────
 
+    public Ticket issueTicket(Long bookingId, String attendeeName, String ticketCode,
+                              Map<String, Object> metadata) {
         boolean exists = ticketRepository.existsBookingById(bookingId);
-
         if (!exists) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
         }
-
         if (ticketRepository.existsByTicketCode(ticketCode)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ticket code already exists");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket code already exists");
         }
 
         Ticket ticket = new Ticket();
@@ -163,12 +150,19 @@ public class TicketService {
         ticket.setIssuedAt(LocalDateTime.now());
         ticket.setStatus(TicketStatus.VALID);
 
-        return ticketRepository.save(ticket);
+        Ticket saved = ticketRepository.save(ticket);
+        // New ticket: evict F1 (latest ticket cache for this booking) and analytics
+        cacheEviction.evictPattern("S4-F1");
+        cacheEviction.evictPattern("S4-F9");
+        cacheEviction.evictPattern("S4-F10");
+        return saved;
     }
 
-    // Find event according to distance of event S4-F3
-    public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double radiusKm) {
+    // ─── [S4-F3] Find Nearby Tickets (location DTO) ───────────────────────────────
 
+    @Cacheable(cacheNames = "ticket-service::S4-F3",
+            key = "#lat + ':' + #lon + ':' + #radiusKm")
+    public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double radiusKm) {
         List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon, radiusKm);
 
         return results.stream().map(r -> new NearbyTicketDTO(
@@ -181,34 +175,42 @@ public class TicketService {
                 ((Number) r[6]).doubleValue())).collect(Collectors.toList());
     }
 
+    // ─── [S4-F7] Purge Expired Tickets (write — invalidates) ─────────────────────
+
     @Transactional
     public int purgeExpiredTickets(int olderThanDays) {
-        // Calculate cutoff: today minus n days.
-        // Example: If olderThanDays is 30, cutoff is 30 days ago.
         LocalDateTime cutoff = LocalDateTime.now().minusDays(olderThanDays);
+        int count = ticketRepository.purgeExpiredAndCancelledTickets(cutoff);
 
-        // Execute deletion of EXPIRED and CANCELLED tickets via repository.
-        return ticketRepository.purgeExpiredAndCancelledTickets(cutoff);
+        cacheEviction.evictPattern("S4-F1");
+        cacheEviction.evictPattern("S4-F6");
+        cacheEviction.evictPattern("S4-F9");
+        cacheEviction.evictPattern("S4-F10");
+
+        return count;
     }
 
+    // ─── [S4-F8] Event Attendance Summary (relationship DTO) ─────────────────────
+
+    @Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
     public EventAttendanceSummaryDTO getSummary(Long eventId) {
         Map<String, Object> data = ticketRepository.getAttendanceSummaryData(eventId);
 
         long total = ((Number) data.getOrDefault("total", 0)).longValue();
-
-        // Throw 404 directly using Spring's built-in exception
         if (total == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No tickets found for event: " + eventId);
         }
 
-        // Handling potential nulls if no tickets exist for the event
-        long used = ((Number) data.getOrDefault("used", 0)).longValue();
+        long used  = ((Number) data.getOrDefault("used", 0)).longValue();
         long valid = ((Number) data.getOrDefault("_valid", 0)).longValue();
         LocalDateTime last = (LocalDateTime) data.get("last_checkin");
 
         return new EventAttendanceSummaryDTO(eventId, total, used, valid, last);
     }
 
+    // ─── [S4-F9] Unused Upcoming Tickets (combined) ───────────────────────────────
+
+    @Cacheable(cacheNames = "ticket-service::S4-F9", key = "'all'")
     public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
         List<Map<String, Object>> results = ticketRepository.findUnusedUpcomingTicketsNative();
 
@@ -221,8 +223,10 @@ public class TicketService {
                 (LocalDateTime) row.get("eventDate"))).toList();
     }
 
-    // ==================== S4-F6: Get Tickets in Date Range ====================
+    // ─── [S4-F6] Ticket History (date range report) ───────────────────────────────
 
+    @Cacheable(cacheNames = "ticket-service::S4-F6",
+            key = "T(String).valueOf(#startDate) + ':' + T(String).valueOf(#endDate) + ':' + T(String).valueOf(#status)")
     public List<Ticket> getTicketHistory(LocalDate startDate, LocalDate endDate, String status) {
         if (startDate == null || endDate == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate and endDate are required");
@@ -232,7 +236,7 @@ public class TicketService {
         }
 
         LocalDateTime start = startDate.atStartOfDay();
-        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+        LocalDateTime end   = endDate.atTime(LocalTime.MAX);
 
         if (status == null || status.isBlank()) {
             return ticketRepository.findByIssuedAtBetween(start, end);
@@ -249,8 +253,10 @@ public class TicketService {
         return ticketRepository.findByIssuedAtBetweenAndStatus(start, end, normalized);
     }
 
-    // ==================== S4-F5: Filter Tickets by Metadata ====================
+    // ─── [S4-F5] Filter Tickets by Metadata (JSONB) ───────────────────────────────
 
+    @Cacheable(cacheNames = "ticket-service::S4-F5",
+            key = "#key + ':' + #operator + ':' + #value")
     public List<Ticket> filterByMetadata(String key, String operator, String value) {
         if (key == null || key.isBlank() || operator == null || value == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "key, operator, and value are required");
@@ -264,5 +270,4 @@ public class TicketService {
                     "Invalid operator: " + operator + ". Allowed: eq, gt, lt");
         };
     }
-
 }
