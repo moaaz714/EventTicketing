@@ -87,4 +87,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByFavoriteCategoryAndMinBookings(
             @Param("categoryJson") String categoryJson,
             @Param("minBookings") int minBookings);
+
+    Optional<User> findByEmail(String email);
 }
