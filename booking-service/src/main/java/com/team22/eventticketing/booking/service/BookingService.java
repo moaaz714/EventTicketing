@@ -222,15 +222,16 @@ public class BookingService {
                 ? List.of()
                 : booking.getBookingItems().stream()
                 .sorted((a, b) -> Integer.compare(a.getEventOrder(), b.getEventOrder()))
-                .map(item -> BookingItemDTO.builder()
-                        .id(item.getId())
-                        .eventOrder(item.getEventOrder())
-                        .sessionTitle(item.getSessionTitle())
-                        .quantity(item.getQuantity())
-                        .unitPrice(item.getUnitPrice())
-                        .status(item.getStatus().name())
-                        .metadata(item.getMetadata()).build()).collect(Collectors.toList());
-
+                .map(item -> new BookingItemDTO(
+                        item.getId(),
+                        item.getEventOrder(),
+                        item.getSessionTitle(),
+                        item.getQuantity(),
+                        item.getUnitPrice(),
+                        item.getStatus().name(),
+                        item.getMetadata()
+                ))
+                .collect(Collectors.toList());
 
         long confirmedItems = itemDTOs.stream()
                 .filter(i -> i.getStatus().equals("CONFIRMED"))
