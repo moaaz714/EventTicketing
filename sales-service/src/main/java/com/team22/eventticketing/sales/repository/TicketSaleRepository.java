@@ -1,7 +1,7 @@
 package com.team22.eventticketing.sales.repository;
 
 import com.team22.eventticketing.sales.entity.TicketSale;
-import com.team22.eventticketing.sales.entity.SaleStatus;
+import static com.team22.eventticketing.sales.entity.TicketSale.SaleStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

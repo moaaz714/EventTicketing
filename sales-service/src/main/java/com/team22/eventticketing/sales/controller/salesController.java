@@ -5,7 +5,7 @@ import com.team22.eventticketing.sales.dto.RevenueReportDTO;
 import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
-import com.team22.eventticketing.sales.entity.PaymentMethod;
+import static com.team22.eventticketing.sales.entity.TicketSale.PaymentMethod;
 import com.team22.eventticketing.sales.service.PromotionService;
 import com.team22.eventticketing.sales.service.SalesService;
 import com.team22.eventticketing.sales.service.TicketSaleService;

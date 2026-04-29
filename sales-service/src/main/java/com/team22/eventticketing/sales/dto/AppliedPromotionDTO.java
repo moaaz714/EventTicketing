@@ -1,6 +1,6 @@
 package com.team22.eventticketing.sales.dto;
 
-import com.team22.eventticketing.sales.entity.DiscountType;
+import static com.team22.eventticketing.sales.entity.Promotion.DiscountType;
 
 import java.time.LocalDateTime;
 

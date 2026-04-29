@@ -2,7 +2,7 @@ package com.team22.eventticketing.sales.service;
 
 import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
 import com.team22.eventticketing.sales.entity.Promotion;
-import com.team22.eventticketing.sales.entity.DiscountType;
+import static com.team22.eventticketing.sales.entity.Promotion.DiscountType;
 import com.team22.eventticketing.sales.repository.PromotionRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

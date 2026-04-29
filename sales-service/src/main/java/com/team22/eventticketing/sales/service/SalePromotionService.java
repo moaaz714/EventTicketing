@@ -2,6 +2,7 @@ package com.team22.eventticketing.sales.service;
 
 import com.team22.eventticketing.sales.entity.SalePromotion;
 import com.team22.eventticketing.sales.repository.SalePromotionRepository;
+import com.team22.eventticketing.sales.repository.TicketSaleRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -12,14 +13,25 @@ import java.util.List;
 public class SalePromotionService {
 
     private final SalePromotionRepository salePromotionRepository;
+    private final TicketSaleRepository ticketSaleRepository;
 
-    public SalePromotionService(SalePromotionRepository salePromotionRepository) {
+    public SalePromotionService(SalePromotionRepository salePromotionRepository,
+                                TicketSaleRepository ticketSaleRepository) {
         this.salePromotionRepository = salePromotionRepository;
+        this.ticketSaleRepository = ticketSaleRepository;
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────
 
     public SalePromotion create(SalePromotion salePromotion) {
+        if (salePromotion.getTicketSale() != null && salePromotion.getTicketSale().getId() != null
+                && salePromotion.getDiscountApplied() != null) {
+            ticketSaleRepository.findById(salePromotion.getTicketSale().getId()).ifPresent(sale -> {
+                if (salePromotion.getDiscountApplied() > sale.getAmount()) {
+                    salePromotion.setDiscountApplied(sale.getAmount());
+                }
+            });
+        }
         return salePromotionRepository.save(salePromotion);
     }
 
