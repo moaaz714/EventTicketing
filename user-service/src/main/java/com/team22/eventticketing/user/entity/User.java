@@ -63,8 +63,13 @@ public class User {
     @Column(nullable = false)
     private Role role;
 
+    /**
+     * Default value at the application layer is ACTIVE.
+     * The DB-level default is set via columnDefinition so schema generation
+     * also reflects the default without requiring a NOT NULL migration.
+     */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "VARCHAR(20) DEFAULT 'ACTIVE'")
     private UserStatus status = UserStatus.ACTIVE;
 
     // ─── JSONB Column ─────────────────────────────────────────────────────────────

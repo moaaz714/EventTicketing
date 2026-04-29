@@ -115,15 +115,15 @@ public class UserService {
         double totalSpent           = ((Number) row[3]).doubleValue();
         double averageBookingAmount = ((Number) row[4]).doubleValue();
 
-        return new UserBookingSummaryDTO(
-                user.getId(),
-                user.getName(),
-                totalBookings,
-                completedBookings,
-                cancelledBookings,
-                totalSpent,
-                averageBookingAmount
-        );
+        return UserBookingSummaryDTO.builder()
+                .userId(user.getId())
+                .name(user.getName())
+                .totalBookings(totalBookings)
+                .completedBookings(completedBookings)
+                .cancelledBookings(cancelledBookings)
+                .totalSpent(totalSpent)
+                .averageBookingAmount(averageBookingAmount)
+                .build();
     }
 
     // ─── [S1-F6] Top attendees by spending ────────────────────────────────────────
@@ -138,13 +138,12 @@ public class UserService {
         }
         return userRepository.findTopAttendees(start.atStartOfDay(), end.atTime(23, 59, 59), limit)
                 .stream()
-                .map(row -> new TopAttendeeDTO(
-                        ((Number) row[0]).longValue(),
-                        (String)  row[1],
-                        ((Number) row[2]).doubleValue(),
-                        ((Number) row[3]).longValue()
-                ))
-                .collect(Collectors.toList());
+                .map(row -> TopAttendeeDTO.builder()
+                        .userId(((Number) row[0]).longValue())
+                        .name((String)  row[1])
+                        .totalSpent(((Number) row[2]).doubleValue())
+                        .averageBookingAmount(((Number) row[3]).longValue())
+                        .build()).collect(Collectors.toList());
     }
 
     // ─── [CRUD] Delete ────────────────────────────────────────────────────────────

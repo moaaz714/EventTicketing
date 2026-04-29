@@ -85,8 +85,7 @@ public class TicketService {
         Set<String> codesInBatch = new HashSet<>();
         for (TicketItemDTO item : items) {
             if (!codesInBatch.add(item.getTicketCode())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Duplicate ticket code in batch: " + item.getTicketCode());
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate ticket code in batch: " + item.getTicketCode());
             }
         }
 
@@ -103,7 +102,8 @@ public class TicketService {
                 item.getTicketCode(),
                 TicketStatus.VALID,
                 now,
-                item.getMetadata())).toList();
+                item.getMetadata()
+        )).toList();
 
         ticketRepository.saveAll(tickets);
 
@@ -126,8 +126,9 @@ public class TicketService {
         }
         return ticketRepository
                 .findTopByBookingIdOrderByIssuedAtDesc(bookingId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "No tickets found for this booking"));
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                "No tickets found for this booking"));
     }
 
     // ─── [S4-F2] Issue Ticket (write) ────────────────────────────────────────────
@@ -165,14 +166,17 @@ public class TicketService {
     public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double radiusKm) {
         List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon, radiusKm);
 
-        return results.stream().map(r -> new NearbyTicketDTO(
-                ((Number) r[0]).longValue(),
-                (String) r[1],
-                ((Number) r[2]).longValue(),
-                (String) r[3],
-                r[4] != null ? ((Number) r[4]).doubleValue() : null,
-                r[5] != null ? ((Number) r[5]).doubleValue() : null,
-                ((Number) r[6]).doubleValue())).collect(Collectors.toList());
+        return results.stream().map(r ->
+                new NearbyTicketDTO(
+                        ((Number) r[0]).longValue(),
+                        (String) r[1],
+                        ((Number) r[2]).longValue(),
+                        (String) r[3],
+                        r[4] != null ? ((Number) r[4]).doubleValue() : null,
+                        r[5] != null ? ((Number) r[5]).doubleValue() : null,
+                        ((Number) r[6]).doubleValue()
+                )
+        ).collect(Collectors.toList());
     }
 
     // ─── [S4-F7] Purge Expired Tickets (write — invalidates) ─────────────────────

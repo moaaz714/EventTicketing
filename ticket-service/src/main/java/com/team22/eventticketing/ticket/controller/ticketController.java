@@ -4,18 +4,14 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import com.team22.eventticketing.ticket.model.Ticket;
+import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
 import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.http.HttpStatus;
-
-import com.team22.eventticketing.ticket.model.Ticket;
-import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.service.TicketService;
 
 import java.time.LocalDate;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -29,17 +25,17 @@ public class ticketController {
         this.ticketService = ticketService;
     }
 
-    // [S4-F1]
+    //[S4-F1]
     @GetMapping("/booking/{bookingId}/latest")
     public Ticket getLatestTicket(@PathVariable Long bookingId) {
         return ticketService.getLatestTicketByBooking(bookingId);
     }
-
     @PostMapping("/booking/{bookingId}")
     @ResponseStatus(HttpStatus.CREATED)
     public Ticket issueTicket(
             @PathVariable Long bookingId,
-            @RequestBody Map<String, Object> request) {
+            @RequestBody Map<String, Object> request
+    ) {
 
         String attendeeName = (String) request.get("attendeeName");
         String ticketCode = (String) request.get("ticketCode");
@@ -49,16 +45,20 @@ public class ticketController {
                 bookingId,
                 attendeeName,
                 ticketCode,
-                metadata);
+                metadata
+        );
     }
+
 
     @GetMapping("/nearby")
     public List<NearbyTicketDTO> getNearbyTickets(
             @RequestParam double lat,
             @RequestParam double lon,
-            @RequestParam double radiusKm) {
+            @RequestParam double radiusKm
+    ) {
         return ticketService.findNearbyTickets(lat, lon, radiusKm);
     }
+
 
     @GetMapping("/health")
     public String statusCheck() {
@@ -105,13 +105,8 @@ public class ticketController {
     // ==================== S4-F7: Purge Expired Tickets ====================
 
     @DeleteMapping("/purge")
-    public Map<String, Object> purgeTickets(@RequestParam("olderThanDays") int olderThanDays) {
-
-        int count = ticketService.purgeExpiredTickets(olderThanDays);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("deletedCount", count);
-        return response;
+    public int purgeTickets(@RequestParam("olderThanDays") int olderThanDays) {
+        return ticketService.purgeExpiredTickets(olderThanDays);
     }
 
     // ==================== S4-F8: Event Attendance Summary ====================
@@ -134,7 +129,8 @@ public class ticketController {
     public List<Ticket> filterTicketsByMetadata(
             @RequestParam String key,
             @RequestParam String operator,
-            @RequestParam String value) {
+            @RequestParam String value
+    ) {
         return ticketService.filterByMetadata(key, operator, value);
     }
 
@@ -144,7 +140,8 @@ public class ticketController {
     public List<Ticket> getTicketHistory(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String status
+    ) {
         return ticketService.getTicketHistory(startDate, endDate, status);
     }
 }

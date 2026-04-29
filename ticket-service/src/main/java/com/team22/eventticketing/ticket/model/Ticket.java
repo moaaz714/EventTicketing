@@ -40,16 +40,6 @@ public class Ticket {
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata; // Map to hold JSONB data [cite: 302]
 
-    @PrePersist
-    public void onCreate() {
-        if (this.status == null) {
-            this.status = TicketStatus.VALID;
-        }
-        if (issuedAt == null) {
-            issuedAt = LocalDateTime.now();
-        }
-    }
-
     // Default Constructor
     public Ticket() {
     }
