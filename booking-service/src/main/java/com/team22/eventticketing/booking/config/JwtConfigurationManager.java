@@ -22,7 +22,7 @@ public class JwtConfigurationManager {
 
         this.expirationMs = (envExpiration != null && !envExpiration.isBlank())
                 ? Long.parseLong(envExpiration)
-                : 3600000;
+                : 86400000;
 
         this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(this.secret));
     }
