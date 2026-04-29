@@ -5,6 +5,7 @@ import com.team22.eventticketing.user.dto.TopAttendeeDTO;
 import com.team22.eventticketing.user.dto.UserProfileDTO;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
+import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -21,15 +23,25 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public UserService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
+    }
+
     // ─── Create ──────────────────────────────────────────────────────────────────
 
     public User create(User user) {
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        notifyObservers("REGISTERED", Map.of("userId", saved.getId(), "email", saved.getEmail() != null ? saved.getEmail() : ""));
+        return saved;
     }
 
     // ─── Read by ID ───────────────────────────────────────────────────────────────
@@ -59,7 +71,9 @@ public class UserService {
         if (patch.getStatus() != null)      existing.setStatus(patch.getStatus());
         if (patch.getPreferences() != null) existing.setPreferences(patch.getPreferences());
 
-        return userRepository.save(existing);
+        User saved = userRepository.save(existing);
+        notifyObservers("USER_UPDATED", Map.of("userId", saved.getId()));
+        return saved;
     }
 
     // ─── Update Preferences ───────────────────────────────────────────────────────
@@ -67,7 +81,9 @@ public class UserService {
     public User updatePreferences(Long id, Map<String, Object> incoming) {
         User user = findById(id);
         user.getPreferences().putAll(incoming);
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        notifyObservers("PREFERENCES_UPDATED", Map.of("userId", saved.getId()));
+        return saved;
     }
 
     // ─── Search ───────────────────────────────────────────────────────────────────
@@ -140,6 +156,7 @@ public class UserService {
                     HttpStatus.NOT_FOUND, "User not found with id: " + id);
         }
         userRepository.deleteById(id);
+        notifyObservers("USER_DELETED", Map.of("userId", id));
     }
 
     // ─── Deactivate ─────────────────────────────────────────────────────────────
@@ -154,7 +171,9 @@ public class UserService {
         }
 
         user.setStatus(com.team22.eventticketing.user.entity.UserStatus.DEACTIVATED);
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        notifyObservers("USER_DEACTIVATED", Map.of("userId", saved.getId()));
+        return saved;
     }
 
     // ─── [S1-F8] Get User Profile ────────────────────────────────────────────────

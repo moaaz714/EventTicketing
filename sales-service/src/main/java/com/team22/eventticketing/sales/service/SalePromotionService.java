@@ -1,26 +1,39 @@
 package com.team22.eventticketing.sales.service;
 
 import com.team22.eventticketing.sales.entity.SalePromotion;
+import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.SalePromotionRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class SalePromotionService {
 
     private final SalePromotionRepository salePromotionRepository;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public SalePromotionService(SalePromotionRepository salePromotionRepository) {
         this.salePromotionRepository = salePromotionRepository;
     }
 
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
+    }
+
     // ─── Create ──────────────────────────────────────────────────────────────────
 
     public SalePromotion create(SalePromotion salePromotion) {
-        return salePromotionRepository.save(salePromotion);
+        SalePromotion saved = salePromotionRepository.save(salePromotion);
+        notifyObservers("SALE_PROMOTION_LINKED", Map.of("salePromotionId", saved.getId()));
+        return saved;
     }
 
     // ─── Read by ID ───────────────────────────────────────────────────────────────
@@ -47,7 +60,9 @@ public class SalePromotionService {
         if (patch.getTicketSale() != null)      existing.setTicketSale(patch.getTicketSale());
         if (patch.getPromotion() != null)       existing.setPromotion(patch.getPromotion());
 
-        return salePromotionRepository.save(existing);
+        SalePromotion saved = salePromotionRepository.save(existing);
+        notifyObservers("SALE_PROMOTION_UPDATED", Map.of("salePromotionId", saved.getId()));
+        return saved;
     }
 
     // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -58,5 +73,6 @@ public class SalePromotionService {
                     HttpStatus.NOT_FOUND, "SalePromotion not found with id: " + id);
         }
         salePromotionRepository.deleteById(id);
+        notifyObservers("SALE_PROMOTION_DELETED", Map.of("salePromotionId", id));
     }
 }

@@ -9,6 +9,7 @@ import com.team22.eventticketing.booking.model.Booking;
 import com.team22.eventticketing.booking.model.BookingItem;
 import com.team22.eventticketing.booking.model.BookingItemStatus;
 import com.team22.eventticketing.booking.model.BookingStatus;
+import com.team22.eventticketing.booking.observer.EntityObserver;
 import com.team22.eventticketing.booking.repository.BookingItemRepository;
 import com.team22.eventticketing.booking.repository.BookingRepository;
 import org.springframework.http.HttpStatus;
@@ -17,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,10 +28,18 @@ public class BookingService {
 
     private final BookingRepository bookingRepository;
     private final BookingItemRepository bookingItemRepository;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public BookingService(BookingRepository bookingRepository, BookingItemRepository bookingItemRepository) {
         this.bookingRepository = bookingRepository;
         this.bookingItemRepository = bookingItemRepository;
+    }
+
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
     }
 
     public List<Booking> searchBookings(BookingStatus status, LocalDateTime startDate, LocalDateTime endDate) {
@@ -45,7 +56,9 @@ public class BookingService {
         if (booking.getBookingDate() == null) {
             booking.setBookingDate(LocalDateTime.now());
         }
-        return bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
+        notifyObservers("BOOKING_CREATED", Map.of("bookingId", saved.getId()));
+        return saved;
     }
 
     // ─── Read by ID ───────────────────────────────────────────────────────────────
@@ -80,7 +93,9 @@ public class BookingService {
         if (patch.getConfirmedAt() != null)  existing.setConfirmedAt(patch.getConfirmedAt());
         if (patch.getEventId() != null)      existing.setEventId(patch.getEventId());
 
-        return bookingRepository.save(existing);
+        Booking saved = bookingRepository.save(existing);
+        notifyObservers("BOOKING_UPDATED", Map.of("bookingId", saved.getId()));
+        return saved;
     }
 
     // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -91,6 +106,7 @@ public class BookingService {
                     HttpStatus.NOT_FOUND, "Booking not found with id: " + id);
         }
         bookingRepository.deleteById(id);
+        notifyObservers("BOOKING_DELETED", Map.of("bookingId", id));
     }
 
     // ─── S3-F4: Complete Booking ──────────────────────────────────────────────────
@@ -123,6 +139,7 @@ public class BookingService {
                 saved.getTotalAmount() != null ? saved.getTotalAmount() : 0.0
         );
 
+        notifyObservers("BOOKING_COMPLETED", Map.of("bookingId", saved.getId()));
         return saved;
     }
 
@@ -164,6 +181,7 @@ public class BookingService {
         booking.setStatus(BookingStatus.CANCELLED);
         bookingRepository.save(booking);
         bookingRepository.cancelValidTicketsForBooking(id);
+        notifyObservers("BOOKING_CANCELLED", Map.of("bookingId", id));
     }
 
     @Transactional
@@ -203,7 +221,9 @@ public class BookingService {
             bookingItemRepository.save(item);
         }
 
-        return bookingRepository.findByIdWithItems(bookingId).get();
+        Booking result = bookingRepository.findByIdWithItems(bookingId).get();
+        notifyObservers("BOOKING_ITEMS_ADDED", Map.of("bookingId", bookingId));
+        return result;
     }
 
     public BookingDetailsDTO getBookingDetails(Long bookingId) {
@@ -265,29 +285,24 @@ public class BookingService {
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setConfirmedAt(LocalDateTime.now());
 
-        return bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
+        notifyObservers("BOOKING_CONFIRMED", Map.of("bookingId", saved.getId(), "eventId", eventId));
+        return saved;
     }
 
     // ─── S3-F3: Get Booking Cost Estimate ─────────────────────────────────────────
 
     public BookingCostEstimateDTO estimateCost(Long eventId, Integer ticketCount, String ticketTier) {
-        // 1. Get Average Capacity
         Double avgCapacity = bookingRepository.getAverageSessionCapacity(eventId);
         if (avgCapacity == null) {
             avgCapacity = 0.0;
         }
 
-        // 2. Calculate Base Price and Tier Multiplier
         double basePrice = avgCapacity / 10.0;
         double tierMultiplier = "VIP".equalsIgnoreCase(ticketTier) ? 2.5 : 1.0;
-
-        // 3. Calculate Ticket Cost
         double ticketCost = basePrice * tierMultiplier * ticketCount;
-
-        // 4. Calculate Service Fee (15%)
         double serviceFee = ticketCost * 0.15;
 
-        // 5. Determine Demand Multiplier
         Long activeBookings = bookingRepository.countActiveBookingsForEvent(eventId);
         double demandMultiplier = 1.0;
         if (activeBookings != null) {
@@ -298,10 +313,7 @@ public class BookingService {
             }
         }
 
-        // 6. Calculate Estimated Total
         double estimatedTotal = (ticketCost + serviceFee) * demandMultiplier;
-
-        // Return the mapped DTO
         return new BookingCostEstimateDTO(ticketCost, serviceFee, estimatedTotal, demandMultiplier);
     }
 }

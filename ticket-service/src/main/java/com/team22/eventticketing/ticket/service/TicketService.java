@@ -4,42 +4,50 @@ import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketStatus;
 import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
+import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
+import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
-import com.team22.eventticketing.ticket.model.Ticket;
-import com.team22.eventticketing.ticket.model.TicketStatus;
-import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
-
-
-
-
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class TicketService {
 
     private final TicketRepository ticketRepository;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public TicketService(TicketRepository ticketRepository) {
         this.ticketRepository = ticketRepository;
     }
 
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
+    }
+
     // ==================== CRUD ====================
 
     public Ticket createTicket(Ticket ticket) {
-        return ticketRepository.save(ticket);
+        Ticket saved = ticketRepository.save(ticket);
+        notifyObservers("TICKET_CREATED", Map.of("ticketId", saved.getId()));
+        return saved;
     }
 
     public Ticket getTicketById(Long id) {
@@ -59,12 +67,15 @@ public class TicketService {
         existing.setStatus(updated.getStatus());
         existing.setIssuedAt(updated.getIssuedAt());
         existing.setMetadata(updated.getMetadata());
-        return ticketRepository.save(existing);
+        Ticket saved = ticketRepository.save(existing);
+        notifyObservers("TICKET_UPDATED", Map.of("ticketId", saved.getId()));
+        return saved;
     }
 
     public void deleteTicket(Long id) {
         Ticket existing = getTicketById(id);
         ticketRepository.delete(existing);
+        notifyObservers("TICKET_DELETED", Map.of("ticketId", id));
     }
 
     // ==================== S4-F4: Batch Ticket Issuance ====================
@@ -74,12 +85,10 @@ public class TicketService {
         Long bookingId = request.getBookingId();
         List<TicketItemDTO> items = request.getTickets();
 
-        // 1. Verify booking exists
         if (!ticketRepository.bookingExistsById(bookingId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId);
         }
 
-        // 2. Check for duplicate ticket codes within the batch
         Set<String> codesInBatch = new HashSet<>();
         for (TicketItemDTO item : items) {
             if (!codesInBatch.add(item.getTicketCode())) {
@@ -87,14 +96,12 @@ public class TicketService {
             }
         }
 
-        // 3. Check for duplicate ticket codes against the database
         for (String code : codesInBatch) {
             if (ticketRepository.existsByTicketCode(code)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket code already exists: " + code);
             }
         }
 
-        // 4. Build and save all tickets
         LocalDateTime now = LocalDateTime.now();
         List<Ticket> tickets = items.stream().map(item -> new Ticket(
                 bookingId,
@@ -106,44 +113,31 @@ public class TicketService {
         )).toList();
 
         ticketRepository.saveAll(tickets);
+        notifyObservers("TICKETS_BATCH_ISSUED", Map.of("bookingId", bookingId, "count", tickets.size()));
         return tickets.size();
     }
 
-    //Get ticket S4-F1
+    // Get ticket S4-F1
     public Ticket getLatestTicketByBooking(Long bookingId) {
-
-        //Check if booking exists using SQL
         boolean bookingExists = ticketRepository.existsBookingById(bookingId);
-
         if (!bookingExists) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
         }
-
-        //Get the latest ticket
         return ticketRepository
                 .findTopByBookingIdOrderByIssuedAtDesc(bookingId)
                 .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                "No tickets found for this booking"));
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "No tickets found for this booking"));
     }
 
-    //Create ticket S4-F2
-    public Ticket issueTicket(Long bookingId,
-                              String attendeeName,
-                              String ticketCode,
-                              Map<String, Object> metadata) {
-
+    // Create ticket S4-F2
+    public Ticket issueTicket(Long bookingId, String attendeeName, String ticketCode, Map<String, Object> metadata) {
         boolean exists = ticketRepository.existsBookingById(bookingId);
-
         if (!exists) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
         }
 
         if (ticketRepository.existsByTicketCode(ticketCode)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ticket code already exists"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket code already exists");
         }
 
         Ticket ticket = new Ticket();
@@ -154,12 +148,13 @@ public class TicketService {
         ticket.setIssuedAt(LocalDateTime.now());
         ticket.setStatus(TicketStatus.VALID);
 
-        return ticketRepository.save(ticket);
+        Ticket saved = ticketRepository.save(ticket);
+        notifyObservers("TICKET_ISSUED", Map.of("ticketId", saved.getId(), "bookingId", bookingId));
+        return saved;
     }
 
-    //Find event according to distance of event S4-F3
+    // Find event according to distance of event S4-F3
     public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double radiusKm) {
-
         List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon, radiusKm);
 
         return results.stream().map(r ->
@@ -175,16 +170,12 @@ public class TicketService {
         ).collect(Collectors.toList());
     }
 
-
-
     @Transactional
     public int purgeExpiredTickets(int olderThanDays) {
-        // Calculate cutoff: today minus n days.
-        // Example: If olderThanDays is 30, cutoff is 30 days ago.
         LocalDateTime cutoff = LocalDateTime.now().minusDays(olderThanDays);
-
-        // Execute deletion of EXPIRED and CANCELLED tickets via repository.
-        return ticketRepository.purgeExpiredAndCancelledTickets(cutoff);
+        int count = ticketRepository.purgeExpiredAndCancelledTickets(cutoff);
+        notifyObservers("TICKETS_PURGED", Map.of("olderThanDays", olderThanDays, "purgedCount", count));
+        return count;
     }
 
     public EventAttendanceSummaryDTO getSummary(Long eventId) {
@@ -192,12 +183,10 @@ public class TicketService {
 
         long total = ((Number) data.getOrDefault("total", 0)).longValue();
 
-        // Throw 404 directly using Spring's built-in exception
         if (total == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No tickets found for event: " + eventId);
         }
 
-        // Handling potential nulls if no tickets exist for the event
         long used = ((Number) data.getOrDefault("used", 0)).longValue();
         long valid = ((Number) data.getOrDefault("_valid", 0)).longValue();
         LocalDateTime last = (LocalDateTime) data.get("last_checkin");
@@ -260,5 +249,4 @@ public class TicketService {
                     "Invalid operator: " + operator + ". Allowed: eq, gt, lt");
         };
     }
-
 }
