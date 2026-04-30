@@ -93,17 +93,19 @@ public class EventService {
 
     // ─── [S2-F2] Update Event Details (write — invalidates) ──────────────────────
 
-    public void updateEventDetails(Long id, Map<String, Object> newDetails) {
+    public Event updateEventDetails(Long id, Map<String, Object> newDetails) {
         Event event = eventRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Event not found"));
+                // Fixed: Now throws 404 instead of 500 for TC_S2_18
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
         Map<String, Object> existingDetails = event.getDetails();
         if (existingDetails == null) existingDetails = new HashMap<>();
         existingDetails.putAll(newDetails);
         event.setDetails(existingDetails);
-        eventRepository.save(event);
+        Event saved = eventRepository.save(event);
         cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
         notifyObservers("EVENT_DETAILS_UPDATED", Map.of("eventId", id));
+        return saved;
     }
 
     // ─── [S2-F4] Update Event Status (write — invalidates) ───────────────────────
@@ -159,22 +161,21 @@ public class EventService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
-        String url = "http://localhost:8081/api/bookings/event/" + eventId +
-                "/revenue?startDate=" + start.toLocalDate() +
-                "&endDate=" + end.toLocalDate();
+        List<Object[]> stats = eventRepository.getEventRevenueStats(eventId);
 
-        Object[][] response = restTemplate.getForObject(url, Object[][].class);
-        Object[] stats = response[0];
+        if (stats != null && !stats.isEmpty() && stats.get(0) != null) {
+            Object[] row = stats.get(0);
+            long totalBookings = row[0] == null ? 0L : ((Number) row[0]).longValue();
+            double totalRevenue = row[1] == null ? 0.0 : ((Number) row[1]).doubleValue();
+            double avg = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
 
-        long totalBookings = ((Number) stats[0]).longValue();
-        double totalRevenue = ((Number) stats[1]).doubleValue();
-        double avg = ((Number) stats[2]).doubleValue();
+            return new EventRevenueDTO(eventId, event.getName(), totalBookings, totalRevenue, avg);
+        }
 
-        return new EventRevenueDTO(eventId, event.getName(), totalBookings, totalRevenue, avg);
+        return new EventRevenueDTO(eventId, event.getName(), 0L, 0.0, 0.0);
     }
 
     // ─── [S2-F7] Rate an Event (write — invalidates) ──────────────────────────────
-
     @Transactional
     public void rateEvent(Long eventId, Long bookingId, Double newRating) {
         if (newRating < 1.0 || newRating > 5.0) {
@@ -278,6 +279,17 @@ public class EventService {
         return eventRepository.findAll(); // list — NOT cached
     }
 
+    // Fixed:
+    public Event updateEvent(Long id, Event updatedEvent) {
+        Event existingEvent = getEventById(id);
+        existingEvent.setName(updatedEvent.getName());
+        existingEvent.setVenue(updatedEvent.getVenue());
+        existingEvent.setEventDate(updatedEvent.getEventDate());
+        existingEvent.setCategory(updatedEvent.getCategory());
+        // Do not update status/rating/etc here as those have specific endpoints
+        return eventRepository.save(existingEvent);
+    }
+
     public void deleteEvent(Long id) {
         if (!eventRepository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found with id: " + id);
@@ -303,10 +315,36 @@ public class EventService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found with id: " + sessionId));
     }
 
-    public void deleteEventSession(Long sessionId) {
-        if (!eventSessionRepository.existsById(sessionId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found with id: " + sessionId);
+    public List<EventSession> getSessionsForEvent(Long eventId) {
+        Event event = getEventById(eventId);
+        return event.getEventSessions();
+    }
+
+    // Fixed:
+    public EventSession getEventSessionById(Long eventId, Long sessionId) {
+        EventSession session = eventSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found"));
+
+        if (!session.getEvent().getId().equals(eventId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Session does not belong to this event");
         }
+        return session;
+    }
+
+    // Fixed:
+    public EventSession updateEventSession(Long eventId, Long sessionId, EventSession updatedSession) {
+        EventSession existingSession = getEventSessionById(eventId, sessionId); // Validates existence and ownership
+        existingSession.setTitle(updatedSession.getTitle());
+        existingSession.setSpeaker(updatedSession.getSpeaker());
+        existingSession.setStartTime(updatedSession.getStartTime());
+        existingSession.setEndTime(updatedSession.getEndTime());
+        existingSession.setCapacity(updatedSession.getCapacity());
+        return eventSessionRepository.save(existingSession);
+    }
+
+    // Fixed:
+    public void deleteEventSession(Long eventId, Long sessionId) {
+        getEventSessionById(eventId, sessionId); // Ensures it exists and matches eventId before deleting
         eventSessionRepository.deleteById(sessionId);
         cacheEviction.evictEntityAndFeatures("event-session", sessionId, "S2-F9");
         notifyObservers("SESSION_DELETED", Map.of("sessionId", sessionId));
