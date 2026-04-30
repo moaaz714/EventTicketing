@@ -87,7 +87,12 @@ public class UserService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Query parameter 'value' must not be blank");
         }
-        return userRepository.findByPreference(key, value);
+        return userRepository.findAllUsers().stream()
+                .filter(u -> {
+                    Object v = u.getPreferences().get(key);
+                    return v != null && v.toString().equals(value);
+                })
+                .collect(Collectors.toList());
     }
 
     // ─── [S1-F3] Get User Booking Summary (DTO) ──────────────────────────────────
@@ -174,15 +179,19 @@ public class UserService {
                     "Category must not be blank");
         }
 
-        String categoryJson;
-        try {
-            categoryJson = objectMapper.writeValueAsString(
-                    Map.of("favoriteCategory", category));
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to build category filter");
-        }
+        Map<Long, Long> completedCounts = userRepository.countCompletedBookingsPerUser()
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> ((Number) row[0]).longValue(),
+                        row -> ((Number) row[1]).longValue()
+                ));
 
-        return userRepository.findByFavoriteCategoryAndMinBookings(categoryJson, minBookings);
+        return userRepository.findAllUsers().stream()
+                .filter(u -> {
+                    Object v = u.getPreferences().get("favoriteCategory");
+                    return v != null && v.toString().equals(category);
+                })
+                .filter(u -> completedCounts.getOrDefault(u.getId(), 0L) >= minBookings)
+                .collect(Collectors.toList());
     }
 }
