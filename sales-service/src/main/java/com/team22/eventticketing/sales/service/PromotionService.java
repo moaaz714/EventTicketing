@@ -4,6 +4,7 @@ import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
 import com.team22.eventticketing.sales.entity.Promotion;
 import com.team22.eventticketing.sales.entity.enums.DiscountType;
 import com.team22.eventticketing.sales.repository.PromotionRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -16,9 +17,12 @@ import java.util.List;
 public class PromotionService {
 
     private final PromotionRepository promotionRepository;
+    private final CacheEvictionService cacheEviction;
 
-    public PromotionService(PromotionRepository promotionRepository) {
+    public PromotionService(PromotionRepository promotionRepository,
+                            CacheEvictionService cacheEviction) {
         this.promotionRepository = promotionRepository;
+        this.cacheEviction = cacheEviction;
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────
@@ -27,21 +31,22 @@ public class PromotionService {
         return promotionRepository.save(promotion);
     }
 
-    // ─── Read by ID ───────────────────────────────────────────────────────────────
+    // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
 
+    @Cacheable(cacheNames = "sales-service::promotion", key = "#id")
     public Promotion findById(Long id) {
         return promotionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Promotion not found with id: " + id));
     }
 
-    // ─── Read all ─────────────────────────────────────────────────────────────────
+    // ─── Read all (NOT cached) ────────────────────────────────────────────────────
 
     public List<Promotion> findAll() {
         return promotionRepository.findAll();
     }
 
-    // ─── Update ───────────────────────────────────────────────────────────────────
+    // ─── [CRUD] Update ────────────────────────────────────────────────────────────
 
     public Promotion update(Long id, Promotion patch) {
         Promotion existing = findById(id);
@@ -55,11 +60,14 @@ public class PromotionService {
         if (patch.getActive() != null)        existing.setActive(patch.getActive());
         if (patch.getMetadata() != null)      existing.setMetadata(patch.getMetadata());
 
-        return promotionRepository.save(existing);
+        Promotion saved = promotionRepository.save(existing);
+        cacheEviction.evictEntityAndFeatures("promotion", id, "S5-F9");
+        return saved;
     }
 
-    // ─── [S5-F9] Top Used Promotions Report ──────────────────────────────────────
+    // ─── [S5-F9] Top Used Promotions Report (combined) ───────────────────────────
 
+    @Cacheable(cacheNames = "sales-service::S5-F9", key = "#limit")
     public List<PromotionUsageDTO> getTopUsedPromotions(int limit) {
         List<Object[]> rows = promotionRepository.findTopUsedPromotions(limit);
         return rows.stream().map(row -> {
@@ -78,7 +86,7 @@ public class PromotionService {
         }).toList();
     }
 
-    // ─── Delete ───────────────────────────────────────────────────────────────────
+    // ─── [CRUD] Delete ────────────────────────────────────────────────────────────
 
     public void delete(Long id) {
         if (!promotionRepository.existsById(id)) {
@@ -86,5 +94,6 @@ public class PromotionService {
                     HttpStatus.NOT_FOUND, "Promotion not found with id: " + id);
         }
         promotionRepository.deleteById(id);
+        cacheEviction.evictEntityAndFeatures("promotion", id, "S5-F9");
     }
 }

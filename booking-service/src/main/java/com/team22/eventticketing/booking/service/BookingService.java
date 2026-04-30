@@ -11,11 +11,15 @@ import com.team22.eventticketing.booking.model.BookingItemStatus;
 import com.team22.eventticketing.booking.model.BookingStatus;
 import com.team22.eventticketing.booking.repository.BookingItemRepository;
 import com.team22.eventticketing.booking.repository.BookingRepository;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -23,14 +27,27 @@ import java.util.stream.Collectors;
 @Service
 public class BookingService {
 
+    private static final String ESTIMATE_CACHE_PREFIX = "booking-service::S3-F3::";
+
     private final BookingRepository bookingRepository;
     private final BookingItemRepository bookingItemRepository;
+    private final CacheEvictionService cacheEviction;
+    private final RedisTemplate<String, Object> redisTemplate;
 
-    public BookingService(BookingRepository bookingRepository, BookingItemRepository bookingItemRepository) {
+    public BookingService(BookingRepository bookingRepository,
+                          BookingItemRepository bookingItemRepository,
+                          CacheEvictionService cacheEviction,
+                          RedisTemplate<String, Object> redisTemplate) {
         this.bookingRepository = bookingRepository;
         this.bookingItemRepository = bookingItemRepository;
+        this.cacheEviction = cacheEviction;
+        this.redisTemplate = redisTemplate;
     }
 
+    // ─── [S3-F1] Search Bookings ──────────────────────────────────────────────────
+
+    @Cacheable(cacheNames = "booking-service::S3-F1",
+            key = "T(String).valueOf(#status) + ':' + T(String).valueOf(#startDate) + ':' + T(String).valueOf(#endDate)")
     public List<Booking> searchBookings(BookingStatus status, LocalDateTime startDate, LocalDateTime endDate) {
         if (status != null) {
             return bookingRepository.findByStatusAndBookingDateBetweenOrderByBookingDateDesc(status, startDate, endDate);
@@ -48,27 +65,26 @@ public class BookingService {
         return bookingRepository.save(booking);
     }
 
-    // ─── Read by ID ───────────────────────────────────────────────────────────────
+    // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
 
+    @Cacheable(cacheNames = "booking-service::booking", key = "#id")
     public Booking findById(Long id) {
         return bookingRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Booking not found with id: " + id));
     }
 
-    // ─── Read all ─────────────────────────────────────────────────────────────────
+    // ─── Read all (NOT cached) ────────────────────────────────────────────────────
 
     public List<Booking> findAll() {
         return bookingRepository.findAll();
     }
 
-    // ─── Read by userId ───────────────────────────────────────────────────────────
-
     public List<Booking> findByUserId(Long userId) {
         return bookingRepository.findByUserId(userId);
     }
 
-    // ─── Update ───────────────────────────────────────────────────────────────────
+    // ─── [CRUD] Update ────────────────────────────────────────────────────────────
 
     public Booking update(Long id, Booking patch) {
         Booking existing = findById(id);
@@ -80,10 +96,12 @@ public class BookingService {
         if (patch.getConfirmedAt() != null)  existing.setConfirmedAt(patch.getConfirmedAt());
         if (patch.getEventId() != null)      existing.setEventId(patch.getEventId());
 
-        return bookingRepository.save(existing);
+        Booking saved = bookingRepository.save(existing);
+        cacheEviction.evictEntityAndFeatures("booking", id, "S3-F1", "S3-F5", "S3-F6", "S3-F9", "S3-F10");
+        return saved;
     }
 
-    // ─── Delete ───────────────────────────────────────────────────────────────────
+    // ─── [CRUD] Delete ────────────────────────────────────────────────────────────
 
     public void delete(Long id) {
         if (!bookingRepository.existsById(id)) {
@@ -91,9 +109,10 @@ public class BookingService {
                     HttpStatus.NOT_FOUND, "Booking not found with id: " + id);
         }
         bookingRepository.deleteById(id);
+        cacheEviction.evictEntityAndFeatures("booking", id, "S3-F1", "S3-F5", "S3-F6", "S3-F9", "S3-F10");
     }
 
-    // ─── S3-F4: Complete Booking ──────────────────────────────────────────────────
+    // ─── [S3-F4] Complete Booking (write — invalidates) ──────────────────────────
 
     @Transactional
     public Booking completeBooking(Long id) {
@@ -123,11 +142,13 @@ public class BookingService {
                 saved.getTotalAmount() != null ? saved.getTotalAmount() : 0.0
         );
 
+        cacheEviction.evictEntityAndFeatures("booking", id, "S3-F1", "S3-F6", "S3-F9", "S3-F10");
         return saved;
     }
 
-    // ─── S3-F5: Filter Bookings by Metadata ──────────────────────────────────────
+    // ─── [S3-F5] Filter Bookings by Metadata (JSONB) ─────────────────────────────
 
+    @Cacheable(cacheNames = "booking-service::S3-F5", key = "#key + ':' + #value")
     public List<Booking> filterByMetadata(String key, String value) {
         if (key == null || key.isBlank() || value == null || value.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -136,8 +157,10 @@ public class BookingService {
         return bookingRepository.findByMetadataField(key, value);
     }
 
-    // ─── S3-F6: Booking Analytics ─────────────────────────────────────────────────
+    // ─── [S3-F6] Booking Analytics (report) ──────────────────────────────────────
 
+    @Cacheable(cacheNames = "booking-service::S3-F6",
+            key = "T(String).valueOf(#start) + ':' + T(String).valueOf(#end)")
     public BookingAnalyticsDTO getAnalytics(LocalDateTime start, LocalDateTime end) {
         long total     = bookingRepository.countInRange(start, end);
         long completed = bookingRepository.countCompletedInRange(start, end);
@@ -148,6 +171,8 @@ public class BookingService {
 
         return new BookingAnalyticsDTO(total, completed, cancelled, revenue, avg, rate);
     }
+
+    // ─── [S3-F2] Cancel Booking (write — invalidates) ────────────────────────────
 
     @Transactional
     public void cancelBooking(Long id) {
@@ -164,7 +189,11 @@ public class BookingService {
         booking.setStatus(BookingStatus.CANCELLED);
         bookingRepository.save(booking);
         bookingRepository.cancelValidTicketsForBooking(id);
+
+        cacheEviction.evictEntityAndFeatures("booking", id, "S3-F1", "S3-F6", "S3-F9", "S3-F10");
     }
+
+    // ─── [S3-F8] Add Items to Booking (write — invalidates) ──────────────────────
 
     @Transactional
     public Booking addItemsToBooking(Long bookingId, List<BookingItemRequest> requests) {
@@ -203,9 +232,14 @@ public class BookingService {
             bookingItemRepository.save(item);
         }
 
-        return bookingRepository.findByIdWithItems(bookingId).get();
+        Booking result = bookingRepository.findByIdWithItems(bookingId).get();
+        cacheEviction.evictEntityAndFeatures("booking", bookingId, "S3-F1", "S3-F6", "S3-F9", "S3-F10");
+        return result;
     }
 
+    // ─── [S3-F9] Booking Details DTO ─────────────────────────────────────────────
+
+    @Cacheable(cacheNames = "booking-service::S3-F9", key = "#bookingId")
     public BookingDetailsDTO getBookingDetails(Long bookingId) {
         Booking booking = bookingRepository.findByIdWithItems(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -243,6 +277,8 @@ public class BookingService {
         );
     }
 
+    // ─── [S3-F7] Confirm Booking (write — invalidates) ───────────────────────────
+
     @Transactional
     public Booking confirmBooking(Long bookingId, Long eventId) {
         Booking booking = bookingRepository.findById(bookingId)
@@ -265,43 +301,43 @@ public class BookingService {
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setConfirmedAt(LocalDateTime.now());
 
-        return bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
+        cacheEviction.evictEntityAndFeatures("booking", bookingId, "S3-F1", "S3-F9", "S3-F10");
+        return saved;
     }
 
-    // ─── S3-F3: Get Booking Cost Estimate ─────────────────────────────────────────
+    // ─── [S3-F3] Booking Cost Estimate (POST — manual cache by body hash) ─────────
 
     public BookingCostEstimateDTO estimateCost(Long eventId, Integer ticketCount, String ticketTier) {
-        // 1. Get Average Capacity
-        Double avgCapacity = bookingRepository.getAverageSessionCapacity(eventId);
-        if (avgCapacity == null) {
-            avgCapacity = 0.0;
-        }
+        String cacheKey = ESTIMATE_CACHE_PREFIX + DigestUtils.sha256Hex(eventId + ":" + ticketCount + ":" + ticketTier);
 
-        // 2. Calculate Base Price and Tier Multiplier
+        try {
+            Object cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached instanceof BookingCostEstimateDTO dto) return dto;
+        } catch (Exception ignored) {}
+
+        Double avgCapacity = bookingRepository.getAverageSessionCapacity(eventId);
+        if (avgCapacity == null) avgCapacity = 0.0;
+
         double basePrice = avgCapacity / 10.0;
         double tierMultiplier = "VIP".equalsIgnoreCase(ticketTier) ? 2.5 : 1.0;
-
-        // 3. Calculate Ticket Cost
         double ticketCost = basePrice * tierMultiplier * ticketCount;
-
-        // 4. Calculate Service Fee (15%)
         double serviceFee = ticketCost * 0.15;
 
-        // 5. Determine Demand Multiplier
         Long activeBookings = bookingRepository.countActiveBookingsForEvent(eventId);
         double demandMultiplier = 1.0;
         if (activeBookings != null) {
-            if (activeBookings > 200) {
-                demandMultiplier = 1.5;
-            } else if (activeBookings > 50) {
-                demandMultiplier = 1.25;
-            }
+            if (activeBookings > 200)     demandMultiplier = 1.5;
+            else if (activeBookings > 50) demandMultiplier = 1.25;
         }
 
-        // 6. Calculate Estimated Total
         double estimatedTotal = (ticketCost + serviceFee) * demandMultiplier;
+        BookingCostEstimateDTO result = new BookingCostEstimateDTO(ticketCost, serviceFee, estimatedTotal, demandMultiplier);
 
-        // Return the mapped DTO
-        return new BookingCostEstimateDTO(ticketCost, serviceFee, estimatedTotal, demandMultiplier);
+        try {
+            redisTemplate.opsForValue().set(cacheKey, result, Duration.ofMinutes(5));
+        } catch (Exception ignored) {}
+
+        return result;
     }
 }

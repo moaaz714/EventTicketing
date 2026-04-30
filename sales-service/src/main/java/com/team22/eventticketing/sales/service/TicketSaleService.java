@@ -4,14 +4,15 @@ import com.team22.eventticketing.sales.dto.AppliedPromotionDTO;
 import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
+import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
 import com.team22.eventticketing.sales.entity.enums.SaleStatus;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
-import java.util.Map;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -22,9 +23,12 @@ import java.util.Map;
 public class TicketSaleService {
 
     private final TicketSaleRepository ticketSaleRepository;
+    private final CacheEvictionService cacheEviction;
 
-    public TicketSaleService(TicketSaleRepository ticketSaleRepository) {
+    public TicketSaleService(TicketSaleRepository ticketSaleRepository,
+                             CacheEvictionService cacheEviction) {
         this.ticketSaleRepository = ticketSaleRepository;
+        this.cacheEviction = cacheEviction;
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────
@@ -33,21 +37,22 @@ public class TicketSaleService {
         return ticketSaleRepository.save(ticketSale);
     }
 
-    // ─── Read by ID ───────────────────────────────────────────────────────────────
+    // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
 
+    @Cacheable(cacheNames = "sales-service::ticket-sale", key = "#id")
     public TicketSale findById(Long id) {
         return ticketSaleRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "TicketSale not found with id: " + id));
     }
 
-    // ─── Read all ─────────────────────────────────────────────────────────────────
+    // ─── Read all (NOT cached) ────────────────────────────────────────────────────
 
     public List<TicketSale> findAll() {
         return ticketSaleRepository.findAll();
     }
 
-    // ─── Update ───────────────────────────────────────────────────────────────────
+    // ─── [CRUD] Update ────────────────────────────────────────────────────────────
 
     public TicketSale update(Long id, TicketSale patch) {
         TicketSale existing = findById(id);
@@ -59,10 +64,13 @@ public class TicketSaleService {
         if (patch.getStatus() != null)              existing.setStatus(patch.getStatus());
         if (patch.getTransactionDetails() != null)  existing.setTransactionDetails(patch.getTransactionDetails());
 
-        return ticketSaleRepository.save(existing);
+        TicketSale saved = ticketSaleRepository.save(existing);
+        cacheEviction.evictEntityAndFeatures("ticket-sale", id,
+                "S5-F1", "S5-F3", "S5-F6", "S5-F8", "S5-F10", "S5-F11");
+        return saved;
     }
 
-    // ─── Delete ───────────────────────────────────────────────────────────────────
+    // ─── [CRUD] Delete ────────────────────────────────────────────────────────────
 
     public void delete(Long id) {
         if (!ticketSaleRepository.existsById(id)) {
@@ -70,9 +78,11 @@ public class TicketSaleService {
                     HttpStatus.NOT_FOUND, "TicketSale not found with id: " + id);
         }
         ticketSaleRepository.deleteById(id);
+        cacheEviction.evictEntityAndFeatures("ticket-sale", id,
+                "S5-F1", "S5-F3", "S5-F6", "S5-F8", "S5-F10", "S5-F11");
     }
 
-    // ─── [S5-F2] Process Refund ───────────────────────────────────────────────────
+    // ─── [S5-F2] Process Refund (write — invalidates) ────────────────────────────
 
     @Transactional
     public TicketSale refund(Long id, String reason) {
@@ -87,11 +97,15 @@ public class TicketSaleService {
         sale.getTransactionDetails().put("refundReason", reason);
         sale.getTransactionDetails().put("refundedAt", LocalDateTime.now().toString());
 
-        return ticketSaleRepository.save(sale);
+        TicketSale saved = ticketSaleRepository.save(sale);
+        cacheEviction.evictEntityAndFeatures("ticket-sale", id,
+                "S5-F1", "S5-F3", "S5-F6", "S5-F8", "S5-F10", "S5-F11");
+        return saved;
     }
 
-    // ─── [S5-F3] User Ticket Sale Summary ────────────────────────────────────────
+    // ─── [S5-F3] User Ticket Sale Summary (DTO) ──────────────────────────────────
 
+    @Cacheable(cacheNames = "sales-service::S5-F3", key = "#userId")
     public UserSaleSummaryDTO getUserSummary(Long userId) {
         if (ticketSaleRepository.countUserById(userId) == 0) {
             throw new ResponseStatusException(
@@ -108,7 +122,6 @@ public class TicketSaleService {
             String method = (String) row[0];
             long count = ((Number) row[1]).longValue();
             double total = ((Number) row[2]).doubleValue();
-
             methodBreakdown.put(method, total);
             totalSales += count;
             totalAmount += total;
@@ -117,8 +130,10 @@ public class TicketSaleService {
         return new UserSaleSummaryDTO(userId, totalSales, totalAmount, methodBreakdown);
     }
 
-    // ─── [S5-F1] Search by optional status and date range ────────────────────────
+    // ─── [S5-F1] Search Sales ────────────────────────────────────────────────────
 
+    @Cacheable(cacheNames = "sales-service::S5-F1",
+            key = "T(String).valueOf(#status) + ':' + T(String).valueOf(#startDate) + ':' + T(String).valueOf(#endDate)")
     public List<TicketSale> search(String status, String startDate, String endDate) {
         LocalDateTime start = (startDate != null)
                 ? LocalDate.parse(startDate).atStartOfDay()
@@ -129,7 +144,8 @@ public class TicketSaleService {
 
         return ticketSaleRepository.findByStatusAndDateRange(status, start, end);
     }
-    // ─── [S5-F7] Retry Failed Ticket Sale ────────────────────────────────────────
+
+    // ─── [S5-F7] Retry Failed Sale (write — invalidates) ─────────────────────────
 
     @Transactional
     public TicketSale retry(Long id) {
@@ -154,11 +170,15 @@ public class TicketSaleService {
         details.put("retryAttempt", retryAttempt);
         details.put("gatewayResponse", "approved");
 
-        return ticketSaleRepository.save(sale);
+        TicketSale saved = ticketSaleRepository.save(sale);
+        cacheEviction.evictEntityAndFeatures("ticket-sale", id,
+                "S5-F1", "S5-F3", "S5-F6", "S5-F8", "S5-F10", "S5-F11");
+        return saved;
     }
 
-    // ─── [S5-F8] Get Sale Details with Applied Promotions ────────────────────────
+    // ─── [S5-F8] Sale Details with Applied Promotions (relationship DTO) ──────────
 
+    @Cacheable(cacheNames = "sales-service::S5-F8", key = "#saleId")
     @Transactional(readOnly = true)
     public SaleDetailsDTO getSaleDetails(Long saleId) {
         TicketSale sale = ticketSaleRepository.findByIdWithPromotions(saleId)
@@ -192,46 +212,37 @@ public class TicketSaleService {
                 finalAmount);
     }
 
+    // ─── [S5-F4] Process Booking Payment (write — invalidates) ───────────────────
+
     @Transactional
     public TicketSale processBookingPayment(Long bookingId, PaymentMethod method, String cardLastFour) {
-
-        // 1. Verify booking exists — 404 if not found
         String bookingStatus = ticketSaleRepository.findBookingStatus(bookingId);
         if (bookingStatus == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND, "Booking not found: " + bookingId);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found: " + bookingId);
         }
-
-        // 2. Verify booking is COMPLETED — 400 if different status
         if (!"COMPLETED".equals(bookingStatus)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Booking is not COMPLETED");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking is not COMPLETED");
         }
 
-        // 3. Find the ticket sale for this booking
         TicketSale sale = ticketSaleRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "TicketSale not found for booking: " + bookingId));
 
-        // 4. Check if already paid — 400 if already COMPLETED
         if (sale.getStatus() == SaleStatus.COMPLETED) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "already paid");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
         }
 
-        // 5. Update payment info
         sale.setMethod(method);
         sale.setStatus(SaleStatus.COMPLETED);
 
-        // 6. Populate transaction details (JSONB)
-        if (sale.getTransactionDetails() == null) {
-            sale.setTransactionDetails(new java.util.HashMap<>());
-        }
+        if (sale.getTransactionDetails() == null) sale.setTransactionDetails(new java.util.HashMap<>());
         sale.getTransactionDetails().put("paymentMethod", method.toString());
         sale.getTransactionDetails().put("cardLastFour", cardLastFour);
         sale.getTransactionDetails().put("paidAt", java.time.LocalDateTime.now().toString());
 
-        // 7. Save
-        return ticketSaleRepository.save(sale);
+        TicketSale saved = ticketSaleRepository.save(sale);
+        cacheEviction.evictEntityAndFeatures("ticket-sale", saved.getId(),
+                "S5-F1", "S5-F3", "S5-F6", "S5-F10", "S5-F11");
+        return saved;
     }
 }

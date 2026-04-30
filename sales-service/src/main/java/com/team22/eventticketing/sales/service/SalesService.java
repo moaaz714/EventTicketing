@@ -5,11 +5,12 @@ import com.team22.eventticketing.sales.entity.Promotion;
 import com.team22.eventticketing.sales.entity.SalePromotion;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.entity.enums.DiscountType;
-import com.team22.eventticketing.sales.entity.enums.SaleStatus;
 import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
+import com.team22.eventticketing.sales.entity.enums.SaleStatus;
 import com.team22.eventticketing.sales.repository.PromotionRepository;
 import com.team22.eventticketing.sales.repository.SalePromotionRepository;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,16 +28,20 @@ public class SalesService {
     private final TicketSaleRepository ticketSaleRepository;
     private final PromotionRepository promotionRepository;
     private final SalePromotionRepository salePromotionRepository;
+    private final CacheEvictionService cacheEviction;
 
     public SalesService(TicketSaleRepository ticketSaleRepository,
                         PromotionRepository promotionRepository,
-                        SalePromotionRepository salePromotionRepository) {
+                        SalePromotionRepository salePromotionRepository,
+                        CacheEvictionService cacheEviction) {
         this.ticketSaleRepository = ticketSaleRepository;
         this.promotionRepository = promotionRepository;
         this.salePromotionRepository = salePromotionRepository;
+        this.cacheEviction = cacheEviction;
     }
 
-    // ─── S5-F4: Process booking payment (From HEAD) ──────────────────────────────
+    // ─── [S5-F4] Process booking payment (write — invalidates) ───────────────────
+
     @Transactional
     public TicketSale processBookingPayment(Long bookingId, PaymentMethod method, String cardLastFour) {
         if (ticketSaleRepository.existsByBookingIdAndStatus(bookingId, SaleStatus.COMPLETED)) {
@@ -54,12 +59,18 @@ public class SalesService {
         if (cardLastFour != null) transactionDetails.put("cardLastFour", cardLastFour);
         transactionDetails.put("gatewayResponse", "approved");
         transactionDetails.put("paidAt", LocalDateTime.now().toString());
-
         ticketSale.setTransactionDetails(transactionDetails);
-        return ticketSaleRepository.save(ticketSale);
+
+        TicketSale saved = ticketSaleRepository.save(ticketSale);
+        cacheEviction.evictEntityAndFeatures("ticket-sale", saved.getId(),
+                "S5-F1", "S5-F3", "S5-F6", "S5-F10", "S5-F11");
+        return saved;
     }
 
-    // ─── S5-F6: Revenue Report (From origin/main) ────────────────────────────────
+    // ─── [S5-F6] Revenue Report (report — cached) ────────────────────────────────
+
+    @Cacheable(cacheNames = "sales-service::S5-F6",
+            key = "T(String).valueOf(#startDate) + ':' + T(String).valueOf(#endDate)")
     public RevenueReportDTO getRevenueReport(LocalDateTime startDate, LocalDateTime endDate) {
         if (startDate.isAfter(endDate)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate cannot be after endDate");
@@ -79,7 +90,8 @@ public class SalesService {
         return new RevenueReportDTO(totalRevenue, totalTransactions, averageSale, refundedAmount, refundCount);
     }
 
-    // ─── S5-F5: Apply Promotion (Merged) ─────────────────────────────────────────
+    // ─── [S5-F5] Apply Promotion to Sale (write — invalidates) ───────────────────
+
     @Transactional
     public TicketSale applyPromotionToSale(Long saleId, Long promotionId) {
         TicketSale ticketSale = ticketSaleRepository.findById(saleId)
@@ -117,10 +129,14 @@ public class SalesService {
         promotionRepository.save(promotion);
         ticketSale.getSalePromotions().add(salePromo);
 
+        // Invalidate sale detail, promotion detail, analytics, top-used report
+        cacheEviction.evictEntityAndFeatures("ticket-sale", saleId,
+                "S5-F8", "S5-F10", "S5-F11");
+        cacheEviction.evictEntityAndFeatures("promotion", promotionId, "S5-F9");
+
         return ticketSale;
     }
 
-    // ─── Helper method to create SalePromotion and calculate discount ──────────
     private SalePromotion createSalePromotion(TicketSale sale, Promotion promotion) {
         double discount;
         if (promotion.getDiscountType() == DiscountType.PERCENTAGE) {

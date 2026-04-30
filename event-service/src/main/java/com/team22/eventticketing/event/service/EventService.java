@@ -10,6 +10,7 @@ import com.team22.eventticketing.event.model.EventSession;
 import com.team22.eventticketing.event.model.EventStatus;
 import com.team22.eventticketing.event.repository.EventRepository;
 import com.team22.eventticketing.event.repository.EventSessionRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,47 +29,49 @@ public class EventService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final EventRepository eventRepository;
     private final EventSessionRepository eventSessionRepository;
+    private final CacheEvictionService cacheEviction;
 
-    public EventService(EventRepository eventRepository, EventSessionRepository eventSessionRepository) {
+    public EventService(EventRepository eventRepository,
+                        EventSessionRepository eventSessionRepository,
+                        CacheEvictionService cacheEviction) {
         this.eventRepository = eventRepository;
         this.eventSessionRepository = eventSessionRepository;
+        this.cacheEviction = cacheEviction;
     }
 
-    // [S2-F1] Search Events by Category and Date Range
+    // ─── [S2-F1] Search Events ────────────────────────────────────────────────────
+
+    @Cacheable(cacheNames = "event-service::S2-F1",
+            key = "T(String).valueOf(#category) + ':' + T(String).valueOf(#startDate) + ':' + T(String).valueOf(#endDate)")
     public List<Event> searchEvents(EventCategory category, LocalDateTime startDate, LocalDateTime endDate) {
-        // Case 1: category + both dates
         if (category != null && startDate != null && endDate != null) {
             return eventRepository.findByCategoryAndEventDateBetweenOrderByEventDateAsc(category, startDate, endDate);
         }
-        // Case 2: category + only startDate
         if (category != null && startDate != null) {
             return eventRepository.findByCategoryAndEventDateAfterOrderByEventDateAsc(category, startDate);
         }
-        // Case 3: category + only endDate
         if (category != null && endDate != null) {
             return eventRepository.findByCategoryAndEventDateBeforeOrderByEventDateAsc(category, endDate);
         }
-        // Case 4: only category
         if (category != null) {
             return eventRepository.findByCategoryOrderByEventDateAsc(category);
         }
-        // Case 5: only date range
         if (startDate != null && endDate != null) {
             return eventRepository.findByEventDateBetweenOrderByEventDateAsc(startDate, endDate);
         }
-        // Case 6: only startDate
         if (startDate != null) {
             return eventRepository.findByEventDateAfterOrderByEventDateAsc(startDate);
         }
-        // Case 7: only endDate
         if (endDate != null) {
             return eventRepository.findByEventDateBeforeOrderByEventDateAsc(endDate);
         }
-        // Case 8: no filters
         return eventRepository.findAllByOrderByEventDateAsc();
     }
 
-    // [S2-F2 & S2-F5] Filter Events by Detail
+    // ─── [S2-F5] Filter Events by Detail (JSONB) ─────────────────────────────────
+
+    @Cacheable(cacheNames = "event-service::S2-F5",
+            key = "#key + ':' + #value + ':' + T(String).valueOf(#status)")
     public List<Event> filterEventsByDetail(String key, String value, String status) {
         if (key == null || key.isBlank() || value == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Key and value are required");
@@ -79,24 +82,23 @@ public class EventService {
         return eventRepository.findByDetailAttributeAndStatus(key, value, status);
     }
 
+    // ─── [S2-F2] Update Event Details (write — invalidates) ──────────────────────
+
     public void updateEventDetails(Long id, Map<String, Object> newDetails) {
         Event event = eventRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Event not found"));
 
         Map<String, Object> existingDetails = event.getDetails();
-
-        if (existingDetails == null) {
-            existingDetails = new HashMap<>();
-        }
-
+        if (existingDetails == null) existingDetails = new HashMap<>();
         existingDetails.putAll(newDetails);
-
         event.setDetails(existingDetails);
-
         eventRepository.save(event);
+
+        cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
     }
 
-    // [S2-F4] Update Event Status
+    // ─── [S2-F4] Update Event Status (write — invalidates) ───────────────────────
+
     @Transactional
     public void updateEventStatus(Long eventId, UpdateEventStatusRequest request) {
         if (request == null || request.getStatus() == null) {
@@ -114,9 +116,13 @@ public class EventService {
 
         event.setStatus(newStatus);
         eventRepository.save(event);
+
+        cacheEviction.evictEntityAndFeatures("event", eventId, "S2-F1", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
     }
 
-    // [S2-F6] Top Rated Events Report
+    // ─── [S2-F6] Top Rated Events Report ─────────────────────────────────────────
+
+    @Cacheable(cacheNames = "event-service::S2-F6", key = "#limit")
     public List<TopEventDTO> getTopRatedEvents(int limit) {
         if (limit <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Limit must be greater than 0");
@@ -130,123 +136,101 @@ public class EventService {
             String name = (String) row[1];
             Double rating = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
             Long totalBookings = row[3] == null ? 0L : ((Number) row[3]).longValue();
-
             result.add(new TopEventDTO(eventId, name, rating, totalBookings));
         }
 
         return result;
     }
 
-    // [S2-F7] Get Event Revenue
-    public EventRevenueDTO getEventRevenue(Long eventId,
-                                           LocalDateTime start,
-                                           LocalDateTime end) {
+    // ─── [S2-F3] Get Event Revenue DTO ───────────────────────────────────────────
 
-        // 1. Check event exists
+    @Cacheable(cacheNames = "event-service::S2-F3",
+            key = "#eventId + ':' + T(String).valueOf(#start) + ':' + T(String).valueOf(#end)")
+    public EventRevenueDTO getEventRevenue(Long eventId, LocalDateTime start, LocalDateTime end) {
         Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Event not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
-        // 2. Call booking-service
         String url = "http://localhost:8081/api/bookings/event/" + eventId +
                 "/revenue?startDate=" + start.toLocalDate() +
                 "&endDate=" + end.toLocalDate();
 
-        // Array of arrays handling
         Object[][] response = restTemplate.getForObject(url, Object[][].class);
-
         Object[] stats = response[0];
 
         long totalBookings = ((Number) stats[0]).longValue();
         double totalRevenue = ((Number) stats[1]).doubleValue();
-        double avg = ((Number) stats[2]).doubleValue(); // already computed in DB
+        double avg = ((Number) stats[2]).doubleValue();
 
-        return new EventRevenueDTO(
-                eventId,
-                event.getName(),
-                totalBookings,
-                totalRevenue,
-                avg
-        );
+        return new EventRevenueDTO(eventId, event.getName(), totalBookings, totalRevenue, avg);
     }
 
-    // [S2-F7] Rate an Event
+    // ─── [S2-F7] Rate an Event (write — invalidates) ──────────────────────────────
+
     @Transactional
     public void rateEvent(Long eventId, Long bookingId, Double newRating) {
-        // 1. Check rating bounds (400)
         if (newRating < 1.0 || newRating > 5.0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rating must be between 1 and 5");
         }
 
-        // 2. Find Event (404)
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
-        // 3. Check if booking exists (404)
         if (eventRepository.checkBookingExists(bookingId) == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
         }
 
-        // 4. Verify booking matches event and is COMPLETED (400)
         if (eventRepository.countCompletedBookingForEvent(bookingId, eventId) == 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking is not completed or does not belong to this event");
         }
 
-        // 5. Recalculate running average
         int currentCount = event.getTotalRatings();
         double currentTotalScore = event.getRating() * currentCount;
-
         int newCount = currentCount + 1;
         double updatedAverage = (currentTotalScore + newRating) / newCount;
 
-        // 6. Update and Save
         event.setTotalRatings(newCount);
         event.setRating(updatedAverage);
         eventRepository.save(event);
+
+        cacheEviction.evictEntityAndFeatures("event", eventId, "S2-F3", "S2-F6");
     }
 
-    // [S2-F8] Verify Event Session
+    // ─── [S2-F8] Verify Event Session (write — invalidates) ───────────────────────
+
     @Transactional
     public Event verifyEventSession(Long eventId, Long sessionId, Long verifiedByUserId) {
-        // 1. Find Event (404)
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
-        // 2. Find Session (404)
         EventSession session = eventSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found"));
 
-        // 3. Verify session belongs to the specific event (400)
         if (!session.getEvent().getId().equals(eventId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Session does not belong to this event");
         }
 
-        // 4. Check if startTime is in the future (400)
         if (session.getStartTime().isBefore(LocalDateTime.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot verify a session that has already started");
         }
 
-        // 5. Cross-Service Check: Is the user an ADMIN? (403)
         if (eventRepository.checkUserIsAdmin(verifiedByUserId) == 0) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is not authorized (Must be ADMIN)");
         }
 
-        // 6. Update the session properties
         session.setVerified(true);
-        if (session.getMetadata() == null) {
-            session.setMetadata(new HashMap<>());
-        }
+        if (session.getMetadata() == null) session.setMetadata(new HashMap<>());
         session.getMetadata().put("verifiedAt", LocalDateTime.now().toString());
         session.getMetadata().put("verifiedBy", verifiedByUserId);
-
-        // Save session
         eventSessionRepository.save(session);
 
-        // Return the updated event
+        cacheEviction.evictEntityAndFeatures("event-session", sessionId, "S2-F9");
+
         return event;
     }
 
-    // [S2-F9] Get Events with Unverified Sessions
+    // ─── [S2-F9] Get Events with Unverified Sessions ─────────────────────────────
+
+    @Cacheable(cacheNames = "event-service::S2-F9", key = "'all'")
     public List<EventSessionAlertDTO> getUnverifiedSessionsReport() {
         List<Event> events = eventRepository.findEventsWithUnverifiedSessions();
 
@@ -266,18 +250,24 @@ public class EventService {
         }).toList();
     }
 
-    // CRUD: EVENT
+    // ─── CRUD: Event ──────────────────────────────────────────────────────────────
+
     public Event createEvent(Event event) {
-        return eventRepository.save(event);
+        Event saved = eventRepository.save(event);
+        // New entity — no detail to evict; invalidate search/filter results
+        cacheEviction.evictPattern("S2-F1");
+        cacheEviction.evictPattern("S2-F10"); // ES index may be stale (§4.5 auto-index retrofit)
+        return saved;
     }
 
+    @Cacheable(cacheNames = "event-service::event", key = "#id")
     public Event getEventById(Long id) {
         return eventRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found with id: " + id));
     }
 
     public List<Event> getAllEvents() {
-        return eventRepository.findAll();
+        return eventRepository.findAll(); // list — NOT cached
     }
 
     public void deleteEvent(Long id) {
@@ -285,15 +275,18 @@ public class EventService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found with id: " + id);
         }
         eventRepository.deleteById(id);
+        cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
     }
 
-    // CRUD: EVENT SESSION
+    // ─── CRUD: EventSession ───────────────────────────────────────────────────────
+
     public EventSession createEventSession(Long eventId, EventSession session) {
-        Event event = getEventById(eventId); // Reuse existing method to ensure event exists
+        Event event = getEventById(eventId);
         session.setEvent(event);
         return eventSessionRepository.save(session);
     }
 
+    @Cacheable(cacheNames = "event-service::event-session", key = "#sessionId")
     public EventSession getEventSessionById(Long sessionId) {
         return eventSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found with id: " + sessionId));
@@ -304,5 +297,6 @@ public class EventService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found with id: " + sessionId);
         }
         eventSessionRepository.deleteById(sessionId);
+        cacheEviction.evictEntityAndFeatures("event-session", sessionId, "S2-F9");
     }
 }
