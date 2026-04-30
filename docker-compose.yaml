@@ -168,7 +168,7 @@ services:
       CASSANDRA_DC: datacenter1
       CASSANDRA_KEYSPACE: eventticketingks
       # Memory limits applied here:
-      MAX_HEAP_SIZE: 512M
+      MAX_HEAP_SIZE: 200M
       HEAP_NEWSIZE: 128M
     volumes:
       - cassandra-data:/var/lib/cassandra

@@ -11,6 +11,7 @@ import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.model.EventSession;
 import com.team22.eventticketing.event.service.EventService;
 import jakarta.annotation.PostConstruct;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -44,6 +45,7 @@ public class eventController {
         return ResponseEntity.ok().build();
     }
 
+    // [S2-F5] Filter Events by Detail
     @GetMapping("/details/search")
     public ResponseEntity<List<Event>> filterEvents(
             @RequestParam String key,
@@ -60,13 +62,15 @@ public class eventController {
         return ResponseEntity.ok().build();
     }
 
+    // [S2-F2] Update Event Details (JSONB Merge)
     @PutMapping("/{id}/details")
-    public ResponseEntity<Void> updateEventDetails(
+    public ResponseEntity<Event> updateEventDetails(
             @PathVariable Long id,
             @RequestBody Map<String, Object> request) {
 
-        eventService.updateEventDetails(id, request);
-        return ResponseEntity.ok().build();
+        // Fixed: Returning the updated event instead of void to pass TC_S2_20
+        Event updatedEvent = eventService.updateEventDetails(id, request);
+        return ResponseEntity.ok(updatedEvent);
     }
 
     // [S2-F8] Verify Event Session
@@ -80,17 +84,28 @@ public class eventController {
         return ResponseEntity.ok(updatedEvent);
     }
 
+    // [S2-F1] Search Events
+
     @GetMapping("/search")
     public ResponseEntity<List<Event>> searchEvents(
             @RequestParam(required = false) EventCategory category,
-            @RequestParam(required = false) LocalDateTime startDate,
-            @RequestParam(required = false) LocalDateTime endDate) {
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
 
-        return ResponseEntity.ok(
-                eventService.searchEvents(category, startDate, endDate)
-        );
+        LocalDateTime start = null;
+        LocalDateTime end = null;
+
+        if (startDate != null && !startDate.isBlank()) {
+            start = LocalDateTime.parse(startDate + "T00:00:00");
+        }
+        if (endDate != null && !endDate.isBlank()) {
+            end = LocalDateTime.parse(endDate + "T23:59:59");
+        }
+
+        return ResponseEntity.ok(eventService.searchEvents(category, start, end));
     }
 
+    // [S2-F3] Get Event Revenue
     @GetMapping("/{id}/revenue")
     public ResponseEntity<EventRevenueDTO> getRevenue(
             @PathVariable Long id,
@@ -103,23 +118,21 @@ public class eventController {
         return ResponseEntity.ok(eventService.getEventRevenue(id, start, end));
     }
 
-    @GetMapping("/test")
-    public String test() {
-        return "CONTROLLER OK";
-    }
-
     // [S2-F9] Get Events with Unverified Sessions Report
     @GetMapping("/sessions/unverified")
     public ResponseEntity<List<EventSessionAlertDTO>> getUnverifiedSessions() {
         return ResponseEntity.ok(eventService.getUnverifiedSessionsReport());
     }
 
+    // [S2-F6] Top Rated Events
     @GetMapping("/reports/top-rated")
     public ResponseEntity<List<TopEventDTO>> getTopRatedEvents(@RequestParam int limit) {
         return ResponseEntity.ok(eventService.getTopRatedEvents(limit));
     }
 
+
     // CRUD ENDPOINTS: EVENT
+
 
     @PostMapping
     public ResponseEntity<Event> createEvent(@RequestBody Event event) {
@@ -137,13 +150,22 @@ public class eventController {
         return ResponseEntity.ok(eventService.getEventById(id));
     }
 
+    // Fixed: Added base update event endpoint
+    @PutMapping("/{id}")
+    public ResponseEntity<Event> updateEvent(@PathVariable Long id, @RequestBody Event updatedEvent) {
+        Event savedEvent = eventService.updateEvent(id, updatedEvent);
+        return ResponseEntity.ok(savedEvent);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteEvent(@PathVariable Long id) {
         eventService.deleteEvent(id);
         return ResponseEntity.noContent().build();
     }
 
+
     // CRUD ENDPOINTS: EVENT SESSION
+
 
     @PostMapping("/{eventId}/sessions")
     public ResponseEntity<EventSession> createEventSession(
@@ -153,14 +175,35 @@ public class eventController {
         return new ResponseEntity<>(createdSession, HttpStatus.CREATED);
     }
 
-    @GetMapping("/sessions/{sessionId}")
-    public ResponseEntity<EventSession> getEventSessionById(@PathVariable Long sessionId) {
-        return ResponseEntity.ok(eventService.getEventSessionById(sessionId));
+    // Fixed: Added get all sessions for a specific event
+    @GetMapping("/{eventId}/sessions")
+    public ResponseEntity<List<EventSession>> getSessionsForEvent(@PathVariable Long eventId) {
+        return ResponseEntity.ok(eventService.getSessionsForEvent(eventId));
     }
 
-    @DeleteMapping("/sessions/{sessionId}")
-    public ResponseEntity<Void> deleteEventSession(@PathVariable Long sessionId) {
-        eventService.deleteEventSession(sessionId);
+    // Fixed: Nested path
+    @GetMapping("/{eventId}/sessions/{sessionId}")
+    public ResponseEntity<EventSession> getEventSessionById(
+            @PathVariable Long eventId,
+            @PathVariable Long sessionId) {
+        return ResponseEntity.ok(eventService.getEventSessionById(eventId, sessionId));
+    }
+
+    // Fixed: Added update session endpoint nested under event
+    @PutMapping("/{eventId}/sessions/{sessionId}")
+    public ResponseEntity<EventSession> updateEventSession(
+            @PathVariable Long eventId,
+            @PathVariable Long sessionId,
+            @RequestBody EventSession updatedSession) {
+        return ResponseEntity.ok(eventService.updateEventSession(eventId, sessionId, updatedSession));
+    }
+
+    // Fixed: Nested path for
+    @DeleteMapping("/{eventId}/sessions/{sessionId}")
+    public ResponseEntity<Void> deleteEventSession(
+            @PathVariable Long eventId,
+            @PathVariable Long sessionId) {
+        eventService.deleteEventSession(eventId, sessionId);
         return ResponseEntity.noContent().build();
     }
 
