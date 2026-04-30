@@ -2,13 +2,16 @@ package com.team22.eventticketing.user.service;
 
 import com.team22.eventticketing.user.entity.FavoriteVenue;
 import com.team22.eventticketing.user.entity.User;
+import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.FavoriteVenueRepository;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -17,6 +20,7 @@ public class FavoriteVenueService {
     private final FavoriteVenueRepository favoriteVenueRepository;
     private final UserService userService;
     private final CacheEvictionService cacheEviction;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public FavoriteVenueService(FavoriteVenueRepository favoriteVenueRepository,
                                 UserService userService,
@@ -26,12 +30,21 @@ public class FavoriteVenueService {
         this.cacheEviction = cacheEviction;
     }
 
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
+    }
+
     // ─── Create ──────────────────────────────────────────────────────────────────
 
     public FavoriteVenue create(Long userId, FavoriteVenue favoriteVenue) {
         User user = userService.findById(userId);
         favoriteVenue.setUser(user);
-        return favoriteVenueRepository.save(favoriteVenue);
+        FavoriteVenue saved = favoriteVenueRepository.save(favoriteVenue);
+        notifyObservers("VENUE_ADDED", Map.of("userId", userId, "venueId", saved.getId()));
+        return saved;
     }
 
     // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
@@ -68,6 +81,7 @@ public class FavoriteVenueService {
 
         FavoriteVenue saved = favoriteVenueRepository.save(existing);
         cacheEviction.evictEntityAndFeatures("favorite-venue", id, "S1-F8", "S1-F9");
+        notifyObservers("VENUE_UPDATED", Map.of("venueId", saved.getId()));
         return saved;
     }
 
@@ -80,6 +94,7 @@ public class FavoriteVenueService {
         }
         favoriteVenueRepository.deleteById(id);
         cacheEviction.evictEntityAndFeatures("favorite-venue", id, "S1-F8", "S1-F9");
+        notifyObservers("VENUE_DELETED", Map.of("venueId", id));
     }
 
     // ─── [S1-F7] Set Default Venue ────────────────────────────────────────────────
@@ -99,11 +114,9 @@ public class FavoriteVenueService {
         favoriteVenueRepository.clearDefaultsByUserId(userId);
         venue.setIsDefault(true);
         favoriteVenueRepository.save(venue);
-
-        // Evict: venue detail, user profile (S1-F8 includes venues), category filter (S1-F9)
+        notifyObservers("DEFAULT_VENUE_SET", Map.of("userId", userId, "venueId", venueId));
         cacheEviction.evictEntityAndFeatures("favorite-venue", venueId, "S1-F8", "S1-F9");
         cacheEviction.evictDetail("user", userId);
-
         return userService.findById(userId);
     }
 }

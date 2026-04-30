@@ -7,6 +7,7 @@ import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
 import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
+import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -17,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -28,16 +30,26 @@ public class TicketService {
 
     private final TicketRepository ticketRepository;
     private final CacheEvictionService cacheEviction;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction) {
         this.ticketRepository = ticketRepository;
         this.cacheEviction = cacheEviction;
     }
 
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
+    }
+
     // ─── CRUD ─────────────────────────────────────────────────────────────────────
 
     public Ticket createTicket(Ticket ticket) {
-        return ticketRepository.save(ticket);
+        Ticket saved = ticketRepository.save(ticket);
+        notifyObservers("TICKET_CREATED", Map.of("ticketId", saved.getId()));
+        return saved;
     }
 
     @Cacheable(cacheNames = "ticket-service::ticket", key = "#id")
@@ -62,6 +74,7 @@ public class TicketService {
 
         Ticket saved = ticketRepository.save(existing);
         cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9", "S4-F10");
+        notifyObservers("TICKET_UPDATED", Map.of("ticketId", saved.getId()));
         return saved;
     }
 
@@ -69,6 +82,7 @@ public class TicketService {
         Ticket existing = getTicketById(id);
         ticketRepository.delete(existing);
         cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9", "S4-F10");
+        notifyObservers("TICKET_DELETED", Map.of("ticketId", id));
     }
 
     // ─── [S4-F4] Batch Ticket Issuance (write — invalidates) ─────────────────────
@@ -106,13 +120,11 @@ public class TicketService {
         )).toList();
 
         ticketRepository.saveAll(tickets);
-
-        // Batch write invalidates search/filter/analytics caches
         cacheEviction.evictPattern("S4-F1");
         cacheEviction.evictPattern("S4-F6");
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
-
+        notifyObservers("TICKETS_BATCH_ISSUED", Map.of("bookingId", bookingId, "count", tickets.size()));
         return tickets.size();
     }
 
@@ -127,8 +139,7 @@ public class TicketService {
         return ticketRepository
                 .findTopByBookingIdOrderByIssuedAtDesc(bookingId)
                 .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND,
-                                "No tickets found for this booking"));
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "No tickets found for this booking"));
     }
 
     // ─── [S4-F2] Issue Ticket (write) ────────────────────────────────────────────
@@ -152,10 +163,10 @@ public class TicketService {
         ticket.setStatus(TicketStatus.VALID);
 
         Ticket saved = ticketRepository.save(ticket);
-        // New ticket: evict F1 (latest ticket cache for this booking) and analytics
         cacheEviction.evictPattern("S4-F1");
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
+        notifyObservers("TICKET_ISSUED", Map.of("ticketId", saved.getId(), "bookingId", bookingId));
         return saved;
     }
 
@@ -180,17 +191,15 @@ public class TicketService {
     }
 
     // ─── [S4-F7] Purge Expired Tickets (write — invalidates) ─────────────────────
-
     @Transactional
     public int purgeExpiredTickets(int olderThanDays) {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(olderThanDays);
         int count = ticketRepository.purgeExpiredAndCancelledTickets(cutoff);
-
         cacheEviction.evictPattern("S4-F1");
         cacheEviction.evictPattern("S4-F6");
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
-
+        notifyObservers("TICKETS_PURGED", Map.of("olderThanDays", olderThanDays, "purgedCount", count));
         return count;
     }
 

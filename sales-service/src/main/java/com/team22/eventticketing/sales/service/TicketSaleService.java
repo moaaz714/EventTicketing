@@ -6,6 +6,7 @@ import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
 import com.team22.eventticketing.sales.entity.enums.SaleStatus;
+import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -15,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,7 @@ public class TicketSaleService {
 
     private final TicketSaleRepository ticketSaleRepository;
     private final CacheEvictionService cacheEviction;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public TicketSaleService(TicketSaleRepository ticketSaleRepository,
                              CacheEvictionService cacheEviction) {
@@ -31,10 +34,19 @@ public class TicketSaleService {
         this.cacheEviction = cacheEviction;
     }
 
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
+    }
+
     // ─── Create ──────────────────────────────────────────────────────────────────
 
     public TicketSale create(TicketSale ticketSale) {
-        return ticketSaleRepository.save(ticketSale);
+        TicketSale saved = ticketSaleRepository.save(ticketSale);
+        notifyObservers("SALE_CREATED", Map.of("saleId", saved.getId()));
+        return saved;
     }
 
     // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
@@ -67,6 +79,7 @@ public class TicketSaleService {
         TicketSale saved = ticketSaleRepository.save(existing);
         cacheEviction.evictEntityAndFeatures("ticket-sale", id,
                 "S5-F1", "S5-F3", "S5-F6", "S5-F8", "S5-F10", "S5-F11");
+        notifyObservers("SALE_UPDATED", Map.of("saleId", saved.getId()));
         return saved;
     }
 
@@ -80,6 +93,7 @@ public class TicketSaleService {
         ticketSaleRepository.deleteById(id);
         cacheEviction.evictEntityAndFeatures("ticket-sale", id,
                 "S5-F1", "S5-F3", "S5-F6", "S5-F8", "S5-F10", "S5-F11");
+        notifyObservers("SALE_DELETED", Map.of("saleId", id));
     }
 
     // ─── [S5-F2] Process Refund (write — invalidates) ────────────────────────────
@@ -100,6 +114,7 @@ public class TicketSaleService {
         TicketSale saved = ticketSaleRepository.save(sale);
         cacheEviction.evictEntityAndFeatures("ticket-sale", id,
                 "S5-F1", "S5-F3", "S5-F6", "S5-F8", "S5-F10", "S5-F11");
+        notifyObservers("SALE_REFUNDED", Map.of("saleId", saved.getId(), "reason", reason != null ? reason : ""));
         return saved;
     }
 
@@ -173,6 +188,7 @@ public class TicketSaleService {
         TicketSale saved = ticketSaleRepository.save(sale);
         cacheEviction.evictEntityAndFeatures("ticket-sale", id,
                 "S5-F1", "S5-F3", "S5-F6", "S5-F8", "S5-F10", "S5-F11");
+        notifyObservers("SALE_RETRIED", Map.of("saleId", saved.getId()));
         return saved;
     }
 
@@ -243,6 +259,8 @@ public class TicketSaleService {
         TicketSale saved = ticketSaleRepository.save(sale);
         cacheEviction.evictEntityAndFeatures("ticket-sale", saved.getId(),
                 "S5-F1", "S5-F3", "S5-F6", "S5-F10", "S5-F11");
+        notifyObservers("PAYMENT_PROCESSED", Map.of("saleId", saved.getId(), "bookingId", bookingId,
+                "method", method.name(), "amount", saved.getAmount() != null ? saved.getAmount() : 0.0));
         return saved;
     }
 }

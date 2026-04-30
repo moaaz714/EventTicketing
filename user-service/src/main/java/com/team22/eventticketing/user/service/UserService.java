@@ -5,6 +5,7 @@ import com.team22.eventticketing.user.dto.TopAttendeeDTO;
 import com.team22.eventticketing.user.dto.UserProfileDTO;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
+import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.UserRepository;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -13,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -23,16 +25,26 @@ public class UserService {
     private final UserRepository userRepository;
     private final CacheEvictionService cacheEviction;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public UserService(UserRepository userRepository, CacheEvictionService cacheEviction) {
         this.userRepository = userRepository;
         this.cacheEviction = cacheEviction;
     }
 
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
+    }
+
     // ─── Create ──────────────────────────────────────────────────────────────────
 
     public User create(User user) {
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        notifyObservers("REGISTERED", Map.of("userId", saved.getId(), "email", saved.getEmail() != null ? saved.getEmail() : ""));
+        return saved;
     }
 
     // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
@@ -65,6 +77,7 @@ public class UserService {
 
         User saved = userRepository.save(existing);
         cacheEviction.evictEntityAndFeatures("user", id, "S1-F1", "S1-F3", "S1-F5", "S1-F8", "S1-F9");
+        notifyObservers("USER_UPDATED", Map.of("userId", saved.getId()));
         return saved;
     }
 
@@ -75,6 +88,7 @@ public class UserService {
         user.getPreferences().putAll(incoming);
         User saved = userRepository.save(user);
         cacheEviction.evictEntityAndFeatures("user", id, "S1-F1", "S1-F3", "S1-F5", "S1-F8", "S1-F9");
+        notifyObservers("PREFERENCES_UPDATED", Map.of("userId", saved.getId()));
         return saved;
     }
 
@@ -160,6 +174,7 @@ public class UserService {
         }
         userRepository.deleteById(id);
         cacheEviction.evictEntityAndFeatures("user", id, "S1-F1", "S1-F3", "S1-F5", "S1-F6", "S1-F8", "S1-F9");
+        notifyObservers("USER_DELETED", Map.of("userId", id));
     }
 
     // ─── [S1-F4] Deactivate ──────────────────────────────────────────────────────
@@ -176,6 +191,7 @@ public class UserService {
         user.setStatus(com.team22.eventticketing.user.entity.UserStatus.DEACTIVATED);
         User saved = userRepository.save(user);
         cacheEviction.evictEntityAndFeatures("user", id, "S1-F1", "S1-F3", "S1-F5", "S1-F6", "S1-F8", "S1-F9");
+        notifyObservers("USER_DEACTIVATED", Map.of("userId", saved.getId()));
         return saved;
     }
 

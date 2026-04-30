@@ -8,6 +8,7 @@ import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.model.EventSession;
 import com.team22.eventticketing.event.model.EventStatus;
+import com.team22.eventticketing.event.observer.EntityObserver;
 import com.team22.eventticketing.event.repository.EventRepository;
 import com.team22.eventticketing.event.repository.EventSessionRepository;
 import org.springframework.cache.annotation.Cacheable;
@@ -30,6 +31,7 @@ public class EventService {
     private final EventRepository eventRepository;
     private final EventSessionRepository eventSessionRepository;
     private final CacheEvictionService cacheEviction;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public EventService(EventRepository eventRepository,
                         EventSessionRepository eventSessionRepository,
@@ -37,6 +39,13 @@ public class EventService {
         this.eventRepository = eventRepository;
         this.eventSessionRepository = eventSessionRepository;
         this.cacheEviction = cacheEviction;
+    }
+
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
     }
 
     // ─── [S2-F1] Search Events ────────────────────────────────────────────────────
@@ -93,8 +102,8 @@ public class EventService {
         existingDetails.putAll(newDetails);
         event.setDetails(existingDetails);
         eventRepository.save(event);
-
         cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
+        notifyObservers("EVENT_DETAILS_UPDATED", Map.of("eventId", id));
     }
 
     // ─── [S2-F4] Update Event Status (write — invalidates) ───────────────────────
@@ -116,8 +125,8 @@ public class EventService {
 
         event.setStatus(newStatus);
         eventRepository.save(event);
-
         cacheEviction.evictEntityAndFeatures("event", eventId, "S2-F1", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
+        notifyObservers("EVENT_STATUS_UPDATED", Map.of("eventId", eventId, "status", newStatus.name()));
     }
 
     // ─── [S2-F6] Top Rated Events Report ─────────────────────────────────────────
@@ -191,8 +200,8 @@ public class EventService {
         event.setTotalRatings(newCount);
         event.setRating(updatedAverage);
         eventRepository.save(event);
-
         cacheEviction.evictEntityAndFeatures("event", eventId, "S2-F3", "S2-F6");
+        notifyObservers("EVENT_RATED", Map.of("eventId", eventId, "rating", newRating));
     }
 
     // ─── [S2-F8] Verify Event Session (write — invalidates) ───────────────────────
@@ -222,9 +231,8 @@ public class EventService {
         session.getMetadata().put("verifiedAt", LocalDateTime.now().toString());
         session.getMetadata().put("verifiedBy", verifiedByUserId);
         eventSessionRepository.save(session);
-
+        notifyObservers("SESSION_VERIFIED", Map.of("eventId", eventId, "sessionId", sessionId));
         cacheEviction.evictEntityAndFeatures("event-session", sessionId, "S2-F9");
-
         return event;
     }
 
@@ -254,9 +262,9 @@ public class EventService {
 
     public Event createEvent(Event event) {
         Event saved = eventRepository.save(event);
-        // New entity — no detail to evict; invalidate search/filter results
         cacheEviction.evictPattern("S2-F1");
-        cacheEviction.evictPattern("S2-F10"); // ES index may be stale (§4.5 auto-index retrofit)
+        cacheEviction.evictPattern("S2-F10");
+        notifyObservers("EVENT_CREATED", Map.of("eventId", saved.getId()));
         return saved;
     }
 
@@ -276,6 +284,7 @@ public class EventService {
         }
         eventRepository.deleteById(id);
         cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
+        notifyObservers("EVENT_DELETED", Map.of("eventId", id));
     }
 
     // ─── CRUD: EventSession ───────────────────────────────────────────────────────
@@ -283,7 +292,9 @@ public class EventService {
     public EventSession createEventSession(Long eventId, EventSession session) {
         Event event = getEventById(eventId);
         session.setEvent(event);
-        return eventSessionRepository.save(session);
+        EventSession saved = eventSessionRepository.save(session);
+        notifyObservers("SESSION_CREATED", Map.of("eventId", eventId, "sessionId", saved.getId()));
+        return saved;
     }
 
     @Cacheable(cacheNames = "event-service::event-session", key = "#sessionId")
@@ -298,5 +309,6 @@ public class EventService {
         }
         eventSessionRepository.deleteById(sessionId);
         cacheEviction.evictEntityAndFeatures("event-session", sessionId, "S2-F9");
+        notifyObservers("SESSION_DELETED", Map.of("sessionId", sessionId));
     }
 }

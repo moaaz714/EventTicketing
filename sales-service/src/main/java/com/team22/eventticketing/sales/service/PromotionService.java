@@ -3,6 +3,7 @@ package com.team22.eventticketing.sales.service;
 import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
 import com.team22.eventticketing.sales.entity.Promotion;
 import com.team22.eventticketing.sales.entity.enums.DiscountType;
+import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.PromotionRepository;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -11,13 +12,16 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class PromotionService {
 
     private final PromotionRepository promotionRepository;
     private final CacheEvictionService cacheEviction;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public PromotionService(PromotionRepository promotionRepository,
                             CacheEvictionService cacheEviction) {
@@ -25,10 +29,19 @@ public class PromotionService {
         this.cacheEviction = cacheEviction;
     }
 
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
+    }
+
     // ─── Create ──────────────────────────────────────────────────────────────────
 
     public Promotion create(Promotion promotion) {
-        return promotionRepository.save(promotion);
+        Promotion saved = promotionRepository.save(promotion);
+        notifyObservers("PROMOTION_CREATED", Map.of("promotionId", saved.getId()));
+        return saved;
     }
 
     // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
@@ -62,6 +75,7 @@ public class PromotionService {
 
         Promotion saved = promotionRepository.save(existing);
         cacheEviction.evictEntityAndFeatures("promotion", id, "S5-F9");
+        notifyObservers("PROMOTION_UPDATED", Map.of("promotionId", saved.getId()));
         return saved;
     }
 
@@ -95,5 +109,6 @@ public class PromotionService {
         }
         promotionRepository.deleteById(id);
         cacheEviction.evictEntityAndFeatures("promotion", id, "S5-F9");
+        notifyObservers("PROMOTION_DELETED", Map.of("promotionId", id));
     }
 }

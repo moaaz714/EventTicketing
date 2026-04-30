@@ -9,6 +9,7 @@ import com.team22.eventticketing.booking.model.Booking;
 import com.team22.eventticketing.booking.model.BookingItem;
 import com.team22.eventticketing.booking.model.BookingItemStatus;
 import com.team22.eventticketing.booking.model.BookingStatus;
+import com.team22.eventticketing.booking.observer.EntityObserver;
 import com.team22.eventticketing.booking.repository.BookingItemRepository;
 import com.team22.eventticketing.booking.repository.BookingRepository;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -21,7 +22,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,6 +36,7 @@ public class BookingService {
     private final BookingItemRepository bookingItemRepository;
     private final CacheEvictionService cacheEviction;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public BookingService(BookingRepository bookingRepository,
                           BookingItemRepository bookingItemRepository,
@@ -42,6 +46,13 @@ public class BookingService {
         this.bookingItemRepository = bookingItemRepository;
         this.cacheEviction = cacheEviction;
         this.redisTemplate = redisTemplate;
+    }
+
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
     }
 
     // ─── [S3-F1] Search Bookings ──────────────────────────────────────────────────
@@ -62,7 +73,9 @@ public class BookingService {
         if (booking.getBookingDate() == null) {
             booking.setBookingDate(LocalDateTime.now());
         }
-        return bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
+        notifyObservers("BOOKING_CREATED", Map.of("bookingId", saved.getId()));
+        return saved;
     }
 
     // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
@@ -98,6 +111,7 @@ public class BookingService {
 
         Booking saved = bookingRepository.save(existing);
         cacheEviction.evictEntityAndFeatures("booking", id, "S3-F1", "S3-F5", "S3-F6", "S3-F9", "S3-F10");
+        notifyObservers("BOOKING_UPDATED", Map.of("bookingId", saved.getId()));
         return saved;
     }
 
@@ -110,6 +124,7 @@ public class BookingService {
         }
         bookingRepository.deleteById(id);
         cacheEviction.evictEntityAndFeatures("booking", id, "S3-F1", "S3-F5", "S3-F6", "S3-F9", "S3-F10");
+        notifyObservers("BOOKING_DELETED", Map.of("bookingId", id));
     }
 
     // ─── [S3-F4] Complete Booking (write — invalidates) ──────────────────────────
@@ -143,6 +158,7 @@ public class BookingService {
         );
 
         cacheEviction.evictEntityAndFeatures("booking", id, "S3-F1", "S3-F6", "S3-F9", "S3-F10");
+        notifyObservers("BOOKING_COMPLETED", Map.of("bookingId", saved.getId()));
         return saved;
     }
 
@@ -189,8 +205,8 @@ public class BookingService {
         booking.setStatus(BookingStatus.CANCELLED);
         bookingRepository.save(booking);
         bookingRepository.cancelValidTicketsForBooking(id);
-
         cacheEviction.evictEntityAndFeatures("booking", id, "S3-F1", "S3-F6", "S3-F9", "S3-F10");
+        notifyObservers("BOOKING_CANCELLED", Map.of("bookingId", id));
     }
 
     // ─── [S3-F8] Add Items to Booking (write — invalidates) ──────────────────────
@@ -234,6 +250,7 @@ public class BookingService {
 
         Booking result = bookingRepository.findByIdWithItems(bookingId).get();
         cacheEviction.evictEntityAndFeatures("booking", bookingId, "S3-F1", "S3-F6", "S3-F9", "S3-F10");
+        notifyObservers("BOOKING_ITEMS_ADDED", Map.of("bookingId", bookingId));
         return result;
     }
 
@@ -303,6 +320,7 @@ public class BookingService {
 
         Booking saved = bookingRepository.save(booking);
         cacheEviction.evictEntityAndFeatures("booking", bookingId, "S3-F1", "S3-F9", "S3-F10");
+        notifyObservers("BOOKING_CONFIRMED", Map.of("bookingId", saved.getId(), "eventId", eventId));
         return saved;
     }
 
