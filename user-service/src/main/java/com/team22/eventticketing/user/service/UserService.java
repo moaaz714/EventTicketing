@@ -128,7 +128,7 @@ public class UserService {
                         .userId(((Number) row[0]).longValue())
                         .name((String)  row[1])
                         .totalSpent(((Number) row[2]).doubleValue())
-                        .averageBookingAmount(((Number) row[3]).longValue())
+                        .bookingCount(((Number) row[3]).longValue())
                         .build()).collect(Collectors.toList());
     }
 
