@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 @Service
 public class TicketSaleService {
 
@@ -218,7 +217,8 @@ public class TicketSaleService {
                 .mapToDouble(AppliedPromotionDTO::getDiscountApplied)
                 .sum();
 
-        double finalAmount = sale.getAmount() - totalDiscount;
+        //double finalAmount = sale.getAmount() - totalDiscount;
+        double finalAmount = Math.max(0, sale.getAmount() - totalDiscount);
 
         return SaleDetailsDTO.builder()
                 .saleId(sale.getId())

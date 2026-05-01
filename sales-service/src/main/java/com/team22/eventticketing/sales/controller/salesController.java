@@ -5,19 +5,18 @@ import com.team22.eventticketing.sales.dto.RevenueReportDTO;
 import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
-import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
+import static com.team22.eventticketing.sales.entity.TicketSale.PaymentMethod;
+
 import com.team22.eventticketing.sales.service.PromotionService;
 import com.team22.eventticketing.sales.service.SalesService;
 import com.team22.eventticketing.sales.service.TicketSaleService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-
 @RestController
 @RequestMapping("/api/sales")
 public class salesController {
@@ -122,7 +121,7 @@ public class salesController {
 
     // ─── S5-F9: Top Used Promotions Report ────────
     @GetMapping("/promotions/top-used")
-    public List<PromotionUsageDTO> getTopUsedPromotions(@RequestParam int limit) {
+    public List<PromotionUsageDTO> getTopUsedPromotions(@RequestParam(defaultValue = "10") int limit) {
         return promotionService.getTopUsedPromotions(limit);
     }
 

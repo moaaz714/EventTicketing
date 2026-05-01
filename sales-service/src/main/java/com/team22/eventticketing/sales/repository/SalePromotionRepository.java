@@ -3,7 +3,6 @@ package com.team22.eventticketing.sales.repository;
 import com.team22.eventticketing.sales.entity.SalePromotion;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
 import java.util.List;
 
 @Repository
