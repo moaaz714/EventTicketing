@@ -4,19 +4,21 @@ import com.team22.eventticketing.sales.dto.RevenueReportDTO;
 import com.team22.eventticketing.sales.entity.Promotion;
 import com.team22.eventticketing.sales.entity.SalePromotion;
 import com.team22.eventticketing.sales.entity.TicketSale;
-
-import static com.team22.eventticketing.sales.entity.TicketSale.SaleStatus;
-import static com.team22.eventticketing.sales.entity.TicketSale.PaymentMethod;
-
+import com.team22.eventticketing.sales.entity.enums.DiscountType;
+import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
+import com.team22.eventticketing.sales.entity.enums.SaleStatus;
+import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.PromotionRepository;
 import com.team22.eventticketing.sales.repository.SalePromotionRepository;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,16 +29,27 @@ public class SalesService {
     private final TicketSaleRepository ticketSaleRepository;
     private final PromotionRepository promotionRepository;
     private final SalePromotionRepository salePromotionRepository;
+    private final CacheEvictionService cacheEviction;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public SalesService(TicketSaleRepository ticketSaleRepository,
                         PromotionRepository promotionRepository,
-                        SalePromotionRepository salePromotionRepository) {
+                        SalePromotionRepository salePromotionRepository,
+                        CacheEvictionService cacheEviction) {
         this.ticketSaleRepository = ticketSaleRepository;
         this.promotionRepository = promotionRepository;
         this.salePromotionRepository = salePromotionRepository;
+        this.cacheEviction = cacheEviction;
     }
 
-    // ─── S5-F4: Process booking payment ──────────────────────────────────────────
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
+    }
+
+    // ─── [S5-F4] Process booking payment (write — invalidates) ───────────────────
     @Transactional
     public TicketSale processBookingPayment(Long bookingId, PaymentMethod method, String cardLastFour) {
         String bookingStatus = ticketSaleRepository.findBookingStatus(bookingId);
@@ -68,13 +81,20 @@ public class SalesService {
 
         transactionDetails.put("gatewayResponse", "approved");
         transactionDetails.put("paidAt", LocalDateTime.now().toString());
-
         ticketSale.setTransactionDetails(transactionDetails);
 
-        return ticketSaleRepository.save(ticketSale);
+        TicketSale saved = ticketSaleRepository.save(ticketSale);
+        cacheEviction.evictEntityAndFeatures("ticket-sale", saved.getId(),
+                "S5-F1", "S5-F3", "S5-F6", "S5-F10", "S5-F11");
+        notifyObservers("PAYMENT_PROCESSED", Map.of("saleId", saved.getId(), "bookingId", bookingId,
+                "method", method.name(), "amount", saved.getAmount() != null ? saved.getAmount() : 0.0));
+        return saved;
     }
 
-    // ─── S5-F6: Revenue Report ────────────────────────────────────────────────────
+    // ─── [S5-F6] Revenue Report (report — cached) ────────────────────────────────
+
+    @Cacheable(cacheNames = "sales-service::S5-F6",
+            key = "T(String).valueOf(#startDate) + ':' + T(String).valueOf(#endDate)")
     public RevenueReportDTO getRevenueReport(LocalDateTime startDate, LocalDateTime endDate) {
         if (startDate.isAfter(endDate)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -101,16 +121,16 @@ public class SalesService {
 
         int refundCount = refunded.size();
 
-        return new RevenueReportDTO(
-                totalRevenue,
-                totalTransactions,
-                averageSale,
-                refundedAmount,
-                refundCount
-        );
+        return RevenueReportDTO.builder()
+                .totalRevenue(totalRevenue)
+                .totalTransactions(totalTransactions)
+                .averageSale(averageSale)
+                .refundedAmount(refundedAmount)
+                .refundCount(refundCount)
+                .build();
     }
 
-    // ─── S5-F5: Apply Promotion ───────────────────────────────────────────────────
+    // ─── [S5-F5] Apply Promotion to Sale (write — invalidates) ───────────────────
     @Transactional
     public TicketSale applyPromotionToSale(Long saleId, Long promotionId) {
 
@@ -155,10 +175,13 @@ public class SalesService {
 
         ticketSale.getSalePromotions().add(salePromo);
 
+        cacheEviction.evictEntityAndFeatures("ticket-sale", saleId,
+                "S5-F8", "S5-F10", "S5-F11");
+        cacheEviction.evictEntityAndFeatures("promotion", promotionId, "S5-F9");
+        notifyObservers("PROMOTION_APPLIED", Map.of("saleId", saleId, "promotionId", promotionId));
         return ticketSale;
     }
 
-    // ─── Helper: FIXED + PERCENTAGE discount logic (CRITICAL FIX) ────────────────
     private SalePromotion createSalePromotion(TicketSale sale, Promotion promotion) {
 
         double discount;
