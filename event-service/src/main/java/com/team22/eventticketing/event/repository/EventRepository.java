@@ -44,6 +44,17 @@ public interface EventRepository extends JpaRepository<Event, Long> {
             @Param("status") String status
     );
 
+    @Query(value = """
+        SELECT 
+            COUNT(id) AS totalBookings, 
+            COALESCE(SUM(total_amount), 0) AS totalRevenue, 
+            COALESCE(AVG(total_amount), 0) AS avgBookingAmount 
+        FROM bookings 
+        WHERE event_id = :eventId 
+          AND status = 'COMPLETED'
+    """, nativeQuery = true)
+    List<Object[]> getEventRevenueStats(@Param("eventId") Long eventId);
+
     // Check if booking exists at all
     @Query(value = "SELECT COUNT(*) FROM bookings WHERE id = :bookingId", nativeQuery = true)
     long checkBookingExists(@Param("bookingId") Long bookingId);

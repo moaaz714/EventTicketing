@@ -3,45 +3,63 @@ package com.team22.eventticketing.sales.service;
 import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
 import com.team22.eventticketing.sales.entity.Promotion;
 import com.team22.eventticketing.sales.entity.enums.DiscountType;
+import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.PromotionRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class PromotionService {
 
     private final PromotionRepository promotionRepository;
+    private final CacheEvictionService cacheEviction;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
-    public PromotionService(PromotionRepository promotionRepository) {
+    public PromotionService(PromotionRepository promotionRepository,
+                            CacheEvictionService cacheEviction) {
         this.promotionRepository = promotionRepository;
+        this.cacheEviction = cacheEviction;
+    }
+
+    public void register(EntityObserver observer) { observers.add(observer); }
+    public void unregister(EntityObserver observer) { observers.remove(observer); }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────
 
     public Promotion create(Promotion promotion) {
-        return promotionRepository.save(promotion);
+        Promotion saved = promotionRepository.save(promotion);
+        notifyObservers("PROMOTION_CREATED", Map.of("promotionId", saved.getId()));
+        return saved;
     }
 
-    // ─── Read by ID ───────────────────────────────────────────────────────────────
+    // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
 
+    @Cacheable(cacheNames = "sales-service::promotion", key = "#id")
     public Promotion findById(Long id) {
         return promotionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Promotion not found with id: " + id));
     }
 
-    // ─── Read all ─────────────────────────────────────────────────────────────────
+    // ─── Read all (NOT cached) ────────────────────────────────────────────────────
 
     public List<Promotion> findAll() {
         return promotionRepository.findAll();
     }
 
-    // ─── Update ───────────────────────────────────────────────────────────────────
+    // ─── [CRUD] Update ────────────────────────────────────────────────────────────
 
     public Promotion update(Long id, Promotion patch) {
         Promotion existing = findById(id);
@@ -55,11 +73,15 @@ public class PromotionService {
         if (patch.getActive() != null)        existing.setActive(patch.getActive());
         if (patch.getMetadata() != null)      existing.setMetadata(patch.getMetadata());
 
-        return promotionRepository.save(existing);
+        Promotion saved = promotionRepository.save(existing);
+        cacheEviction.evictEntityAndFeatures("promotion", id, "S5-F9");
+        notifyObservers("PROMOTION_UPDATED", Map.of("promotionId", saved.getId()));
+        return saved;
     }
 
-    // ─── [S5-F9] Top Used Promotions Report ──────────────────────────────────────
+    // ─── [S5-F9] Top Used Promotions Report (combined) ───────────────────────────
 
+    @Cacheable(cacheNames = "sales-service::S5-F9", key = "#limit")
     public List<PromotionUsageDTO> getTopUsedPromotions(int limit) {
         List<Object[]> rows = promotionRepository.findTopUsedPromotions(limit);
         return rows.stream().map(row -> {
@@ -73,12 +95,20 @@ public class PromotionService {
             LocalDateTime expiry   = ((Timestamp) row[7]).toLocalDateTime();
             boolean expired        = expiry.isBefore(LocalDateTime.now());
 
-            return new PromotionUsageDTO(promotionId, code, discType, discountValue,
-                    timesUsed, totalDiscount, active, expired);
+            return PromotionUsageDTO.builder()
+                    .promotionId(promotionId)
+                    .code(code)
+                    .discountType(discType)
+                    .discountValue(discountValue)
+                    .timesUsed(timesUsed)
+                    .totalDiscountGiven(totalDiscount)
+                    .active(active)
+                    .expired(expired)
+                    .build();
         }).toList();
     }
 
-    // ─── Delete ───────────────────────────────────────────────────────────────────
+    // ─── [CRUD] Delete ────────────────────────────────────────────────────────────
 
     public void delete(Long id) {
         if (!promotionRepository.existsById(id)) {
@@ -86,5 +116,7 @@ public class PromotionService {
                     HttpStatus.NOT_FOUND, "Promotion not found with id: " + id);
         }
         promotionRepository.deleteById(id);
+        cacheEviction.evictEntityAndFeatures("promotion", id, "S5-F9");
+        notifyObservers("PROMOTION_DELETED", Map.of("promotionId", id));
     }
 }
