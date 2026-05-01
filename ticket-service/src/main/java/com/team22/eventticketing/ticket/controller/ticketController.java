@@ -4,17 +4,18 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import com.team22.eventticketing.ticket.model.Ticket;
-import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.http.HttpStatus;
-
-import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
+import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
+import com.team22.eventticketing.ticket.model.dto.TicketAnalyticsDTO;
+
+import org.springframework.web.bind.annotation.*;
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.service.TicketService;
+import com.team22.eventticketing.ticket.observer.MongoEventLogger;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -23,22 +24,24 @@ import java.util.Map;
 public class ticketController {
 
     private final TicketService ticketService;
+    private final MongoEventLogger eventLogger;
 
-    public ticketController(TicketService ticketService) {
+    public ticketController(TicketService ticketService, MongoEventLogger eventLogger) {
         this.ticketService = ticketService;
+        this.eventLogger = eventLogger;
     }
 
-    //[S4-F1]
+    // [S4-F1]
     @GetMapping("/booking/{bookingId}/latest")
     public Ticket getLatestTicket(@PathVariable Long bookingId) {
         return ticketService.getLatestTicketByBooking(bookingId);
     }
+
     @PostMapping("/booking/{bookingId}")
     @ResponseStatus(HttpStatus.CREATED)
     public Ticket issueTicket(
             @PathVariable Long bookingId,
-            @RequestBody Map<String, Object> request
-    ) {
+            @RequestBody Map<String, Object> request) {
 
         String attendeeName = (String) request.get("attendeeName");
         String ticketCode = (String) request.get("ticketCode");
@@ -48,20 +51,16 @@ public class ticketController {
                 bookingId,
                 attendeeName,
                 ticketCode,
-                metadata
-        );
+                metadata);
     }
-
 
     @GetMapping("/nearby")
     public List<NearbyTicketDTO> getNearbyTickets(
             @RequestParam double lat,
             @RequestParam double lon,
-            @RequestParam double radiusKm
-    ) {
+            @RequestParam double radiusKm) {
         return ticketService.findNearbyTickets(lat, lon, radiusKm);
     }
-
 
     @GetMapping("/health")
     public String statusCheck() {
@@ -108,8 +107,13 @@ public class ticketController {
     // ==================== S4-F7: Purge Expired Tickets ====================
 
     @DeleteMapping("/purge")
-    public int purgeTickets(@RequestParam("olderThanDays") int olderThanDays) {
-        return ticketService.purgeExpiredTickets(olderThanDays);
+    public Map<String, Object> purgeTickets(@RequestParam("olderThanDays") int olderThanDays) {
+
+        int count = ticketService.purgeExpiredTickets(olderThanDays);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("deletedCount", count);
+        return response;
     }
 
     // ==================== S4-F8: Event Attendance Summary ====================
@@ -132,8 +136,7 @@ public class ticketController {
     public List<Ticket> filterTicketsByMetadata(
             @RequestParam String key,
             @RequestParam String operator,
-            @RequestParam String value
-    ) {
+            @RequestParam String value) {
         return ticketService.filterByMetadata(key, operator, value);
     }
 
@@ -143,8 +146,29 @@ public class ticketController {
     public List<Ticket> getTicketHistory(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(required = false) String status
-    ) {
+            @RequestParam(required = false) String status) {
         return ticketService.getTicketHistory(startDate, endDate, status);
+    }
+
+    // S4-F10
+    @GetMapping("/analytics")
+    public ResponseEntity<TicketAnalyticsDTO> getTicketAnalyticsDashboard(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        // STEP 4: Trigger the Observer Pattern for Observability logging.
+        // Doing this HERE ensures it runs on every invocation, bypassing the Redis
+        // cache[cite: 1].
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("startDate", startDate);
+        payload.put("endDate", endDate);
+
+        // Log the purely observability action to MongoDB via the Observer chain[cite:
+        // 1]
+        eventLogger.onEvent("ANALYTICS_VIEWED", payload);
+
+        // STEP 5: Call the cached Service method and return a 200 OK[cite: 1]
+        TicketAnalyticsDTO response = ticketService.getAnalytics(startDate, endDate);
+        return ResponseEntity.ok(response);
     }
 }

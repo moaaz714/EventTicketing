@@ -1,13 +1,7 @@
 package com.team22.eventticketing.sales.entity;
 
 import jakarta.persistence.*;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonBackReference;
-import java.time.LocalDateTime;
-
-
-
-
 import java.time.LocalDateTime;
 
 /**
