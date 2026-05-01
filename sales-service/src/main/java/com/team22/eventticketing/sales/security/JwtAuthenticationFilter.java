@@ -10,19 +10,25 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
 
+@Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final UserLoaderHandler userLoaderHandler;
 
-    public JwtAuthenticationFilter(JwtService jwtService, UserLoaderHandler userLoaderHandler) {
+    public JwtAuthenticationFilter(JwtService jwtService) {
         this.jwtService = jwtService;
-        this.userLoaderHandler = userLoaderHandler;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.endsWith("/health");
     }
 
     @Override
@@ -31,7 +37,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        String requiredRole = resolveRequiredRole(request);
+        UserLoaderHandler userLoaderHandler = new UserLoaderHandler();
 
         AuthHandler tokenExtraction = new TokenExtractionHandler();
         AuthHandler signatureValidation = new SignatureValidationHandler(jwtService);
@@ -41,7 +47,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         signatureValidation.setNext(userLoaderHandler);
         userLoaderHandler.setNext(roleAuthorization);
 
-        AuthContext ctx = new AuthContext(request, requiredRole);
+        AuthContext ctx = new AuthContext(request, "ATTENDEE");
 
         try {
             tokenExtraction.handle(ctx);
@@ -61,17 +67,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         filterChain.doFilter(request, response);
-    }
-
-    private String resolveRequiredRole(HttpServletRequest request) {
-        String method = request.getMethod();
-        String path = request.getRequestURI();
-
-        if ("PUT".equalsIgnoreCase(method) && path.matches("/api/users/\\d+/role")) {
-            return "ADMIN";
-        }
-
-        return "ATTENDEE";
     }
 
     private void writeError(HttpServletResponse response, int status, String message)
