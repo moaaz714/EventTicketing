@@ -6,10 +6,13 @@ import org.springframework.http.ResponseEntity;
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
 import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
+import com.team22.eventticketing.ticket.model.dto.TicketAnalyticsDTO;
+
 import org.springframework.web.bind.annotation.*;
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.service.TicketService;
+import com.team22.eventticketing.ticket.observer.MongoEventLogger;
 
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -21,9 +24,11 @@ import java.util.Map;
 public class ticketController {
 
     private final TicketService ticketService;
+    private final MongoEventLogger eventLogger;
 
-    public ticketController(TicketService ticketService) {
+    public ticketController(TicketService ticketService, MongoEventLogger eventLogger) {
         this.ticketService = ticketService;
+        this.eventLogger = eventLogger;
     }
 
     // [S4-F1]
@@ -143,5 +148,27 @@ public class ticketController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) String status) {
         return ticketService.getTicketHistory(startDate, endDate, status);
+    }
+
+    // S4-F10
+    @GetMapping("/analytics")
+    public ResponseEntity<TicketAnalyticsDTO> getTicketAnalyticsDashboard(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        // STEP 4: Trigger the Observer Pattern for Observability logging.
+        // Doing this HERE ensures it runs on every invocation, bypassing the Redis
+        // cache[cite: 1].
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("startDate", startDate);
+        payload.put("endDate", endDate);
+
+        // Log the purely observability action to MongoDB via the Observer chain[cite:
+        // 1]
+        eventLogger.onEvent("ANALYTICS_VIEWED", payload);
+
+        // STEP 5: Call the cached Service method and return a 200 OK[cite: 1]
+        TicketAnalyticsDTO response = ticketService.getAnalytics(startDate, endDate);
+        return ResponseEntity.ok(response);
     }
 }
