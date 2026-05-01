@@ -1,8 +1,6 @@
 package com.team22.eventticketing.sales.dto;
 
-import com.team22.eventticketing.sales.entity.enums.DiscountType;
-import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
-import com.team22.eventticketing.sales.entity.enums.SaleStatus;
+import com.team22.eventticketing.sales.entity.*;
 
 import java.util.List;
 import java.util.Map;
@@ -11,7 +9,7 @@ public class PromotionUsageDTO {
 
     private Long promotionId;
     private String code;
-    private DiscountType discountType;
+    private Promotion.DiscountType discountType;
     private Double discountValue;
     private Integer timesUsed;
     private Double totalDiscountGiven;
@@ -49,7 +47,7 @@ public class PromotionUsageDTO {
     public static class Builder{
         private Long promotionId;
         private String code;
-        private DiscountType discountType;
+        private Promotion.DiscountType discountType;
         private Double discountValue;
         private Integer timesUsed;
         private Double totalDiscountGiven;
@@ -58,7 +56,7 @@ public class PromotionUsageDTO {
 
         public Builder promotionId(Long promotionId){this.promotionId=promotionId;return this;}
         public Builder code(String code){this.code=code;return this;}
-        public Builder discountType(DiscountType discountType){this.discountType=discountType;return this;}
+        public Builder discountType(Promotion.DiscountType discountType){this.discountType=discountType;return this;}
         public Builder discountValue(Double discountValue){this.discountValue=discountValue;return this;}
         public Builder timesUsed(Integer timesUsed){this.timesUsed=timesUsed;return this;}
         public Builder totalDiscountGiven(Double totalDiscountGiven){this.totalDiscountGiven=totalDiscountGiven;return this;}
@@ -76,8 +74,8 @@ public class PromotionUsageDTO {
     public String getCode() { return code; }
     public void setCode(String code) { this.code = code; }
 
-    public DiscountType getDiscountType() { return discountType; }
-    public void setDiscountType(DiscountType discountType) { this.discountType = discountType; }
+    public Promotion.DiscountType getDiscountType() { return discountType; }
+    public void setDiscountType(Promotion.DiscountType discountType) { this.discountType = discountType; }
 
     public Double getDiscountValue() { return discountValue; }
     public void setDiscountValue(Double discountValue) { this.discountValue = discountValue; }

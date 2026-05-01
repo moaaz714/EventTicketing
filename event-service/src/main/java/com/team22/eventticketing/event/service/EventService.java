@@ -174,9 +174,8 @@ public class EventService {
             double totalRevenue = row[1] == null ? 0.0 : ((Number) row[1]).doubleValue();
             double avg = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
 
-            return new EventRevenueDTO(eventId, event.getName(), totalBookings, totalRevenue, avg);
-        }
 
+        }
         return EventRevenueDTO.builder()
                 .eventId(eventId)
                 .name(event.getName())
@@ -184,6 +183,8 @@ public class EventService {
                 .totalRevenue(0.0)
                 .averageBookingAmount(0.0)
                 .build();
+
+
     }
 
     // ─── [S2-F7] Rate an Event (write — invalidates) ──────────────────────────────
