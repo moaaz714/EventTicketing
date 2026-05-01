@@ -98,7 +98,13 @@ public class SalesService {
         double refundedAmount = refunded.stream().mapToDouble(TicketSale::getAmount).sum();
         int refundCount = refunded.size();
 
-        return new RevenueReportDTO(totalRevenue, totalTransactions, averageSale, refundedAmount, refundCount);
+        return RevenueReportDTO.builder()
+                .totalRevenue(totalRevenue)
+                .totalTransactions(totalTransactions)
+                .averageSale(averageSale)
+                .refundedAmount(refundedAmount)
+                .refundCount(refundCount)
+                .build();
     }
 
     // ─── [S5-F5] Apply Promotion to Sale (write — invalidates) ───────────────────

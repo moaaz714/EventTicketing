@@ -142,7 +142,12 @@ public class TicketSaleService {
             totalAmount += total;
         }
 
-        return new UserSaleSummaryDTO(userId, totalSales, totalAmount, methodBreakdown);
+        return UserSaleSummaryDTO.builder()
+                .userId(userId)
+                .totalSales(totalSales)
+                .totalAmount(totalAmount)
+                .methodBreakdown(methodBreakdown)
+                .build();
     }
 
     // ─── [S5-F1] Search Sales ────────────────────────────────────────────────────
@@ -215,17 +220,18 @@ public class TicketSaleService {
 
         double finalAmount = sale.getAmount() - totalDiscount;
 
-        return new SaleDetailsDTO(
-                sale.getId(),
-                sale.getBookingId(),
-                sale.getUserId(),
-                sale.getAmount(),
-                sale.getMethod(),
-                sale.getStatus(),
-                sale.getTransactionDetails(),
-                appliedPromotions,
-                totalDiscount,
-                finalAmount);
+        return SaleDetailsDTO.builder()
+                .saleId(sale.getId())
+                .bookingId(sale.getBookingId())
+                .userId(sale.getUserId())
+                .originalAmount(sale.getAmount())
+                .method(sale.getMethod())
+                .status(sale.getStatus())
+                .transactionDetails(sale.getTransactionDetails())
+                .appliedPromotions(appliedPromotions)
+                .totalDiscount(totalDiscount)
+                .finalAmount(finalAmount)
+                .build();
     }
 
     // ─── [S5-F4] Process Booking Payment (write — invalidates) ───────────────────

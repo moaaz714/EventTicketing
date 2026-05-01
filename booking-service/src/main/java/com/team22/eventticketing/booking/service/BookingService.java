@@ -185,7 +185,14 @@ public class BookingService {
         double avg     = completed > 0 ? revenue / completed : 0.0;
         double rate    = total > 0 ? (completed * 100.0) / total : 0.0;
 
-        return new BookingAnalyticsDTO(total, completed, cancelled, revenue, avg, rate);
+        return BookingAnalyticsDTO.builder()
+                .totalBookings(total)
+                .completedBookings(completed)
+                .cancelledBookings(cancelled)
+                .totalRevenue(revenue)
+                .averageBookingAmount(avg)
+                .completionRate(rate)
+                .build();
     }
 
     // ─── [S3-F2] Cancel Booking (write — invalidates) ────────────────────────────
@@ -281,17 +288,17 @@ public class BookingService {
                 .filter(i -> i.getStatus().equals("CONFIRMED"))
                 .count();
 
-        return new BookingDetailsDTO(
-                booking.getId(),
-                booking.getUserId(),
-                booking.getEventId(),
-                booking.getStatus().name(),
-                booking.getTotalAmount(),
-                booking.getMetadata(),
-                itemDTOs,
-                itemDTOs.size(),
-                confirmedItems
-        );
+        return BookingDetailsDTO.builder()
+                .bookingId(booking.getId())
+                .userId(booking.getUserId())
+                .eventId(booking.getEventId())
+                .status(booking.getStatus().name())
+                .totalAmount(booking.getTotalAmount())
+                .metadata(booking.getMetadata())
+                .items(itemDTOs)
+                .totalItems(itemDTOs.size())
+                .confirmedItems(confirmedItems)
+                .build();
     }
 
     // ─── [S3-F7] Confirm Booking (write — invalidates) ───────────────────────────
@@ -350,7 +357,12 @@ public class BookingService {
         }
 
         double estimatedTotal = (ticketCost + serviceFee) * demandMultiplier;
-        BookingCostEstimateDTO result = new BookingCostEstimateDTO(ticketCost, serviceFee, estimatedTotal, demandMultiplier);
+        BookingCostEstimateDTO result = BookingCostEstimateDTO.builder()
+                .ticketCost(ticketCost)
+                .serviceFee(serviceFee)
+                .estimatedTotal(estimatedTotal)
+                .demandMultiplier(demandMultiplier)
+                .build();
 
         try {
             redisTemplate.opsForValue().set(cacheKey, result, Duration.ofMinutes(5));

@@ -95,8 +95,16 @@ public class PromotionService {
             LocalDateTime expiry   = ((Timestamp) row[7]).toLocalDateTime();
             boolean expired        = expiry.isBefore(LocalDateTime.now());
 
-            return new PromotionUsageDTO(promotionId, code, discType, discountValue,
-                    timesUsed, totalDiscount, active, expired);
+            return PromotionUsageDTO.builder()
+                    .promotionId(promotionId)
+                    .code(code)
+                    .discountType(discType)
+                    .discountValue(discountValue)
+                    .timesUsed(timesUsed)
+                    .totalDiscountGiven(totalDiscount)
+                    .active(active)
+                    .expired(expired)
+                    .build();
         }).toList();
     }
 
