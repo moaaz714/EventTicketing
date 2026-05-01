@@ -4,9 +4,7 @@ import com.team22.eventticketing.sales.dto.RevenueReportDTO;
 import com.team22.eventticketing.sales.entity.Promotion;
 import com.team22.eventticketing.sales.entity.SalePromotion;
 import com.team22.eventticketing.sales.entity.TicketSale;
-import com.team22.eventticketing.sales.entity.enums.DiscountType;
-import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
-import com.team22.eventticketing.sales.entity.enums.SaleStatus;
+import com.team22.eventticketing.sales.entity.*;
 import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.PromotionRepository;
 import com.team22.eventticketing.sales.repository.SalePromotionRepository;
@@ -51,7 +49,7 @@ public class SalesService {
 
     // ─── [S5-F4] Process booking payment (write — invalidates) ───────────────────
     @Transactional
-    public TicketSale processBookingPayment(Long bookingId, PaymentMethod method, String cardLastFour) {
+    public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method, String cardLastFour) {
         String bookingStatus = ticketSaleRepository.findBookingStatus(bookingId);
 
         if (bookingStatus == null) {
@@ -70,7 +68,7 @@ public class SalesService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Booking not found"));
 
-        ticketSale.setStatus(SaleStatus.COMPLETED);
+        ticketSale.setStatus(TicketSale.SaleStatus.COMPLETED);
 
         Map<String, Object> transactionDetails = new HashMap<>();
         transactionDetails.put("method", method.name());
@@ -138,7 +136,7 @@ public class SalesService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Ticket sale not found"));
 
-        if (ticketSale.getStatus() != SaleStatus.PENDING) {
+        if (ticketSale.getStatus() != TicketSale.SaleStatus.PENDING) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "cannot apply promotion to a completed/cancelled sale");
         }

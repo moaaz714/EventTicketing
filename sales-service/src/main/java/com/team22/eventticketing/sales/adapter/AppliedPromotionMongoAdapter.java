@@ -1,7 +1,7 @@
 package com.team22.eventticketing.sales.adapter;
 
 import com.team22.eventticketing.sales.dto.AppliedPromotionDTO;
-import com.team22.eventticketing.sales.entity.enums.DiscountType;
+import com.team22.eventticketing.sales.entity.*;
 import org.bson.Document;
 
 import java.time.LocalDateTime;
@@ -15,7 +15,7 @@ public class AppliedPromotionMongoAdapter {
         dto.setPromotionCode(doc.getString("promotionCode"));
 
         dto.setDiscountType(
-                DiscountType.valueOf(doc.getString("discountType"))
+                Promotion.DiscountType.valueOf(doc.getString("discountType"))
         );
 
         dto.setDiscountApplied(doc.getDouble("discountApplied"));
