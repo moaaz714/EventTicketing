@@ -77,5 +77,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
         WHERE b.status = 'COMPLETED'
         GROUP BY b.user_id
         """, nativeQuery = true)
+    List<User> findByFavoriteCategoryAndMinBookings(
+            @Param("categoryJson") String categoryJson,
+            @Param("minBookings") int minBookings);
+
+    Optional<User> findByEmail(String email);
     List<Object[]> countCompletedBookingsPerUser();
 }
