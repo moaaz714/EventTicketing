@@ -1,5 +1,7 @@
+
 package com.team22.eventticketing.user.security;
 
+import com.team22.eventticketing.user.repository.UserRepository;
 import com.team22.eventticketing.user.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -10,19 +12,29 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
 
+@Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final UserLoaderHandler userLoaderHandler;
+    private final UserRepository userRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService, UserLoaderHandler userLoaderHandler) {
+    public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository) {
         this.jwtService = jwtService;
-        this.userLoaderHandler = userLoaderHandler;
+        this.userRepository = userRepository;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/api/auth/") ||
+                path.equals("/api/health") ||
+                path.equals("/api/users/health");
     }
 
     @Override
@@ -32,6 +44,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String requiredRole = resolveRequiredRole(request);
+
+        UserLoaderHandler userLoaderHandler = new UserLoaderHandler(userRepository);
 
         AuthHandler tokenExtraction = new TokenExtractionHandler();
         AuthHandler signatureValidation = new SignatureValidationHandler(jwtService);

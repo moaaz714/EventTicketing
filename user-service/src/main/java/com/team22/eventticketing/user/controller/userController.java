@@ -137,4 +137,16 @@ public class userController {
         return ResponseEntity.ok(
                 userService.findByFavoriteCategoryAndMinBookings(category, minBookings));
     }
+
+    // ─── [CC-2] Update User Role (ADMIN only) ────────────────────────────────────
+    @PutMapping("/{id}/role")
+    public ResponseEntity<User> updateRole(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        String role = body.get("role");
+        if (role == null || role.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(userService.updateRole(id, role));
+    }
 }
