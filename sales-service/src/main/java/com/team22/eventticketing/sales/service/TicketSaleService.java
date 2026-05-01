@@ -5,8 +5,9 @@ import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import static com.team22.eventticketing.sales.entity.TicketSale.SaleStatus;
+
 import static com.team22.eventticketing.sales.entity.TicketSale.PaymentMethod;
-import com.team22.eventticketing.sales.entity.Promotion;
+
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -17,7 +18,6 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 @Service
 public class TicketSaleService {
 
@@ -177,7 +177,8 @@ public class TicketSaleService {
                 .mapToDouble(AppliedPromotionDTO::getDiscountApplied)
                 .sum();
 
-        double finalAmount = sale.getAmount() - totalDiscount;
+        //double finalAmount = sale.getAmount() - totalDiscount;
+        double finalAmount = Math.max(0, sale.getAmount() - totalDiscount);
 
         return new SaleDetailsDTO(
                 sale.getId(),

@@ -14,11 +14,11 @@ import java.util.Map;
 @Entity
 @Table(name = "promotions")
 public class Promotion {
-
     public enum DiscountType {
         PERCENTAGE,
         FIXED
     }
+
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

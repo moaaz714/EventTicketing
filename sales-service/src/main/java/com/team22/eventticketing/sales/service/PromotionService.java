@@ -12,7 +12,6 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
-
 @Service
 public class PromotionService {
 

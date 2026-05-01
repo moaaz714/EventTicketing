@@ -2,7 +2,6 @@ package com.team22.eventticketing.sales;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-
 @SpringBootApplication
 public class SalesServiceApplication {
 

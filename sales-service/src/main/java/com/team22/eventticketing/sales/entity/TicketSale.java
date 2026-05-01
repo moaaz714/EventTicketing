@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 @Entity
 @Table(name = "ticket_sales")
 public class TicketSale {
@@ -21,12 +20,15 @@ public class TicketSale {
         WALLET
     }
 
+
     public enum SaleStatus {
         PENDING,
         COMPLETED,
         FAILED,
         REFUNDED
     }
+
+
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -48,6 +50,7 @@ public class TicketSale {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private SaleStatus status;
+
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")

@@ -21,13 +21,11 @@ public class SalePromotionService {
         this.ticketSaleRepository = ticketSaleRepository;
     }
 
-    // ─── Create ──────────────────────────────────────────────────────────────────
-
     public SalePromotion create(SalePromotion salePromotion) {
-        if (salePromotion.getTicketSale() != null && salePromotion.getTicketSale().getId() != null
-                && salePromotion.getDiscountApplied() != null) {
+        if (salePromotion.getTicketSale() != null && salePromotion.getTicketSale().getId() != null) {
             ticketSaleRepository.findById(salePromotion.getTicketSale().getId()).ifPresent(sale -> {
-                if (salePromotion.getDiscountApplied() > sale.getAmount()) {
+                if (salePromotion.getDiscountApplied() != null && sale.getAmount() != null
+                        && salePromotion.getDiscountApplied() > sale.getAmount()) {
                     salePromotion.setDiscountApplied(sale.getAmount());
                 }
             });
@@ -35,21 +33,15 @@ public class SalePromotionService {
         return salePromotionRepository.save(salePromotion);
     }
 
-    // ─── Read by ID ───────────────────────────────────────────────────────────────
-
     public SalePromotion findById(Long id) {
         return salePromotionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "SalePromotion not found with id: " + id));
     }
 
-    // ─── Read all ─────────────────────────────────────────────────────────────────
-
     public List<SalePromotion> findAll() {
         return salePromotionRepository.findAll();
     }
-
-    // ─── Update ───────────────────────────────────────────────────────────────────
 
     public SalePromotion update(Long id, SalePromotion patch) {
         SalePromotion existing = findById(id);
@@ -61,8 +53,6 @@ public class SalePromotionService {
 
         return salePromotionRepository.save(existing);
     }
-
-    // ─── Delete ───────────────────────────────────────────────────────────────────
 
     public void delete(Long id) {
         if (!salePromotionRepository.existsById(id)) {

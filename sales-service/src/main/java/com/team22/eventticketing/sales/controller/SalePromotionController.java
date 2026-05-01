@@ -4,7 +4,6 @@ import com.team22.eventticketing.sales.entity.SalePromotion;
 import com.team22.eventticketing.sales.service.SalePromotionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 @RestController
