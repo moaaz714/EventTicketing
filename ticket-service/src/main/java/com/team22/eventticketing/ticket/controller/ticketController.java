@@ -1,16 +1,15 @@
 package com.team22.eventticketing.ticket.controller;
 
+import com.team22.eventticketing.ticket.model.dto.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import com.team22.eventticketing.ticket.model.Ticket;
-import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
-import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
-import com.team22.eventticketing.ticket.model.dto.TicketAnalyticsDTO;
+import com.team22.eventticketing.ticket.model.dto.TicketScanRequestDTO;
+import com.team22.eventticketing.ticket.service.TicketScanService;
+
 
 import org.springframework.web.bind.annotation.*;
-import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
-import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.service.TicketService;
 import com.team22.eventticketing.ticket.observer.MongoEventLogger;
 
@@ -25,10 +24,14 @@ public class ticketController {
 
     private final TicketService ticketService;
     private final MongoEventLogger eventLogger;
+    private final TicketScanService ticketScanService;
 
-    public ticketController(TicketService ticketService, MongoEventLogger eventLogger) {
+    public ticketController(TicketService ticketService,
+                            MongoEventLogger eventLogger,
+                            TicketScanService ticketScanService) {
         this.ticketService = ticketService;
         this.eventLogger = eventLogger;
+        this.ticketScanService = ticketScanService;
     }
 
     // [S4-F1]
@@ -170,5 +173,23 @@ public class ticketController {
         // STEP 5: Call the cached Service method and return a 200 OK[cite: 1]
         TicketAnalyticsDTO response = ticketService.getAnalytics(startDate, endDate);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/scan")
+    public ResponseEntity<?> scanTicket(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody TicketScanRequestDTO request
+    ) {
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing or invalid token");
+        }
+
+        String token = authHeader.substring(7);
+
+        ticketScanService.recordScan(id, token, request);
+
+        return ResponseEntity.ok("Scan event recorded");
     }
 }
