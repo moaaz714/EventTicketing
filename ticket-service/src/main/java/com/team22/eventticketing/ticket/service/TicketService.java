@@ -1,5 +1,6 @@
 package com.team22.eventticketing.ticket.service;
 
+import com.team22.eventticketing.ticket.adapter.ObjectArrayDtoAdapter;
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketStatus;
 import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
@@ -188,19 +189,18 @@ public class TicketService {
     // ─── [S4-F3] Find Nearby Tickets (location DTO)
     // ───────────────────────────────
 
-    @Cacheable(cacheNames = "ticket-service::S4-F3", key = "#lat + ':' + #lon + ':' + #radiusKm")
+    @Cacheable(cacheNames = "ticket-service::S4-F3",
+            key = "#lat + ':' + #lon + ':' + #radiusKm")
     public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double radiusKm) {
-        List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon, radiusKm);
 
-        return results.stream().map(r -> NearbyTicketDTO.builder()
-                .ticketId(((Number) r[0]).longValue())
-                .attendeeName((String) r[1])
-                .bookingId(((Number) r[2]).longValue())
-                .eventName((String) r[3])
-                .eventLat(r[4] != null ? ((Number) r[4]).doubleValue() : null)
-                .eventLon(r[5] != null ? ((Number) r[5]).doubleValue() : null)
-                .distanceKm(((Number) r[6]).doubleValue())
-                .build()).collect(Collectors.toList());
+        List<Object[]> results =
+                ticketRepository.findNearbyTickets(lat, lon, radiusKm);
+
+        ObjectArrayDtoAdapter adapter = new ObjectArrayDtoAdapter();
+
+        return results.stream()
+                .map(adapter::adapt)
+                .collect(Collectors.toList());
     }
 
     // ─── [S4-F7] Purge Expired Tickets (write — invalidates) ─────────────────────
