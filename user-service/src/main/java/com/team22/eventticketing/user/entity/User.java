@@ -56,10 +56,6 @@ public class User {
 
     // ─── Enum Columns ────────────────────────────────────────────────────────────
 
-    /**
-     * Stored as a VARCHAR string in PostgreSQL (e.g. 'ATTENDEE', 'ADMIN').
-     * EnumType.STRING ensures the textual name, not the ordinal integer, is saved.
-     */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
