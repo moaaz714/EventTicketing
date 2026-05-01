@@ -28,7 +28,7 @@ public class TopAttendeeDTO {
         public Builder userId(Long userId) { this.userId = userId; return this; }
         public Builder name(String name) { this.name = name; return this; }
         public Builder totalSpent(Double totalSpent) { this.totalSpent = totalSpent; return this; }
-        public Builder averageBookingAmount(Long bookingCount) { this.bookingCount = bookingCount; return this; }
+        public Builder bookingCount(Long bookingCount) { this.bookingCount = bookingCount; return this; }
 
         public TopAttendeeDTO build() {
             return new TopAttendeeDTO(this);

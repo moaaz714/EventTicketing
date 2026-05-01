@@ -163,15 +163,15 @@ public class TicketService {
         List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon, radiusKm);
 
         return results.stream().map(r ->
-                new NearbyTicketDTO(
-                        ((Number) r[0]).longValue(),
-                        (String) r[1],
-                        ((Number) r[2]).longValue(),
-                        (String) r[3],
-                        r[4] != null ? ((Number) r[4]).doubleValue() : null,
-                        r[5] != null ? ((Number) r[5]).doubleValue() : null,
-                        ((Number) r[6]).doubleValue()
-                )
+                 NearbyTicketDTO.builder()
+                         .ticketId(((Number) r[0]).longValue())
+                         .attendeeName((String) r[1])
+                         .bookingId(((Number) r[2]).longValue())
+                         .eventName((String) r[3])
+                         .eventLat(r[4] != null ? ((Number) r[4]).doubleValue() : null)
+                         .eventLon(r[5] != null ? ((Number) r[5]).doubleValue() : null)
+                         .distanceKm(((Number) r[6]).doubleValue())
+                         .build()
         ).collect(Collectors.toList());
     }
 
@@ -202,19 +202,25 @@ public class TicketService {
         long valid = ((Number) data.getOrDefault("_valid", 0)).longValue();
         LocalDateTime last = (LocalDateTime) data.get("last_checkin");
 
-        return new EventAttendanceSummaryDTO(eventId, total, used, valid, last);
+        return EventAttendanceSummaryDTO.builder()
+                .eventId(eventId)
+                .totalTickets(total)
+                .usedTickets(used)
+                .validTickets(valid)
+                .lastCheckIn(last)
+                .build();
     }
 
     public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
         List<Map<String, Object>> results = ticketRepository.findUnusedUpcomingTicketsNative();
 
-        return results.stream().map(row -> new UnusedTicketDTO(
-                ((Number) row.get("ticketId")).longValue(),
-                (String) row.get("attendeeName"),
-                (String) row.get("ticketCode"),
-                ((Number) row.get("bookingId")).longValue(),
-                (String) row.get("eventName"),
-                (LocalDateTime) row.get("eventDate"))).toList();
+        return results.stream().map(row -> UnusedTicketDTO.builder()
+                        .ticketId(((Number) row.get("ticketId")).longValue())
+                        .attendeeName((String) row.get("attendeeName"))
+                        .ticketCode((String) row.get("ticketCode"))
+                        .bookingId(((Number) row.get("bookingId")).longValue())
+                        .eventName((String) row.get("eventName"))
+                        .eventDate((LocalDateTime) row.get("eventDate")).build()).toList();
     }
 
     // ==================== S4-F6: Get Tickets in Date Range ====================

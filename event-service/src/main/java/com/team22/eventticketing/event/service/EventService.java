@@ -131,7 +131,12 @@ public class EventService {
             Double rating = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
             Long totalBookings = row[3] == null ? 0L : ((Number) row[3]).longValue();
 
-            result.add(new TopEventDTO(eventId, name, rating, totalBookings));
+            result.add( TopEventDTO.builder()
+                    .eventId(eventId)
+                    .name(name)
+                    .rating(rating)
+                    .totalBookings(totalBookings)
+                    .build());
         }
 
         return result;
@@ -161,13 +166,13 @@ public class EventService {
         double totalRevenue = ((Number) stats[1]).doubleValue();
         double avg = ((Number) stats[2]).doubleValue(); // already computed in DB
 
-        return new EventRevenueDTO(
-                eventId,
-                event.getName(),
-                totalBookings,
-                totalRevenue,
-                avg
-        );
+        return EventRevenueDTO.builder()
+                .eventId(eventId)
+                .name(event.getName())
+                .totalBookings(totalBookings)
+                .totalRevenue(totalRevenue)
+                .averageBookingAmount(avg)
+                .build();
     }
 
     // [S2-F7] Rate an Event
@@ -256,13 +261,13 @@ public class EventService {
                             .filter(session -> session.getVerified() != null && !session.getVerified())
                             .toList();
 
-            return new EventSessionAlertDTO(
-                    event.getId(),
-                    event.getName(),
-                    event.getStatus(),
-                    unverifiedSessions,
-                    unverifiedSessions.size()
-            );
+            return  EventSessionAlertDTO.builder()
+                    .eventId(event.getId())
+                    .eventName(event.getName())
+                    .eventStatus(event.getStatus())
+                    .unverifiedSessions(unverifiedSessions)
+                    .unverifiedCount(unverifiedSessions.size())
+                    .build();
         }).toList();
     }
 

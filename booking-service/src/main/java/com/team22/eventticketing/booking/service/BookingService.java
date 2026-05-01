@@ -146,7 +146,14 @@ public class BookingService {
         double avg     = completed > 0 ? revenue / completed : 0.0;
         double rate    = total > 0 ? (completed * 100.0) / total : 0.0;
 
-        return new BookingAnalyticsDTO(total, completed, cancelled, revenue, avg, rate);
+        return BookingAnalyticsDTO.builder()
+                .totalBookings(total)
+                .completedBookings(completed)
+                .cancelledBookings(cancelled)
+                .totalRevenue(revenue)
+                .averageBookingAmount(avg)
+                .completionRate(rate)
+                .build();
     }
 
     @Transactional
@@ -230,17 +237,17 @@ public class BookingService {
                 .filter(i -> i.getStatus().equals("CONFIRMED"))
                 .count();
 
-        return new BookingDetailsDTO(
-                booking.getId(),
-                booking.getUserId(),
-                booking.getEventId(),
-                booking.getStatus().name(),
-                booking.getTotalAmount(),
-                booking.getMetadata(),
-                itemDTOs,
-                itemDTOs.size(),
-                confirmedItems
-        );
+        return BookingDetailsDTO.builder()
+                .bookingId(booking.getId())
+                .userId(booking.getUserId())
+                .eventId(booking.getEventId())
+                .status(booking.getStatus().name())
+                .totalAmount(booking.getTotalAmount())
+                .metadata(booking.getMetadata())
+                .items(itemDTOs)
+                .totalItems(itemDTOs.size())
+                .confirmedItems(confirmedItems)
+                .build();
     }
 
     @Transactional
@@ -302,6 +309,11 @@ public class BookingService {
         double estimatedTotal = (ticketCost + serviceFee) * demandMultiplier;
 
         // Return the mapped DTO
-        return new BookingCostEstimateDTO(ticketCost, serviceFee, estimatedTotal, demandMultiplier);
+        return BookingCostEstimateDTO.builder()
+                .ticketCost(ticketCost)
+                .serviceFee(serviceFee)
+                .estimatedTotal(estimatedTotal)
+                .demandMultiplier(demandMultiplier)
+                .build();
     }
 }
