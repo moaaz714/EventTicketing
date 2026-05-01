@@ -28,7 +28,7 @@ public class MongoDocumentAdapter {
                 .completedBookings(completedBookings)
                 .cancelledBookings(cancelledBookings)
                 .totalRevenue(totalRevenue)
-                .avgBookingAmount(avgBookingAmount)
+                .averageBookingAmount(avgBookingAmount)
                 .completionRate(completionRate)
                 .build();
     }
