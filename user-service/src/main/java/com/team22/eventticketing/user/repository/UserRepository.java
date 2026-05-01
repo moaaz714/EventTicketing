@@ -17,7 +17,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query(value = "SELECT * FROM users WHERE " +
            "(:name IS NULL OR LOWER(name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +
            "(:email IS NULL OR LOWER(email) LIKE LOWER(CONCAT('%', :email, '%'))) AND " +
-           "(:role IS NULL OR role = :role)",
+           "(:role IS NULL OR role::text = :role)",
            nativeQuery = true)
     List<User> searchUsers(@Param("name") String name,
                            @Param("email") String email,
@@ -44,11 +44,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
         """, nativeQuery = true)
     long countActiveBookingsByUserId(@Param("userId") Long userId);
 
-    // S1-F5: filter users by a JSONB preferences key-value pair
-    @Query(value = "SELECT * FROM users WHERE preferences ->> :key = :value",
-           nativeQuery = true)
-    List<User> findByPreference(@Param("key") String key,
-                                @Param("value") String value);
+    // S1-F5: all users (preference filtering done in-service for DB portability)
+    @Query("SELECT u FROM User u")
+    List<User> findAllUsers();
 
     // S1-F6: top N attendees by total spending in a date range
     @Query(value = """
@@ -72,19 +70,17 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.favoriteVenues WHERE u.id = :id")
     Optional<User> findByIdWithVenues(@Param("id") Long id);
 
-    // S1-F9
-    @Transactional
+    // S1-F9: completed booking count per user (category filtering done in-service)
     @Query(value = """
-        SELECT u.* FROM users u
-        WHERE u.preferences @> CAST(:categoryJson AS jsonb)
-        AND (
-            (SELECT COUNT(b.id)
-            FROM bookings b
-            WHERE b.user_id = u.id
-            AND b.status = 'COMPLETED'
-          ) >= :minBookings)
+        SELECT b.user_id, COUNT(b.id)
+        FROM bookings b
+        WHERE b.status = 'COMPLETED'
+        GROUP BY b.user_id
         """, nativeQuery = true)
     List<User> findByFavoriteCategoryAndMinBookings(
             @Param("categoryJson") String categoryJson,
             @Param("minBookings") int minBookings);
+
+    Optional<User> findByEmail(String email);
+    List<Object[]> countCompletedBookingsPerUser();
 }

@@ -31,6 +31,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: on-failure
 
   # Event Service (Port 8082)
   event-service:
@@ -167,7 +168,7 @@ services:
       CASSANDRA_DC: datacenter1
       CASSANDRA_KEYSPACE: eventticketingks
       # Memory limits applied here:
-      MAX_HEAP_SIZE: 512M
+      MAX_HEAP_SIZE: 200M
       HEAP_NEWSIZE: 128M
     volumes:
       - cassandra-data:/var/lib/cassandra
