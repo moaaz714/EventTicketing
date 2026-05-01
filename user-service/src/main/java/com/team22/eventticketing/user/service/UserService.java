@@ -92,6 +92,22 @@ public class UserService {
         return saved;
     }
 
+    // ─── [CC-2] Update Role ───────────────────────────────────────────────────────
+
+    public User updateRole(Long id, String roleStr) {
+        Role newRole;
+        try {
+            newRole = Role.valueOf(roleStr);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid role value: " + roleStr);
+        }
+
+        User user = findById(id);
+        user.setRole(newRole);
+        return userRepository.save(user);
+    }
+
     // ─── [S1-F1] Search ───────────────────────────────────────────────────────────
 
     @Cacheable(cacheNames = "user-service::S1-F1",
