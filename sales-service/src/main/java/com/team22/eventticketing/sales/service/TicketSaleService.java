@@ -4,8 +4,7 @@ import com.team22.eventticketing.sales.dto.AppliedPromotionDTO;
 import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
-import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
-import com.team22.eventticketing.sales.entity.enums.SaleStatus;
+import com.team22.eventticketing.sales.entity.*;
 import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
 import org.springframework.cache.annotation.Cacheable;
@@ -20,7 +19,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 @Service
 public class TicketSaleService {
 
@@ -102,12 +100,12 @@ public class TicketSaleService {
     public TicketSale refund(Long id, String reason) {
         TicketSale sale = findById(id);
 
-        if (sale.getStatus() != SaleStatus.COMPLETED) {
+        if (sale.getStatus() != TicketSale.SaleStatus.COMPLETED) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Only COMPLETED sales can be refunded");
         }
 
-        sale.setStatus(SaleStatus.REFUNDED);
+        sale.setStatus(TicketSale.SaleStatus.REFUNDED);
         sale.getTransactionDetails().put("refundReason", reason);
         sale.getTransactionDetails().put("refundedAt", LocalDateTime.now().toString());
 
@@ -171,12 +169,12 @@ public class TicketSaleService {
     public TicketSale retry(Long id) {
         TicketSale sale = findById(id);
 
-        if (sale.getStatus() != SaleStatus.FAILED) {
+        if (sale.getStatus() != TicketSale.SaleStatus.FAILED) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Only FAILED sales can be retried");
         }
 
-        sale.setStatus(SaleStatus.COMPLETED);
+        sale.setStatus(TicketSale.SaleStatus.COMPLETED);
 
         Map<String, Object> details = sale.getTransactionDetails();
         if (details == null) {
@@ -218,7 +216,8 @@ public class TicketSaleService {
                 .mapToDouble(AppliedPromotionDTO::getDiscountApplied)
                 .sum();
 
-        double finalAmount = sale.getAmount() - totalDiscount;
+        //double finalAmount = sale.getAmount() - totalDiscount;
+        double finalAmount = Math.max(0, sale.getAmount() - totalDiscount);
 
         return SaleDetailsDTO.builder()
                 .saleId(sale.getId())
@@ -237,7 +236,7 @@ public class TicketSaleService {
     // ─── [S5-F4] Process Booking Payment (write — invalidates) ───────────────────
 
     @Transactional
-    public TicketSale processBookingPayment(Long bookingId, PaymentMethod method, String cardLastFour) {
+    public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method, String cardLastFour) {
         String bookingStatus = ticketSaleRepository.findBookingStatus(bookingId);
         if (bookingStatus == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found: " + bookingId);
@@ -250,12 +249,12 @@ public class TicketSaleService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "TicketSale not found for booking: " + bookingId));
 
-        if (sale.getStatus() == SaleStatus.COMPLETED) {
+        if (sale.getStatus() == TicketSale.SaleStatus.COMPLETED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
         }
 
         sale.setMethod(method);
-        sale.setStatus(SaleStatus.COMPLETED);
+        sale.setStatus(TicketSale.SaleStatus.COMPLETED);
 
         if (sale.getTransactionDetails() == null) sale.setTransactionDetails(new java.util.HashMap<>());
         sale.getTransactionDetails().put("paymentMethod", method.toString());

@@ -1,7 +1,8 @@
 package com.team22.eventticketing.sales.adapter;
 
 import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
-import com.team22.eventticketing.sales.entity.enums.DiscountType;
+import com.team22.eventticketing.sales.entity.Promotion;
+import com.team22.eventticketing.sales.entity.Promotion.DiscountType;
 import org.bson.Document;
 
 public class PromotionUsageMongoAdapter {
@@ -9,7 +10,7 @@ public class PromotionUsageMongoAdapter {
         return PromotionUsageDTO.builder()
                 .promotionId(doc.getLong("promotionId"))
                 .code(doc.getString("code"))
-                .discountType(DiscountType.valueOf(doc.getString("discountType")))
+                .discountType(Promotion.DiscountType.valueOf(doc.getString("discountType")))
                 .discountValue(doc.getDouble("discountValue"))
                 .timesUsed(doc.getInteger("timesUsed"))
                 .totalDiscountGiven(doc.getDouble("totalDiscountGiven"))

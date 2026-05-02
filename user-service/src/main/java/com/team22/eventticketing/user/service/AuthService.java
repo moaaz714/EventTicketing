@@ -1,6 +1,7 @@
 package com.team22.eventticketing.user.service;
 
 import com.team22.eventticketing.user.dto.AuthResponse;
+import com.team22.eventticketing.user.dto.LoginRequest;
 import com.team22.eventticketing.user.dto.RegisterRequest;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
@@ -69,6 +70,29 @@ public class AuthService {
         String token = jwtService.generateToken(user.getId(), user.getEmail(), user.getRole().name());
 
         // g) Return 201
+        return new AuthResponse(token, jwtService.getExpirationMs());
+    }
+
+    // ─── [S1-F11] Login ───────────────────────────────────────────────────────────
+
+    public AuthResponse login(LoginRequest request) {
+
+        // a) Find user by email — 401 if not found (do not reveal whether email exists)
+        User user = userRepository.findByEmail(request.email())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED, "Invalid credentials"));
+
+        // b) Verify password — 401 if wrong (same message to prevent enumeration)
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+        }
+
+        // c) MongoDB logging skipped for now
+
+        // d) Generate token
+        String token = jwtService.generateToken(user.getId(), user.getEmail(), user.getRole().name());
+
+        // e) Return 200
         return new AuthResponse(token, jwtService.getExpirationMs());
     }
 }

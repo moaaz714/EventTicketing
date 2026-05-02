@@ -2,8 +2,7 @@ package com.team22.eventticketing.sales.adapter;
 
 import com.team22.eventticketing.sales.dto.AppliedPromotionDTO;
 import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
-import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
-import com.team22.eventticketing.sales.entity.enums.SaleStatus;
+import com.team22.eventticketing.sales.entity.*;
 import org.bson.Document;
 
 import java.util.ArrayList;
@@ -33,8 +32,8 @@ public class SaleDetailsMongoAdapter {
                 .bookingId(doc.getLong("bookingId"))
                 .userId(doc.getLong("userId"))
                 .originalAmount(doc.getDouble("originalAmount"))
-                .method(PaymentMethod.valueOf(doc.getString("method")))
-                .status(SaleStatus.valueOf(doc.getString("status")))
+                .method(TicketSale.PaymentMethod.valueOf(doc.getString("method")))
+                .status(TicketSale.SaleStatus.valueOf(doc.getString("status")))
                 .transactionDetails((Map<String, Object>) doc.get("transactionDetails"))
                 .appliedPromotions(appliedPromotions)
                 .totalDiscount(doc.getDouble("totalDiscount"))
