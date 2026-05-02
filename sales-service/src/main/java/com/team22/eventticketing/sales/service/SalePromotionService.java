@@ -32,8 +32,6 @@ public class SalePromotionService {
         for (EntityObserver o : observers) o.onEvent(action, payload);
     }
 
-    // ─── Create ──────────────────────────────────────────────────────────────────
-
     public SalePromotion create(SalePromotion salePromotion) {
         SalePromotion saved = salePromotionRepository.save(salePromotion);
         notifyObservers("SALE_PROMOTION_LINKED", Map.of("salePromotionId", saved.getId()));

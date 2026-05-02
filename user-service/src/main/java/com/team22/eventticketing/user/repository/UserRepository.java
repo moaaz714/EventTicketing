@@ -70,6 +70,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.favoriteVenues WHERE u.id = :id")
     Optional<User> findByIdWithVenues(@Param("id") Long id);
 
+
+    Optional<User> findByEmail(String email);
+
+    boolean existsByEmail(String email);
+    boolean existsByPhone(String phone);
+
     // S1-F9: completed booking count per user (category filtering done in-service)
     @Query(value = """
         SELECT b.user_id, COUNT(b.id)
@@ -77,14 +83,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
         WHERE b.status = 'COMPLETED'
         GROUP BY b.user_id
         """, nativeQuery = true)
-    List<User> findByFavoriteCategoryAndMinBookings(
-            @Param("categoryJson") String categoryJson,
-            @Param("minBookings") int minBookings);
-
-    Optional<User> findByEmail(String email);
-
-    boolean existsByEmail(String email);
-    boolean existsByPhone(String phone);
-
     List<Object[]> countCompletedBookingsPerUser();
 }

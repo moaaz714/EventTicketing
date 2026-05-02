@@ -1,5 +1,8 @@
 package com.team22.eventticketing.ticket.service;
 
+import com.team22.eventticketing.ticket.adapter.CassandraRowAdapter;
+import com.team22.eventticketing.ticket.adapter.ObjectArrayDtoAdapter;
+import com.team22.eventticketing.ticket.adapter.PostgresRowAdapter;
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketStatus;
 import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
@@ -190,17 +193,14 @@ public class TicketService {
 
     @Cacheable(cacheNames = "ticket-service::S4-F3", key = "#lat + ':' + #lon + ':' + #radiusKm")
     public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double radiusKm) {
+
         List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon, radiusKm);
 
-        return results.stream().map(r -> NearbyTicketDTO.builder()
-                .ticketId(((Number) r[0]).longValue())
-                .attendeeName((String) r[1])
-                .bookingId(((Number) r[2]).longValue())
-                .eventName((String) r[3])
-                .eventLat(r[4] != null ? ((Number) r[4]).doubleValue() : null)
-                .eventLon(r[5] != null ? ((Number) r[5]).doubleValue() : null)
-                .distanceKm(((Number) r[6]).doubleValue())
-                .build()).collect(Collectors.toList());
+        ObjectArrayDtoAdapter adapter = new ObjectArrayDtoAdapter();
+
+        return results.stream()
+                .map(adapter::adapt)
+                .collect(Collectors.toList());
     }
 
     // ─── [S4-F7] Purge Expired Tickets (write — invalidates) ─────────────────────
@@ -222,22 +222,19 @@ public class TicketService {
     public EventAttendanceSummaryDTO getSummary(Long eventId) {
         Map<String, Object> data = ticketRepository.getAttendanceSummaryData(eventId);
 
-        long total = ((Number) data.getOrDefault("total", 0)).longValue();
-        if (total == 0) {
+        // 1. Business Validation: Keep the 404 check in the service layer
+        if (data == null || ((Number) data.getOrDefault("total", 0)).longValue() == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No tickets found for event: " + eventId);
         }
 
-        long used = ((Number) data.getOrDefault("used", 0)).longValue();
-        long valid = ((Number) data.getOrDefault("_valid", 0)).longValue();
-        LocalDateTime last = (LocalDateTime) data.get("last_checkin");
+        // 2. Data Safety: The adapter expects "eventId" to be inside the map.
+        // If your repository query doesn't explicitly return it, this prevents a
+        // NullPointerException.
+        data.putIfAbsent("eventId", eventId);
 
-        return EventAttendanceSummaryDTO.builder()
-                .eventId(eventId)
-                .totalTickets(total)
-                .usedTickets(used)
-                .validTickets(valid)
-                .lastCheckIn(last)
-                .build();
+        // 3. Structural Pattern: Delegate DTO creation to the Adapter
+        CassandraRowAdapter adapter = new CassandraRowAdapter();
+        return adapter.adapt(data);
     }
 
     // ─── [S4-F9] Unused Upcoming Tickets (combined)
@@ -245,15 +242,17 @@ public class TicketService {
 
     @Cacheable(cacheNames = "ticket-service::S4-F9", key = "'all'")
     public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
+
+        // Fetch the raw data from PostgreSQL
         List<Map<String, Object>> results = ticketRepository.findUnusedUpcomingTicketsNative();
 
-        return results.stream().map(row -> UnusedTicketDTO.builder()
-                .ticketId(((Number) row.get("ticketId")).longValue())
-                .attendeeName((String) row.get("attendeeName"))
-                .ticketCode((String) row.get("ticketCode"))
-                .bookingId(((Number) row.get("bookingId")).longValue())
-                .eventName((String) row.get("eventName"))
-                .eventDate((LocalDateTime) row.get("eventDate")).build()).toList();
+        // Instantiate the correct structural adapter
+        PostgresRowAdapter adapter = new PostgresRowAdapter();
+
+        // Stream and adapt the results
+        return results.stream()
+                .map(adapter::adapt)
+                .toList();
     }
 
     // ─── [S4-F6] Ticket History (date range report)
