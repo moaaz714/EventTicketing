@@ -16,6 +16,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.team22.eventticketing.event.model.EventSearchDocument;
+import com.team22.eventticketing.event.service.EventFullTextSearchService;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -25,9 +28,16 @@ import java.util.Map;
 public class eventController {
 
     private final EventService eventService;
+    private final EventFullTextSearchService eventFullTextSearchService;
 
-    public eventController(EventService eventService) {
+//    public eventController(EventService eventService) {
+//        this.eventService = eventService;
+//    }
+
+    public eventController(EventService eventService,
+                           EventFullTextSearchService eventFullTextSearchService) {
         this.eventService = eventService;
+        this.eventFullTextSearchService = eventFullTextSearchService;
     }
 
     @GetMapping("/health")
@@ -84,8 +94,44 @@ public class eventController {
         return ResponseEntity.ok(updatedEvent);
     }
 
-    // [S2-F1] Search Events
+    // [S2-F10] Full-Text Event Search
+    @GetMapping("/search/full-text")
+    public ResponseEntity<List<EventSearchDocument>> fullTextSearchEvents(
+            @RequestParam String query,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String venue,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) Double minRating,
+            @RequestParam(required = false) Double maxRating
+    ) {
+        LocalDateTime start = null;
+        LocalDateTime end = null;
 
+        if (startDate != null && !startDate.isBlank()) {
+            start = LocalDateTime.parse(startDate + "T00:00:00");
+        }
+
+        if (endDate != null && !endDate.isBlank()) {
+            end = LocalDateTime.parse(endDate + "T23:59:59");
+        }
+
+        return ResponseEntity.ok(
+                eventFullTextSearchService.fullTextSearch(
+                        query,
+                        category,
+                        venue,
+                        status,
+                        start,
+                        end,
+                        minRating,
+                        maxRating
+                )
+        );
+    }
+
+    // [S2-F1] Search Events
     @GetMapping("/search")
     public ResponseEntity<List<Event>> searchEvents(
             @RequestParam(required = false) EventCategory category,
