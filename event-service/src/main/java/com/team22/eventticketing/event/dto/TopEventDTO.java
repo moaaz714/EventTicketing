@@ -1,7 +1,7 @@
 package com.team22.eventticketing.event.dto;
 
-import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
-import com.team22.eventticketing.booking.dto.BookingItemDTO;
+//import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
+//import com.team22.eventticketing.booking.dto.BookingItemDTO;
 
 import java.util.List;
 import java.util.Map;

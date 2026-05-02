@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import com.team22.eventticketing.event.repository.EventSearchRepository;
+import com.team22.eventticketing.event.model.EventSearchDocument;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -32,13 +34,15 @@ public class EventService {
     private final EventSessionRepository eventSessionRepository;
     private final CacheEvictionService cacheEviction;
     private final List<EntityObserver> observers = new ArrayList<>();
+    private final EventSearchRepository eventSearchRepository;
 
     public EventService(EventRepository eventRepository,
                         EventSessionRepository eventSessionRepository,
-                        CacheEvictionService cacheEviction) {
+                        CacheEvictionService cacheEviction,EventSearchRepository eventSearchRepository) {
         this.eventRepository = eventRepository;
         this.eventSessionRepository = eventSessionRepository;
         this.cacheEviction = cacheEviction;
+        this.eventSearchRepository = eventSearchRepository;
     }
 
     public void register(EntityObserver observer) { observers.add(observer); }
@@ -105,6 +109,7 @@ public class EventService {
         Event saved = eventRepository.save(event);
         cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
         notifyObservers("EVENT_DETAILS_UPDATED", Map.of("eventId", id));
+        syncToElasticsearch(saved, "auto_crud_update");
         return saved;
     }
 
@@ -127,6 +132,7 @@ public class EventService {
 
         event.setStatus(newStatus);
         eventRepository.save(event);
+        syncToElasticsearch(event, "auto_crud_update");
         cacheEviction.evictEntityAndFeatures("event", eventId, "S2-F1", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
         notifyObservers("EVENT_STATUS_UPDATED", Map.of("eventId", eventId, "status", newStatus.name()));
     }
@@ -174,7 +180,6 @@ public class EventService {
             double totalRevenue = row[1] == null ? 0.0 : ((Number) row[1]).doubleValue();
             double avg = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
 
-            return new EventRevenueDTO(eventId, event.getName(), totalBookings, totalRevenue, avg);
         }
 
         return EventRevenueDTO.builder()
@@ -212,6 +217,7 @@ public class EventService {
         event.setTotalRatings(newCount);
         event.setRating(updatedAverage);
         eventRepository.save(event);
+        syncToElasticsearch(event, "auto_crud_update");
         cacheEviction.evictEntityAndFeatures("event", eventId, "S2-F3", "S2-F6");
         notifyObservers("EVENT_RATED", Map.of("eventId", eventId, "rating", newRating));
     }
@@ -277,6 +283,7 @@ public class EventService {
         cacheEviction.evictPattern("S2-F1");
         cacheEviction.evictPattern("S2-F10");
         notifyObservers("EVENT_CREATED", Map.of("eventId", saved.getId()));
+        syncToElasticsearch(saved, "auto_crud_create");
         return saved;
     }
 
@@ -297,7 +304,8 @@ public class EventService {
         existingEvent.setVenue(updatedEvent.getVenue());
         existingEvent.setEventDate(updatedEvent.getEventDate());
         existingEvent.setCategory(updatedEvent.getCategory());
-        // Do not update status/rating/etc here as those have specific endpoints
+        Event saved = eventRepository.save(existingEvent);
+        syncToElasticsearch(saved, "auto_crud_update");
         return eventRepository.save(existingEvent);
     }
 
@@ -306,8 +314,14 @@ public class EventService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found with id: " + id);
         }
         eventRepository.deleteById(id);
+
+
+        if (eventSearchRepository.existsById(String.valueOf(id))) {
+            eventSearchRepository.deleteById(String.valueOf(id));
+        }
+
         cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
-        notifyObservers("EVENT_DELETED", Map.of("eventId", id));
+        notifyObservers("EVENT_DELETED", Map.of("eventId", id)); // MS2 strictly says keep this EVENT_DELETED, not INDEXED
     }
 
     // ─── CRUD: EventSession ───────────────────────────────────────────────────────
@@ -360,4 +374,44 @@ public class EventService {
         cacheEviction.evictEntityAndFeatures("event-session", sessionId, "S2-F9");
         notifyObservers("SESSION_DELETED", Map.of("sessionId", sessionId));
     }
+
+    // ─── [S2-F11] Elasticsearch Synchronization Helper ────────────────────────────
+
+    private void syncToElasticsearch(Event pgEvent, String source) {
+        EventSearchDocument esDoc = new EventSearchDocument();
+        esDoc.setId(String.valueOf(pgEvent.getId()));
+        esDoc.setName(pgEvent.getName());
+        esDoc.setCategory(pgEvent.getCategory().name());
+        esDoc.setVenue(pgEvent.getVenue());
+        esDoc.setEventDate(pgEvent.getEventDate());
+        esDoc.setRating(pgEvent.getRating() != null ? pgEvent.getRating() : 0.0);
+        esDoc.setStatus(pgEvent.getStatus().name());
+
+        // Step c: Read the description key from the JSONB details (default empty)
+        String description = "";
+        if (pgEvent.getDetails() != null && pgEvent.getDetails().containsKey("description")) {
+            description = pgEvent.getDetails().get("description").toString();
+        }
+        esDoc.setDescription(description);
+
+        // Step d: Create or update the document in Elasticsearch
+        eventSearchRepository.save(esDoc);
+
+        // Step f: Log INDEXED event to MongoDB via Observer
+        List<String> indexedFields = List.of("id", "name", "category", "venue", "description", "eventDate", "rating", "status");
+        notifyObservers("INDEXED", Map.of(
+                "eventId", pgEvent.getId(),
+                "indexedFields", indexedFields,
+                "source", source
+        ));
+    }
+
+    // Explicit endpoint method (Steps b & c)
+    public void explicitIndexEvent(Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        syncToElasticsearch(event, "explicit");
+    }
+
+
 }
