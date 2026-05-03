@@ -93,4 +93,16 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
     );
+
+    // =========================
+    // S5-F12 (Refund Window Policy — fetch eventDate)
+    // =========================
+    @Query(value = """
+            SELECT e.event_date
+            FROM ticket_sales ts
+            JOIN bookings b ON b.id = ts.booking_id
+            JOIN events e ON e.id = b.event_id
+            WHERE ts.id = :saleId
+            """, nativeQuery = true)
+    LocalDateTime findEventDateBySaleId(@Param("saleId") Long saleId);
 }
