@@ -105,4 +105,25 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             WHERE ts.id = :saleId
             """, nativeQuery = true)
     LocalDateTime findEventDateBySaleId(@Param("saleId") Long saleId);
+
+    // =========================
+    // S5-F10 (Tier Revenue Analytics)
+    // =========================
+    @Query(value = """
+            SELECT
+              COALESCE(bi.metadata->>'ticketTier', 'UNSPECIFIED') AS tier,
+              SUM(bi.unit_price * bi.quantity)                    AS totalRevenue,
+              COUNT(DISTINCT ts.id)                              AS saleCount,
+              SUM(bi.quantity)                                   AS ticketsSold
+            FROM ticket_sales ts
+            JOIN bookings b      ON b.id  = ts.booking_id
+            JOIN booking_items bi ON bi.booking_id = b.id
+            WHERE ts.created_at BETWEEN :startDate AND :endDate
+              AND ts.status::text = 'COMPLETED'
+            GROUP BY COALESCE(bi.metadata->>'ticketTier', 'UNSPECIFIED')
+            """, nativeQuery = true)
+    List<Object[]> findTierRevenue(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 }
