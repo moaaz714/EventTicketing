@@ -2,27 +2,25 @@ package com.team22.eventticketing.event.service;
 
 import com.team22.eventticketing.event.model.EventSearchDocument;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
-import org.springframework.data.elasticsearch.core.SearchHit;
-import org.springframework.data.elasticsearch.core.SearchHits;
-import org.springframework.data.elasticsearch.core.query.Criteria;
-import org.springframework.data.elasticsearch.core.query.CriteriaQuery;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class EventFullTextSearchService {
 
-    private final ElasticsearchOperations elasticsearchOperations;
+    private final RestTemplate restTemplate = new RestTemplate();
 
-    public EventFullTextSearchService(ElasticsearchOperations elasticsearchOperations) {
-        this.elasticsearchOperations = elasticsearchOperations;
-    }
+    private static final String ELASTICSEARCH_SEARCH_URL =
+            "http://elasticsearch:9200/events/_search";
 
     @Cacheable(
             cacheNames = "event-service::S2-F10",
@@ -45,49 +43,216 @@ public class EventFullTextSearchService {
             Double minRating,
             Double maxRating
     ) {
-        if (query == null || query.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Query is required");
+        Map<String, Object> requestBody = buildSearchRequest(
+                query,
+                category,
+                venue,
+                status,
+                startDate,
+                endDate,
+                minRating,
+                maxRating
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+
+        Map response = restTemplate.postForObject(
+                ELASTICSEARCH_SEARCH_URL,
+                request,
+                Map.class
+        );
+
+        return extractResults(response);
+    }
+
+    private Map<String, Object> buildSearchRequest(
+            String query,
+            String category,
+            String venue,
+            String status,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            Double minRating,
+            Double maxRating
+    ) {
+        boolean hasQuery = query != null && !query.isBlank();
+
+        List<Map<String, Object>> mustQueries = new ArrayList<>();
+        List<Map<String, Object>> filters = new ArrayList<>();
+
+        if (hasQuery) {
+            String safeQuery = query.trim().toLowerCase();
+
+            mustQueries.add(Map.of(
+                    "query_string", Map.of(
+                            "query", "*" + safeQuery + "*",
+                            "fields", List.of("name", "description", "venue"),
+                            "analyze_wildcard", true,
+                            "default_operator", "OR"
+                    )
+            ));
+        } else {
+            mustQueries.add(Map.of("match_all", Map.of()));
         }
 
-        Criteria criteria = new Criteria("name").matches(query)
-                .or(new Criteria("description").matches(query))
-                .or(new Criteria("venue").matches(query));
-
         if (category != null && !category.isBlank()) {
-            criteria = criteria.and(new Criteria("category").is(category));
+            filters.add(Map.of(
+                    "match", Map.of(
+                            "category", category.trim().toUpperCase()
+                    )
+            ));
         }
 
         if (venue != null && !venue.isBlank()) {
-            criteria = criteria.and(new Criteria("venue").matches(venue));
+            filters.add(Map.of(
+                    "match_phrase", Map.of(
+                            "venue", venue.trim()
+                    )
+            ));
         }
 
         if (status != null && !status.isBlank()) {
-            criteria = criteria.and(new Criteria("status").is(status));
+            filters.add(Map.of(
+                    "match", Map.of(
+                            "status", status.trim().toUpperCase()
+                    )
+            ));
         }
 
-        if (startDate != null) {
-            criteria = criteria.and(new Criteria("eventDate").greaterThanEqual(startDate));
+        if (startDate != null || endDate != null) {
+            Map<String, Object> dateRange = new HashMap<>();
+
+            if (startDate != null) {
+                dateRange.put("gte", startDate.toString());
+            }
+
+            if (endDate != null) {
+                dateRange.put("lte", endDate.toString());
+            }
+
+            filters.add(Map.of(
+                    "range", Map.of(
+                            "eventDate", dateRange
+                    )
+            ));
         }
 
-        if (endDate != null) {
-            criteria = criteria.and(new Criteria("eventDate").lessThanEqual(endDate));
+        if (minRating != null || maxRating != null) {
+            Map<String, Object> ratingRange = new HashMap<>();
+
+            if (minRating != null) {
+                ratingRange.put("gte", minRating);
+            }
+
+            if (maxRating != null) {
+                ratingRange.put("lte", maxRating);
+            }
+
+            filters.add(Map.of(
+                    "range", Map.of(
+                            "rating", ratingRange
+                    )
+            ));
         }
 
-        if (minRating != null) {
-            criteria = criteria.and(new Criteria("rating").greaterThanEqual(minRating));
+        Map<String, Object> boolQuery = new HashMap<>();
+        boolQuery.put("must", mustQueries);
+
+        if (!filters.isEmpty()) {
+            boolQuery.put("filter", filters);
         }
 
-        if (maxRating != null) {
-            criteria = criteria.and(new Criteria("rating").lessThanEqual(maxRating));
+        Map<String, Object> finalQuery = Map.of(
+                "bool", boolQuery
+        );
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("query", finalQuery);
+
+        if (hasQuery) {
+            requestBody.put("sort", List.of(
+                    Map.of("_score", Map.of("order", "desc"))
+            ));
         }
 
-        CriteriaQuery searchQuery = new CriteriaQuery(criteria, PageRequest.of(0, 100));
+        return requestBody;
+    }
 
-        SearchHits<EventSearchDocument> hits =
-                elasticsearchOperations.search(searchQuery, EventSearchDocument.class);
+    private List<EventSearchDocument> extractResults(Map response) {
+        List<EventSearchDocument> results = new ArrayList<>();
 
-        return hits.stream()
-                .map(SearchHit::getContent)
-                .toList();
+        if (response == null || response.get("hits") == null) {
+            return results;
+        }
+
+        Map hitsObject = (Map) response.get("hits");
+
+        if (hitsObject.get("hits") == null) {
+            return results;
+        }
+
+        List hits = (List) hitsObject.get("hits");
+
+        for (Object hitObject : hits) {
+            Map hit = (Map) hitObject;
+            Map source = (Map) hit.get("_source");
+
+            if (source == null) {
+                continue;
+            }
+
+            EventSearchDocument doc = new EventSearchDocument();
+
+            Object id = source.get("id");
+            Object name = source.get("name");
+            Object description = source.get("description");
+            Object category = source.get("category");
+            Object venue = source.get("venue");
+            Object status = source.get("status");
+            Object eventDate = source.get("eventDate");
+            Object rating = source.get("rating");
+
+            if (id != null) {
+                doc.setId(String.valueOf(id));
+            }
+
+            if (name != null) {
+                doc.setName(String.valueOf(name));
+            }
+
+            if (description != null) {
+                doc.setDescription(String.valueOf(description));
+            }
+
+            if (category != null) {
+                doc.setCategory(String.valueOf(category));
+            }
+
+            if (venue != null) {
+                doc.setVenue(String.valueOf(venue));
+            }
+
+            if (status != null) {
+                doc.setStatus(String.valueOf(status));
+            }
+
+            if (eventDate != null) {
+                doc.setEventDate(LocalDateTime.parse(String.valueOf(eventDate)));
+            }
+
+            if (rating instanceof Number number) {
+                doc.setRating(number.doubleValue());
+            } else if (rating != null) {
+                doc.setRating(Double.parseDouble(String.valueOf(rating)));
+            }
+
+            results.add(doc);
+        }
+
+        return results;
     }
 }
