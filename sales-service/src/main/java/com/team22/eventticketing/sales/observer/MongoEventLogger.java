@@ -48,7 +48,8 @@ public class MongoEventLogger implements EntityObserver {
             case "SALE_CREATED", "SALE_UPDATED", "SALE_DELETED", "SALE_REFUNDED",
                  "SALE_RETRIED", "PAYMENT_PROCESSED", "PROMOTION_CREATED",
                  "PROMOTION_UPDATED", "PROMOTION_DELETED", "SALE_PROMOTION_LINKED",
-                 "SALE_PROMOTION_UPDATED", "SALE_PROMOTION_DELETED", "PROMOTION_APPLIED" -> EventType.PAYMENT_AUDIT;
+                 "SALE_PROMOTION_UPDATED", "SALE_PROMOTION_DELETED", "PROMOTION_APPLIED",
+                 "SALE_REFUNDED_WINDOW_POLICY", "REFUND_DENIED" -> EventType.PAYMENT_AUDIT;
             default -> EventType.AUTH;
         };
     }
