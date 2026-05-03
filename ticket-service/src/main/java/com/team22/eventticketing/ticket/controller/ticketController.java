@@ -7,6 +7,9 @@ import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
 import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketAnalyticsDTO;
+import com.team22.eventticketing.ticket.model.dto.TicketScanDTO;
+import com.team22.eventticketing.ticket.model.dto.TicketScanRequestDTO;
+import com.team22.eventticketing.ticket.service.TicketScanService;
 
 import org.springframework.web.bind.annotation.*;
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
@@ -18,6 +21,8 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
+
 
 @RestController
 @RequestMapping("/api/tickets")
@@ -25,10 +30,11 @@ public class ticketController {
 
     private final TicketService ticketService;
     private final MongoEventLogger eventLogger;
-
-    public ticketController(TicketService ticketService, MongoEventLogger eventLogger) {
+    private final TicketScanService ticketScanService;
+    public ticketController(TicketService ticketService, MongoEventLogger eventLogger, TicketScanService ticketScanService) {
         this.ticketService = ticketService;
         this.eventLogger = eventLogger;
+        this.ticketScanService = ticketScanService;
     }
 
     // [S4-F1]
@@ -171,4 +177,25 @@ public class ticketController {
         TicketAnalyticsDTO response = ticketService.getAnalytics(startDate, endDate);
         return ResponseEntity.ok(response);
     }
+
+    // S4-F11
+    @PostMapping("/{id}/scan")
+    public ResponseEntity<?> scanTicket(
+        @PathVariable Long id,
+        @RequestHeader("Authorization") String authHeader,
+        @RequestBody TicketScanRequestDTO request) {
+        if (authHeader == null || !authHeader.startsWith("Bearer "))
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing token");
+        ticketScanService.recordScan(id, authHeader.substring(7), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body("Scan recorded");
+    }
+
+    // S4-F12
+    @GetMapping("/{id}/scans")
+    public ResponseEntity<List<TicketScanDTO>> getScanHistory(
+        @PathVariable Long id,
+        @RequestParam(required = false) Instant startTime,
+        @RequestParam(required = false) Instant endTime) {
+            return ResponseEntity.ok(ticketScanService.getScanHistory(id, startTime, endTime));
+        }
 }

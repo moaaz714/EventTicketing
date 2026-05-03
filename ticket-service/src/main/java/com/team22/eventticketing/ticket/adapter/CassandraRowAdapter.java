@@ -25,6 +25,8 @@ package com.team22.eventticketing.ticket.adapter;
 
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
 import java.util.Map;
+import com.team22.eventticketing.ticket.model.dto.TicketScanDTO;
+import com.team22.eventticketing.ticket.model.TicketScanEvent;
 
 public class CassandraRowAdapter {
 
@@ -36,6 +38,17 @@ public class CassandraRowAdapter {
                 .usedTickets(((Number) row.get("used")).longValue())
                 .validTickets(((Number) row.get("valid")).longValue())
                 .lastCheckIn((java.time.LocalDateTime) row.get("last_checkin"))
+                .build();
+    }
+
+    public TicketScanDTO adapt(TicketScanEvent event) {
+        return TicketScanDTO.builder().timestamp(event.getKey().getTimestamp())
+                .scanType(event.getScanType())
+                .attendeeName(event.getAttendeeName())
+                .gate(event.getGate())
+                .section(event.getSection())
+                .seatNumber(event.getSeatNumber())
+                .notes(event.getNotes())
                 .build();
     }
 }
