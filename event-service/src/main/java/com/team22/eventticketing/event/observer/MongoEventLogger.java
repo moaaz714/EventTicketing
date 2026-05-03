@@ -39,7 +39,7 @@ public class MongoEventLogger implements EntityObserver {
         return switch (action) {
             case "EVENT_CREATED", "EVENT_UPDATED", "EVENT_DETAILS_UPDATED",
                  "EVENT_STATUS_UPDATED", "EVENT_RATED", "SESSION_VERIFIED",
-                 "EVENT_DELETED", "SESSION_CREATED", "SESSION_DELETED" -> EventType.EVENT_ACTIVITY;
+                 "EVENT_DELETED", "SESSION_CREATED", "SESSION_DELETED","INDEXED" -> EventType.EVENT_ACTIVITY;
             case "BOOKING_CREATED", "BOOKING_UPDATED", "BOOKING_DELETED",
                  "BOOKING_COMPLETED", "BOOKING_CANCELLED", "BOOKING_CONFIRMED",
                  "BOOKING_ITEMS_ADDED" -> EventType.BOOKING;
