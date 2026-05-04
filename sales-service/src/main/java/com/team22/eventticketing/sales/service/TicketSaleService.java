@@ -2,6 +2,7 @@ package com.team22.eventticketing.sales.service;
 
 import com.team22.eventticketing.sales.dto.AppliedPromotionDTO;
 import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
+import com.team22.eventticketing.sales.dto.TierRevenueDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.entity.*;
@@ -231,6 +232,42 @@ public class TicketSaleService {
                 .totalDiscount(totalDiscount)
                 .finalAmount(finalAmount)
                 .build();
+    }
+
+    // ─── [S5-F10] Tier Revenue Analytics ────────────────────────────────────────
+
+    public void logAnalyticsViewed(LocalDate startDate, LocalDate endDate) {
+        notifyObservers("ANALYTICS_VIEWED", Map.of(
+                "startDate", startDate.toString(),
+                "endDate", endDate.toString()));
+    }
+
+    @Cacheable(cacheNames = "sales-service::S5-F10",
+            key = "#startDate.toString() + ':' + #endDate.toString()")
+    public List<TierRevenueDTO> getTierRevenue(LocalDate startDate, LocalDate endDate) {
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(23, 59, 59, 999_000_000);
+
+        List<Object[]> rows = ticketSaleRepository.findTierRevenue(start, end);
+        List<TierRevenueDTO> result = new ArrayList<>();
+
+        for (Object[] row : rows) {
+            String tier = (String) row[0];
+            double totalRevenue = ((Number) row[1]).doubleValue();
+            long saleCount = ((Number) row[2]).longValue();
+            long ticketsSold = ((Number) row[3]).longValue();
+            double avgRevenue = saleCount > 0 ? totalRevenue / saleCount : 0.0;
+
+            result.add(TierRevenueDTO.builder()
+                    .tier(tier)
+                    .totalRevenue(totalRevenue)
+                    .saleCount(saleCount)
+                    .ticketsSold(ticketsSold)
+                    .averageRevenuePerSale(avgRevenue)
+                    .build());
+        }
+
+        return result;
     }
 
     // ─── [S5-F4] Process Booking Payment (write — invalidates) ───────────────────
