@@ -12,17 +12,10 @@
     <name>event-service</name>
     <description>event-service</description>
     <url/>
-    <licenses>
-        <license/>
-    </licenses>
-    <developers>
-        <developer/>
-    </developers>
+    <licenses><license/></licenses>
+    <developers><developer/></developers>
     <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
+        <connection/><developerConnection/><tag/><url/>
     </scm>
     <properties>
         <java.version>25</java.version>
