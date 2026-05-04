@@ -14,7 +14,9 @@ import com.team22.eventticketing.sales.service.SalesService;
 import com.team22.eventticketing.sales.service.TicketSaleService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,6 +39,17 @@ public class salesController {
         this.ticketSaleService = ticketSaleService;
         this.promotionService = promotionService;
         this.refundWindowPolicyService = refundWindowPolicyService;
+    }
+
+    private void assertOwnerOrAdmin(Long saleUserId) {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (isAdmin) return;
+        Long callerId = (Long) auth.getDetails();
+        if (!callerId.equals(saleUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
     }
 
     // ─── Health Check ─────────────────────────────
@@ -63,6 +76,7 @@ public class salesController {
             @PathVariable Long saleId,
             @PathVariable Long promotionId
     ) {
+        assertOwnerOrAdmin(ticketSaleService.findById(saleId).getUserId());
         TicketSale updatedSale = salesService.applyPromotionToSale(saleId, promotionId);
         return new ResponseEntity<>(updatedSale, HttpStatus.OK);
     }
@@ -87,7 +101,9 @@ public class salesController {
 
     @GetMapping("/{id}")
     public TicketSale getById(@PathVariable Long id) {
-        return ticketSaleService.findById(id);
+        TicketSale sale = ticketSaleService.findById(id);
+        assertOwnerOrAdmin(sale.getUserId());
+        return sale;
     }
 
     @GetMapping
@@ -97,30 +113,35 @@ public class salesController {
 
     @PutMapping("/{id}")
     public TicketSale update(@PathVariable Long id, @RequestBody TicketSale ticketSale) {
+        assertOwnerOrAdmin(ticketSaleService.findById(id).getUserId());
         return ticketSaleService.update(id, ticketSale);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {
+        assertOwnerOrAdmin(ticketSaleService.findById(id).getUserId());
         ticketSaleService.delete(id);
     }
 
     // ─── S5-F2: Refund ────────────────────────────
     @PutMapping("/{id}/refund")
     public TicketSale refund(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        assertOwnerOrAdmin(ticketSaleService.findById(id).getUserId());
         return ticketSaleService.refund(id, body.get("reason"));
     }
 
     // ─── S5-F3: User Ticket Sale Summary ──────────
     @GetMapping("/user/{userId}/summary")
     public UserSaleSummaryDTO getUserSummary(@PathVariable Long userId) {
+        assertOwnerOrAdmin(userId);
         return ticketSaleService.getUserSummary(userId);
     }
 
     // ─── S5-F8: Sale Details with Applied Promotions ──────────
     @GetMapping("/{saleId}/details")
     public SaleDetailsDTO getSaleDetails(@PathVariable Long saleId) {
+        assertOwnerOrAdmin(ticketSaleService.findById(saleId).getUserId());
         return ticketSaleService.getSaleDetails(saleId);
     }
 
@@ -133,6 +154,7 @@ public class salesController {
     // ─── S5-F7: Retry Failed Ticket Sale ──────────
     @PutMapping("/{id}/retry")
     public TicketSale retry(@PathVariable Long id) {
+        assertOwnerOrAdmin(ticketSaleService.findById(id).getUserId());
         return ticketSaleService.retry(id);
     }
 
@@ -156,8 +178,7 @@ public class salesController {
         LocalDate end = LocalDate.parse(endDate);
 
         if (start.isAfter(end)) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "startDate must not be after endDate");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate must not be after endDate");
         }
 
         ticketSaleService.logAnalyticsViewed(start, end);
@@ -171,6 +192,7 @@ public class salesController {
             @PathVariable Long id,
             @RequestBody Map<String, String> body
     ) {
+        assertOwnerOrAdmin(ticketSaleService.findById(id).getUserId());
         TicketSale result = refundWindowPolicyService.processRefundWithWindowPolicy(
                 id, body.get("reason"));
         return ResponseEntity.ok(result);
