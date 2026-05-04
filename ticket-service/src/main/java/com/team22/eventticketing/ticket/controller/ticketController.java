@@ -5,6 +5,12 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import com.team22.eventticketing.ticket.model.Ticket;
+import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
+import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
+import com.team22.eventticketing.ticket.model.dto.TicketAnalyticsDTO;
+import com.team22.eventticketing.ticket.model.dto.TicketScanDTO;
+import com.team22.eventticketing.ticket.model.dto.TicketScanRequestDTO;
+import com.team22.eventticketing.ticket.service.TicketScanService;
 import com.team22.eventticketing.ticket.model.dto.TicketScanRequestDTO;
 import com.team22.eventticketing.ticket.service.TicketScanService;
 
@@ -17,6 +23,8 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
+
 
 @RestController
 @RequestMapping("/api/tickets")
@@ -25,10 +33,7 @@ public class ticketController {
     private final TicketService ticketService;
     private final MongoEventLogger eventLogger;
     private final TicketScanService ticketScanService;
-
-    public ticketController(TicketService ticketService,
-                            MongoEventLogger eventLogger,
-                            TicketScanService ticketScanService) {
+    public ticketController(TicketService ticketService, MongoEventLogger eventLogger, TicketScanService ticketScanService) {
         this.ticketService = ticketService;
         this.eventLogger = eventLogger;
         this.ticketScanService = ticketScanService;
@@ -175,21 +180,24 @@ public class ticketController {
         return ResponseEntity.ok(response);
     }
 
+    // S4-F11
     @PostMapping("/{id}/scan")
     public ResponseEntity<?> scanTicket(
-            @PathVariable Long id,
-            @RequestHeader("Authorization") String authHeader,
-            @RequestBody TicketScanRequestDTO request
-    ) {
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing or invalid token");
-        }
-
-        String token = authHeader.substring(7);
-
-        ticketScanService.recordScan(id, token, request);
-
-        return ResponseEntity.ok("Scan event recorded");
+        @PathVariable Long id,
+        @RequestHeader("Authorization") String authHeader,
+        @RequestBody TicketScanRequestDTO request) {
+        if (authHeader == null || !authHeader.startsWith("Bearer "))
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing token");
+        ticketScanService.recordScan(id, authHeader.substring(7), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body("Scan recorded");
     }
+
+    // S4-F12
+    @GetMapping("/{id}/scans")
+    public ResponseEntity<List<TicketScanDTO>> getScanHistory(
+        @PathVariable Long id,
+        @RequestParam(required = false) Instant startTime,
+        @RequestParam(required = false) Instant endTime) {
+            return ResponseEntity.ok(ticketScanService.getScanHistory(id, startTime, endTime));
+        }
 }
