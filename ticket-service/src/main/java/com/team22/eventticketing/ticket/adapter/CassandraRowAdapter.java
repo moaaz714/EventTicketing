@@ -11,7 +11,7 @@ import java.time.ZoneId;
 
 public class CassandraRowAdapter {
 
-    public EventAttendanceSummaryDTO adapt(Row row) {
+    public EventAttendanceSummaryDTO EventAttendanceSummaryDTOadapt(Row row) {
 
         return EventAttendanceSummaryDTO.builder()
                 .eventId(row.getLong("event_id"))

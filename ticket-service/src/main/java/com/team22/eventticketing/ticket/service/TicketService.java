@@ -1,9 +1,11 @@
 package com.team22.eventticketing.ticket.service;
 
+import com.datastax.oss.driver.api.core.cql.Row;
 import com.team22.eventticketing.ticket.adapter.CassandraRowAdapter;
 import com.team22.eventticketing.ticket.adapter.ObjectArrayDtoAdapter;
 import com.team22.eventticketing.ticket.adapter.PostgresRowAdapter;
 import com.team22.eventticketing.ticket.model.Ticket;
+import com.team22.eventticketing.ticket.model.TicketScanEvent;
 import com.team22.eventticketing.ticket.model.TicketStatus;
 import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
@@ -219,7 +221,7 @@ public class TicketService {
 
     // ─── [S4-F8] Event Attendance Summary (relationship DTO) ─────────────────────
 
-    @Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
+@Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
     public EventAttendanceSummaryDTO getSummary(Long eventId) {
         Map<String, Object> data = ticketRepository.getAttendanceSummaryData(eventId);
 
@@ -235,7 +237,7 @@ public class TicketService {
 
         // 3. Structural Pattern: Delegate DTO creation to the Adapter
         CassandraRowAdapter adapter = new CassandraRowAdapter();
-        return adapter.adapt(data);
+        return adapter.EventAttendanceSummaryDTOadapt((Row) data);
     }
 
     // ─── [S4-F9] Unused Upcoming Tickets (combined)
