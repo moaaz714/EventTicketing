@@ -139,6 +139,7 @@ public class TicketService {
 
         ticketRepository.saveAll(tickets);
         cacheEviction.evictPattern("S4-F1");
+        cacheEviction.evictPattern("S4-F5");
         cacheEviction.evictPattern("S4-F6");
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
