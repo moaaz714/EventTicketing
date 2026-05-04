@@ -7,6 +7,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -240,9 +243,27 @@ public class EventFullTextSearchService {
                 doc.setStatus(String.valueOf(status));
             }
 
+
             if (eventDate != null) {
-                doc.setEventDate(LocalDateTime.parse(String.valueOf(eventDate)));
+                String dateStr = String.valueOf(eventDate);
+
+                // 1. If the date is missing the time component (e.g., "2026-06-10"), append midnight
+                if (!dateStr.contains("T")) {
+                    dateStr += "T00:00:00";
+                }
+
+                // 2. If Elasticsearch appended a UTC 'Z' timezone marker, strip it so LocalDateTime doesn't crash
+                dateStr = dateStr.replace("Z", "");
+
+                try {
+                    doc.setEventDate(LocalDateTime.parse(dateStr));
+                } catch (Exception e) {
+                    // 3. If a truly corrupted date gets through, log it instead of crashing the whole server
+                    System.err.println("Failed to parse eventDate from Elasticsearch: " + dateStr);
+                }
             }
+
+
 
             if (rating instanceof Number number) {
                 doc.setRating(number.doubleValue());
