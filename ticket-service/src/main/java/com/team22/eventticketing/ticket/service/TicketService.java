@@ -15,6 +15,8 @@ import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
+
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -58,7 +60,7 @@ public class TicketService {
 
     // ─── CRUD
     // ─────────────────────────────────────────────────────────────────────
-
+    @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
     public Ticket createTicket(Ticket ticket) {
         Ticket saved = ticketRepository.save(ticket);
         notifyObservers("TICKET_CREATED", Map.of("ticketId", saved.getId()));
@@ -76,6 +78,7 @@ public class TicketService {
         return ticketRepository.findAll(); // list — NOT cached
     }
 
+    @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
     public Ticket updateTicket(Long id, Ticket updated) {
         Ticket existing = getTicketById(id);
 
@@ -221,7 +224,7 @@ public class TicketService {
 
     // ─── [S4-F8] Event Attendance Summary (relationship DTO) ─────────────────────
 
-@Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
+    @Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
     public EventAttendanceSummaryDTO getSummary(Long eventId) {
         Map<String, Object> data = ticketRepository.getAttendanceSummaryData(eventId);
 

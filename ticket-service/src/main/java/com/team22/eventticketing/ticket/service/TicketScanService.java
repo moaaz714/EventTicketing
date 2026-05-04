@@ -1,5 +1,6 @@
 package com.team22.eventticketing.ticket.service;
 
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -8,7 +9,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors; 
+import java.util.stream.Collectors;
 import java.util.Map;
 
 import com.team22.eventticketing.ticket.adapter.CassandraRowAdapter;
@@ -22,8 +23,6 @@ import com.team22.eventticketing.ticket.repository.TicketRepository;
 import com.team22.eventticketing.ticket.repository.TicketScanEventRepository;
 import io.jsonwebtoken.Claims;
 
-
-
 @Service
 public class TicketScanService {
     private final TicketRepository ticketRepository;
@@ -32,20 +31,20 @@ public class TicketScanService {
     private MongoEventLogger mongoEventLogger;
 
     public TicketScanService(TicketRepository ticketRepository,
-                             TicketScanEventRepository cassandraRepo,
-                             JwtService jwtService,
-                             MongoEventLogger mongoEventLogger) {
+            TicketScanEventRepository cassandraRepo,
+            JwtService jwtService,
+            MongoEventLogger mongoEventLogger) {
         this.ticketRepository = ticketRepository;
         this.cassandraRepository = cassandraRepo;
         this.jwtService = jwtService;
         this.mongoEventLogger = mongoEventLogger;
     }
 
-
     // ─── [S4-F11] Record Ticket Scan (write) ─────────────────────────────────
+    @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
     public void recordScan(Long ticketId, String token, TicketScanRequestDTO request) {
 
-        //  1. Validate JWT
+        // 1. Validate JWT
         Claims claims;
         try {
             claims = jwtService.extractClaims(token);
@@ -63,11 +62,10 @@ public class TicketScanService {
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
 
-        //  3. Create Cassandra entity
+        // 3. Create Cassandra entity
         TicketScanEventKey key = new TicketScanEventKey(
                 ticketId,
-                Instant.now()
-        );
+                Instant.now());
 
         TicketScanEvent event = new TicketScanEvent();
         event.setKey(key);
@@ -78,7 +76,7 @@ public class TicketScanService {
         event.setSeatNumber(request.getSeatNumber());
         event.setNotes(request.getNotes());
 
-        //  4. Save to Cassandra
+        // 4. Save to Cassandra
         cassandraRepository.save(event);
 
         // 5. Log to Mongo (TicketEvent)
@@ -94,24 +92,29 @@ public class TicketScanService {
         mongoEventLogger.onEvent("TICKET_SCANNED", payload);
     }
 
-
-     // ─── [S4-F12] Get Ticket Scan History (read) ───────────────────────────────
-     @Cacheable(cacheNames = "ticket-service::S4-F12", key = "#ticketId + ':' + T(String).valueOf(#startTime)+ ':' + T(String).valueOf(#endTime)")
-     public List<TicketScanDTO> getScanHistory(Long ticketId, Instant startTime, Instant endTime) {
+    // ─── [S4-F12] Get Ticket Scan History (read) ───────────────────────────────
+    @Cacheable(cacheNames = "ticket-service::S4-F12", key = "#ticketId + ':' + T(String).valueOf(#startTime)+ ':' + T(String).valueOf(#endTime)")
+    public List<TicketScanDTO> getScanHistory(Long ticketId, Instant startTime, Instant endTime) {
         // Verify ticket in postgreSQL
-        ticketRepository.findById(ticketId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found: " + ticketId));
+        ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found: " + ticketId));
         // Query Cassandra based on which params are presented
         List<TicketScanEvent> events;
-        if(startTime != null && endTime != null) { events = cassandraRepository.findByKeyTicketIdAndKeyTimestampBetween(ticketId, startTime, endTime);}
-        else if (startTime != null) { events = cassandraRepository.findByKeyTicketIdAndKeyTimestampGreaterThanEqual(ticketId, startTime);}
-        else if (endTime != null) { events = cassandraRepository.findByKeyTicketIdAndKeyTimestampLessThanEqual(ticketId, endTime); }
-        
-        else { events = cassandraRepository.findByKeyTicketId(ticketId); }
+        if (startTime != null && endTime != null) {
+            events = cassandraRepository.findByKeyTicketIdAndKeyTimestampBetween(ticketId, startTime, endTime);
+        } else if (startTime != null) {
+            events = cassandraRepository.findByKeyTicketIdAndKeyTimestampGreaterThanEqual(ticketId, startTime);
+        } else if (endTime != null) {
+            events = cassandraRepository.findByKeyTicketIdAndKeyTimestampLessThanEqual(ticketId, endTime);
+        }
+
+        else {
+            events = cassandraRepository.findByKeyTicketId(ticketId);
+        }
 
         // Adapt to DTOs
         CassandraRowAdapter adapter = new CassandraRowAdapter();
         return events.stream().map(adapter::adapt).collect(Collectors.toList());
-     }
-
+    }
 
 }
