@@ -3,6 +3,7 @@ package com.team22.eventticketing.sales.controller;
 import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
 import com.team22.eventticketing.sales.dto.RevenueReportDTO;
 import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
+import com.team22.eventticketing.sales.dto.TierRevenueDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import static com.team22.eventticketing.sales.entity.TicketSale.PaymentMethod;
@@ -143,6 +144,25 @@ public class salesController {
             @RequestParam(required = false) String endDate
     ) {
         return ticketSaleService.search(status, startDate, endDate);
+    }
+
+    // ─── S5-F10: Get Ticket Sales by Tier ─────────
+    @GetMapping("/analytics/tier")
+    public ResponseEntity<List<TierRevenueDTO>> getTierRevenue(
+            @RequestParam String startDate,
+            @RequestParam String endDate
+    ) {
+        LocalDate start = LocalDate.parse(startDate);
+        LocalDate end = LocalDate.parse(endDate);
+
+        if (start.isAfter(end)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "startDate must not be after endDate");
+        }
+
+        ticketSaleService.logAnalyticsViewed(start, end);
+        List<TierRevenueDTO> result = ticketSaleService.getTierRevenue(start, end);
+        return ResponseEntity.ok(result);
     }
 
     // ─── S5-F12: Refund with Window Policy ────────
