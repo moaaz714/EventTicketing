@@ -165,4 +165,10 @@ public class bookingController {
     public ResponseEntity<BookingDetailsDTO> getBookingDetails(@PathVariable Long id) {
         return ResponseEntity.ok(bookingService.getBookingDetails(id));
     }
+    //-- End point for the second feature in the booking service in milestone 2
+    @PostMapping("/{bookingId}/record-attendance")
+    public ResponseEntity<?> recordAttendance(@PathVariable Long bookingId) {
+        bookingService.recordAttendance(bookingId);
+        return ResponseEntity.ok("Attendance recorded");
+    }
 }

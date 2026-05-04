@@ -1,16 +1,22 @@
 package com.team22.eventticketing.user.service;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.team22.eventticketing.user.dto.AuthResponse;
 import com.team22.eventticketing.user.dto.LoginRequest;
 import com.team22.eventticketing.user.dto.RegisterRequest;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.entity.UserStatus;
+import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.UserRepository;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AuthService {
@@ -18,6 +24,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final List<EntityObserver> observers = new ArrayList<>();
 
     public AuthService(UserRepository userRepository,
                        BCryptPasswordEncoder passwordEncoder,
@@ -26,6 +33,11 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
     }
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) o.onEvent(action, payload);
+    }
+    public void register(EntityObserver observer) {observers.add(observer);}
+    public void unregister(EntityObserver observer) {observers.remove(observer);}
 
     // ─── [S1-F10] Register ────────────────────────────────────────────────────────
 
@@ -64,7 +76,8 @@ public class AuthService {
         user.setStatus(UserStatus.ACTIVE);
         userRepository.save(user);
 
-        // e) MongoDB logging skipped for now
+        // e) MongoDB logging
+        notifyObservers("REGISTERED", Map.of("userId", user.getId()));
 
         // f) Generate token
         String token = jwtService.generateToken(user.getId(), user.getEmail(), user.getRole().name());
@@ -87,7 +100,8 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
-        // c) MongoDB logging skipped for now
+        // c) MongoDB logging
+        notifyObservers("LOGGED_IN", Map.of("userId", user.getId()));
 
         // d) Generate token
         String token = jwtService.generateToken(user.getId(), user.getEmail(), user.getRole().name());

@@ -3,11 +3,13 @@ package com.team22.eventticketing.sales.controller;
 import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
 import com.team22.eventticketing.sales.dto.RevenueReportDTO;
 import com.team22.eventticketing.sales.dto.SaleDetailsDTO;
+import com.team22.eventticketing.sales.dto.TierRevenueDTO;
 import com.team22.eventticketing.sales.dto.UserSaleSummaryDTO;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import static com.team22.eventticketing.sales.entity.TicketSale.PaymentMethod;
 
 import com.team22.eventticketing.sales.service.PromotionService;
+import com.team22.eventticketing.sales.service.RefundWindowPolicyService;
 import com.team22.eventticketing.sales.service.SalesService;
 import com.team22.eventticketing.sales.service.TicketSaleService;
 import org.springframework.http.HttpStatus;
@@ -17,6 +19,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+
 @RestController
 @RequestMapping("/api/sales")
 public class salesController {
@@ -24,12 +27,16 @@ public class salesController {
     private final SalesService salesService;
     private final TicketSaleService ticketSaleService;
     private final PromotionService promotionService;
+    private final RefundWindowPolicyService refundWindowPolicyService;
 
-    public salesController(SalesService salesService, TicketSaleService ticketSaleService,
-                           PromotionService promotionService) {
+    public salesController(SalesService salesService,
+                           TicketSaleService ticketSaleService,
+                           PromotionService promotionService,
+                           RefundWindowPolicyService refundWindowPolicyService) {
         this.salesService = salesService;
         this.ticketSaleService = ticketSaleService;
         this.promotionService = promotionService;
+        this.refundWindowPolicyService = refundWindowPolicyService;
     }
 
     // ─── Health Check ─────────────────────────────
@@ -38,16 +45,14 @@ public class salesController {
         return "OK";
     }
 
-    // ─── S5-F4: Process Ticket Sale for Booking (Merged Logic) ───
+    // ─── S5-F4: Process Ticket Sale for Booking ───
     @PostMapping("/booking/{bookingId}")
     public ResponseEntity<TicketSale> payBooking(
             @PathVariable Long bookingId,
             @RequestBody Map<String, String> body
     ) {
-        // We use the SalesService version since that's where we merged the transactional logic
         PaymentMethod method = PaymentMethod.valueOf(body.get("method").toUpperCase());
         String cardLastFour = body.get("cardLastFour");
-
         TicketSale sale = salesService.processBookingPayment(bookingId, method, cardLastFour);
         return new ResponseEntity<>(sale, HttpStatus.CREATED);
     }
@@ -62,7 +67,7 @@ public class salesController {
         return new ResponseEntity<>(updatedSale, HttpStatus.OK);
     }
 
-    // ─── S5-F6: Revenue Report (From origin/main) ────────────────────
+    // ─── S5-F6: Revenue Report ────────────────────
     @GetMapping("/reports/revenue")
     public RevenueReportDTO getRevenueReport(
             @RequestParam String startDate,
@@ -113,7 +118,7 @@ public class salesController {
         return ticketSaleService.getUserSummary(userId);
     }
 
-    // ─── S5-F8: Get Sale Details with Applied Promotions ──────────
+    // ─── S5-F8: Sale Details with Applied Promotions ──────────
     @GetMapping("/{saleId}/details")
     public SaleDetailsDTO getSaleDetails(@PathVariable Long saleId) {
         return ticketSaleService.getSaleDetails(saleId);
@@ -139,5 +144,35 @@ public class salesController {
             @RequestParam(required = false) String endDate
     ) {
         return ticketSaleService.search(status, startDate, endDate);
+    }
+
+    // ─── S5-F10: Get Ticket Sales by Tier ─────────
+    @GetMapping("/analytics/tier")
+    public ResponseEntity<List<TierRevenueDTO>> getTierRevenue(
+            @RequestParam String startDate,
+            @RequestParam String endDate
+    ) {
+        LocalDate start = LocalDate.parse(startDate);
+        LocalDate end = LocalDate.parse(endDate);
+
+        if (start.isAfter(end)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "startDate must not be after endDate");
+        }
+
+        ticketSaleService.logAnalyticsViewed(start, end);
+        List<TierRevenueDTO> result = ticketSaleService.getTierRevenue(start, end);
+        return ResponseEntity.ok(result);
+    }
+
+    // ─── S5-F12: Refund with Window Policy ────────
+    @PostMapping("/{id}/refund-window-policy")
+    public ResponseEntity<TicketSale> refundWithWindowPolicy(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body
+    ) {
+        TicketSale result = refundWindowPolicyService.processRefundWithWindowPolicy(
+                id, body.get("reason"));
+        return ResponseEntity.ok(result);
     }
 }

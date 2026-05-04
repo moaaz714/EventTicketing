@@ -1,5 +1,6 @@
 package com.team22.eventticketing.ticket.controller;
 
+import com.team22.eventticketing.ticket.model.dto.*;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -10,10 +11,11 @@ import com.team22.eventticketing.ticket.model.dto.TicketAnalyticsDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketScanDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketScanRequestDTO;
 import com.team22.eventticketing.ticket.service.TicketScanService;
+import com.team22.eventticketing.ticket.model.dto.TicketScanRequestDTO;
+import com.team22.eventticketing.ticket.service.TicketScanService;
+
 
 import org.springframework.web.bind.annotation.*;
-import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
-import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.service.TicketService;
 import com.team22.eventticketing.ticket.observer.MongoEventLogger;
 
