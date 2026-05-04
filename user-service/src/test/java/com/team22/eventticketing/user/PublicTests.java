@@ -584,23 +584,23 @@ class PublicTests {
     // ═════════════════════════════════════════════════════════════════════════
     // TC24 — Owner GET own activity returns 2xx + paginated envelope
     // ═════════════════════════════════════════════════════════════════════════
-//     @Test
-//     @DisplayName("TC24 — ActivityOwnerHappyPathTests")
-//     void tc24_ownerGetOwnActivity() throws Exception {
-//         String email = email();
-//         Long uid = null;
-//         try {
-//             uid = uidFrom(post(REGISTER_PATH, regBody(email, "pass123")));
-//             String jwt = mapper.readTree(post(LOGIN_PATH,
-//                     Map.of("email", email, "password", "pass123"))).get("token").asText();
-//             mockMvc.perform(get(activityPath(uid)).header("Authorization", "Bearer " + jwt))
-//                     .andExpect(status().is2xxSuccessful())
-//                     .andExpect(jsonPath("$.content").isArray())
-//                     .andExpect(jsonPath("$.page").exists())
-//                     .andExpect(jsonPath("$.size").exists())
-//                     .andExpect(jsonPath("$.totalElements").exists());
-//         } finally { deleteIfExists(uid); }
-//     }
+    @Test
+    @DisplayName("TC24 — ActivityOwnerHappyPathTests")
+    void tc24_ownerGetOwnActivity() throws Exception {
+        String email = email();
+        Long uid = null;
+        try {
+            uid = uidFrom(post(REGISTER_PATH, regBody(email, "pass123")));
+            String jwt = mapper.readTree(post(LOGIN_PATH,
+                    Map.of("email", email, "password", "pass123"))).get("token").asText();
+            mockMvc.perform(get(activityPath(uid)).header("Authorization", "Bearer " + jwt))
+                    .andExpect(status().is2xxSuccessful())
+                    .andExpect(jsonPath("$.content").isArray())
+                    .andExpect(jsonPath("$.page").exists())
+                    .andExpect(jsonPath("$.size").exists())
+                    .andExpect(jsonPath("$.totalElements").exists());
+        } finally { deleteIfExists(uid); }
+    }
 
     // ═════════════════════════════════════════════════════════════════════════
     // TC25 — Non-existent user ID returns strictly 404 (admin token)
@@ -705,40 +705,40 @@ class PublicTests {
     // ═════════════════════════════════════════════════════════════════════════
     // TC31 — Cross-user activity (regular user) returns strictly 403
     // ═════════════════════════════════════════════════════════════════════════
-//     @Test
-//     @DisplayName("TC31 — ActivityCrossUserRegularTests")
-//     void tc31_activityCrossUserRegular() throws Exception {
-//         String emailA = email(), emailB = email();
-//         Long uidA = null, uidB = null;
-//         try {
-//             uidA = uidFrom(post(REGISTER_PATH, regBody(emailA, "passA")));
-//             uidB = uidFrom(post(REGISTER_PATH, regBody(emailB, "passB")));
-//             String tokenA = mapper.readTree(post(LOGIN_PATH,
-//                     Map.of("email", emailA, "password", "passA"))).get("token").asText();
-//             MvcResult result = mockMvc.perform(
-//                     get(activityPath(uidB)).header("Authorization", "Bearer " + tokenA)).andReturn();
-//             int status = result.getResponse().getStatus();
-//             Assertions.assertFalse(status >= 500, "TC31: cross-user activity must NOT 5xx; status=" + status);
-//             Assertions.assertEquals(403, status,
-//                     "TC31: cross-user activity must return strictly 403; got " + status);
-//         } finally { deleteIfExists(uidA); deleteIfExists(uidB); }
-//     }
+    @Test
+    @DisplayName("TC31 — ActivityCrossUserRegularTests")
+    void tc31_activityCrossUserRegular() throws Exception {
+        String emailA = email(), emailB = email();
+        Long uidA = null, uidB = null;
+        try {
+            uidA = uidFrom(post(REGISTER_PATH, regBody(emailA, "passA")));
+            uidB = uidFrom(post(REGISTER_PATH, regBody(emailB, "passB")));
+            String tokenA = mapper.readTree(post(LOGIN_PATH,
+                    Map.of("email", emailA, "password", "passA"))).get("token").asText();
+            MvcResult result = mockMvc.perform(
+                    get(activityPath(uidB)).header("Authorization", "Bearer " + tokenA)).andReturn();
+            int status = result.getResponse().getStatus();
+            Assertions.assertFalse(status >= 500, "TC31: cross-user activity must NOT 5xx; status=" + status);
+            Assertions.assertEquals(403, status,
+                    "TC31: cross-user activity must return strictly 403; got " + status);
+        } finally { deleteIfExists(uidA); deleteIfExists(uidB); }
+    }
 
     // ═════════════════════════════════════════════════════════════════════════
     // TC32 — Admin GET another user's activity returns 2xx + content array
     // ═════════════════════════════════════════════════════════════════════════
-//     @Test
-//     @DisplayName("TC32 — ActivityCrossUserAdminTests")
-//     void tc32_activityCrossUserAdmin() throws Exception {
-//         String email = email();
-//         Long uid = null;
-//         try {
-//             uid = uidFrom(post(REGISTER_PATH, regBody(email, "pass123")));
-//             mockMvc.perform(get(activityPath(uid)).header("Authorization", "Bearer " + adminToken()))
-//                     .andExpect(status().is2xxSuccessful())
-//                     .andExpect(jsonPath("$.content").isArray());
-//         } finally { deleteIfExists(uid); }
-//     }
+    @Test
+    @DisplayName("TC32 — ActivityCrossUserAdminTests")
+    void tc32_activityCrossUserAdmin() throws Exception {
+        String email = email();
+        Long uid = null;
+        try {
+            uid = uidFrom(post(REGISTER_PATH, regBody(email, "pass123")));
+            mockMvc.perform(get(activityPath(uid)).header("Authorization", "Bearer " + adminToken()))
+                    .andExpect(status().is2xxSuccessful())
+                    .andExpect(jsonPath("$.content").isArray());
+        } finally { deleteIfExists(uid); }
+    }
 
     // ═════════════════════════════════════════════════════════════════════════
     // TC33 — page=-1 returns 4xx
@@ -781,6 +781,173 @@ class PublicTests {
                     "TC34: page=abc must NOT be 2xx; status=" + status);
             Assertions.assertTrue(status >= 400 && status < 500,
                     "TC34: page=abc must return 4xx; got " + status);
+        } finally { deleteIfExists(uid); }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // TC35 — Register+login events appear in activity, ordered most-recent first
+    // ═════════════════════════════════════════════════════════════════════════
+    @Test
+    @DisplayName("TC35 — ActivityContainsRegisteredAndLoggedInEvents")
+    void tc35_activityContainsRegisteredAndLoggedIn() throws Exception {
+        String email = email();
+        Long uid = null;
+        try {
+            uid = uidFrom(post(REGISTER_PATH, regBody(email, "pass123")));
+            String jwt = mapper.readTree(post(LOGIN_PATH,
+                    Map.of("email", email, "password", "pass123"))).get("token").asText();
+            String body = mockMvc.perform(get(activityPath(uid)).header("Authorization", "Bearer " + jwt))
+                    .andExpect(status().is2xxSuccessful())
+                    .andReturn().getResponse().getContentAsString();
+            com.fasterxml.jackson.databind.JsonNode content = mapper.readTree(body).get("content");
+            Assertions.assertTrue(content.isArray() && content.size() >= 2,
+                    "TC35: expected at least 2 events (REGISTERED + LOGGED_IN); got " + content.size());
+            // most-recent first → LOGGED_IN before REGISTERED
+            boolean foundLoggedIn = false, foundRegistered = false;
+            int loggedInIdx = -1, registeredIdx = -1;
+            for (int i = 0; i < content.size(); i++) {
+                String action = content.get(i).get("action").asText();
+                if ("LOGGED_IN".equals(action))   { foundLoggedIn  = true; loggedInIdx  = i; }
+                if ("REGISTERED".equals(action))  { foundRegistered = true; registeredIdx = i; }
+            }
+            Assertions.assertTrue(foundRegistered, "TC35: REGISTERED event missing from activity feed");
+            Assertions.assertTrue(foundLoggedIn,   "TC35: LOGGED_IN event missing from activity feed");
+            Assertions.assertTrue(loggedInIdx < registeredIdx,
+                    "TC35: events must be ordered most-recent first; LOGGED_IN should appear before REGISTERED");
+        } finally { deleteIfExists(uid); }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // TC36 — Role change appears as most-recent event in activity feed
+    // ═════════════════════════════════════════════════════════════════════════
+    @Test
+    @DisplayName("TC36 — ActivityContainsRoleChangedEvent")
+    void tc36_activityContainsRoleChanged() throws Exception {
+        String email = email();
+        Long uid = null;
+        try {
+            uid = uidFrom(post(REGISTER_PATH, regBody(email, "pass123")));
+            String jwt = mapper.readTree(post(LOGIN_PATH,
+                    Map.of("email", email, "password", "pass123"))).get("token").asText();
+
+            // Admin triggers role change ATTENDEE → ADMIN
+            mockMvc.perform(
+                    org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .put("/api/users/" + uid + "/role")
+                            .header("Authorization", "Bearer " + adminToken())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsString(Map.of("role", "ADMIN"))))
+                    .andExpect(status().is2xxSuccessful());
+
+            String body = mockMvc.perform(get(activityPath(uid)).header("Authorization", "Bearer " + jwt))
+                    .andExpect(status().is2xxSuccessful())
+                    .andReturn().getResponse().getContentAsString();
+            com.fasterxml.jackson.databind.JsonNode content = mapper.readTree(body).get("content");
+            Assertions.assertTrue(content.isArray() && content.size() >= 1,
+                    "TC36: activity feed must not be empty after role change");
+            Assertions.assertEquals("ROLE_CHANGED", content.get(0).get("action").asText(),
+                    "TC36: most-recent event must be ROLE_CHANGED; got " + content.get(0).get("action").asText());
+        } finally { deleteIfExists(uid); }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // TC37 — Cross-user activity with regular token returns strictly 403
+    // ═════════════════════════════════════════════════════════════════════════
+    @Test
+    @DisplayName("TC37 — ActivityCrossUserOwnershipViolationIs403")
+    void tc37_activityCrossUserOwnershipViolation() throws Exception {
+        String emailA = email(), emailB = email();
+        Long uidA = null, uidB = null;
+        try {
+            uidA = uidFrom(post(REGISTER_PATH, regBody(emailA, "passA")));
+            uidB = uidFrom(post(REGISTER_PATH, regBody(emailB, "passB")));
+            String tokenA = mapper.readTree(post(LOGIN_PATH,
+                    Map.of("email", emailA, "password", "passA"))).get("token").asText();
+            // B exists → must be 403 (ownership), not 404
+            MvcResult result = mockMvc.perform(
+                    get(activityPath(uidB)).header("Authorization", "Bearer " + tokenA)).andReturn();
+            int status = result.getResponse().getStatus();
+            Assertions.assertFalse(status >= 500, "TC37: must not 5xx; status=" + status);
+            Assertions.assertEquals(403, status,
+                    "TC37: cross-user activity with valid token and existing user must be strictly 403; got " + status);
+        } finally { deleteIfExists(uidA); deleteIfExists(uidB); }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // TC38 — Admin can GET any user's activity (ownership bypass)
+    // ═════════════════════════════════════════════════════════════════════════
+    @Test
+    @DisplayName("TC38 — ActivityAdminBypassesOwnershipCheck")
+    void tc38_activityAdminBypassesOwnership() throws Exception {
+        String email = email();
+        Long uid = null;
+        try {
+            uid = uidFrom(post(REGISTER_PATH, regBody(email, "pass123")));
+            mockMvc.perform(get(activityPath(uid)).header("Authorization", "Bearer " + adminToken()))
+                    .andExpect(status().is2xxSuccessful())
+                    .andExpect(jsonPath("$.content").isArray());
+        } finally { deleteIfExists(uid); }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // TC39 — No Authorization header on activity endpoint returns strictly 401
+    // ═════════════════════════════════════════════════════════════════════════
+    @Test
+    @DisplayName("TC39 — ActivityNoAuthHeaderReturns401")
+    void tc39_activityNoAuthHeader() throws Exception {
+        String email = email();
+        Long uid = null;
+        try {
+            uid = uidFrom(post(REGISTER_PATH, regBody(email, "pass123")));
+            mockMvc.perform(get(activityPath(uid)))
+                    .andExpect(status().isUnauthorized());
+        } finally { deleteIfExists(uid); }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // TC40 — Admin GET activity for non-existent user returns 404
+    // ═════════════════════════════════════════════════════════════════════════
+    @Test
+    @DisplayName("TC40 — ActivityAdminNonExistentUserReturns404")
+    void tc40_activityAdminNonExistentUser() throws Exception {
+        mockMvc.perform(get(activityPath(999L)).header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isNotFound());
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // TC41 — Pagination: page=0&size=1 returns exactly 1 event, correct total
+    // ═════════════════════════════════════════════════════════════════════════
+    @Test
+    @DisplayName("TC41 — ActivityPaginationSizeOneCorrectTotal")
+    void tc41_activityPaginationSizeOne() throws Exception {
+        String email = email();
+        Long uid = null;
+        try {
+            uid = uidFrom(post(REGISTER_PATH, regBody(email, "pass123")));
+            // Login twice to generate multiple events (REGISTERED + LOGGED_IN x2)
+            post(LOGIN_PATH, Map.of("email", email, "password", "pass123"));
+            String jwt = mapper.readTree(post(LOGIN_PATH,
+                    Map.of("email", email, "password", "pass123"))).get("token").asText();
+
+            // First get total without pagination
+            String fullBody = mockMvc.perform(get(activityPath(uid)).header("Authorization", "Bearer " + jwt))
+                    .andExpect(status().is2xxSuccessful())
+                    .andReturn().getResponse().getContentAsString();
+            long totalElements = mapper.readTree(fullBody).get("totalElements").asLong();
+            Assertions.assertTrue(totalElements >= 3,
+                    "TC41: expected at least 3 events (REGISTERED + 2x LOGGED_IN); got " + totalElements);
+
+            // Now request page=0&size=1
+            String pagedBody = mockMvc.perform(get(activityPath(uid))
+                            .param("page", "0").param("size", "1")
+                            .header("Authorization", "Bearer " + jwt))
+                    .andExpect(status().is2xxSuccessful())
+                    .andReturn().getResponse().getContentAsString();
+            com.fasterxml.jackson.databind.JsonNode pagedTree = mapper.readTree(pagedBody);
+            Assertions.assertEquals(1, pagedTree.get("content").size(),
+                    "TC41: page=0&size=1 must return exactly 1 event");
+            Assertions.assertEquals(totalElements, pagedTree.get("totalElements").asLong(),
+                    "TC41: totalElements must match full-fetch count regardless of page size");
         } finally { deleteIfExists(uid); }
     }
 }
