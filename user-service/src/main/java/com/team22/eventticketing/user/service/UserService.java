@@ -139,8 +139,8 @@ public class UserService {
 
     @Cacheable(cacheNames = "user-service::S1-F12", key = "#userId + '::' + #page + '::' + #size")
     public ActivityFeedResponse getActivityFeed(Long userId, int page, int size) {
-        if (page < 0) page = 0;
-        if (size <= 0) size = 10;
+        if (page < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page must be >= 0");
+        if (size <= 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "size must be > 0");
         if (size > 100) size = 100;
 
         Pageable pageable = PageRequest.of(page, size);
