@@ -43,6 +43,8 @@ public class RedisConfig {
                 // --- M2 Features ---
                 // S4-F10 uses JDK Serialization -> ZERO ClassCastExceptions!
                 configs.put("ticket-service::S4-F10", cfg(Duration.ofMinutes(10), jdkSerializer));
+                // S4-F12 
+                configs.put("ticket-service::S4-F12", cfg(Duration.ofMinutes(5), json));
 
                 return RedisCacheManager.builder(factory)
                                 .withInitialCacheConfigurations(configs)

@@ -1,9 +1,11 @@
 package com.team22.eventticketing.ticket.service;
 
+import com.datastax.oss.driver.api.core.cql.Row;
 import com.team22.eventticketing.ticket.adapter.CassandraRowAdapter;
 import com.team22.eventticketing.ticket.adapter.ObjectArrayDtoAdapter;
 import com.team22.eventticketing.ticket.adapter.PostgresRowAdapter;
 import com.team22.eventticketing.ticket.model.Ticket;
+import com.team22.eventticketing.ticket.model.TicketScanEvent;
 import com.team22.eventticketing.ticket.model.TicketStatus;
 import com.team22.eventticketing.ticket.model.dto.BatchTicketRequestDTO;
 import com.team22.eventticketing.ticket.model.dto.EventAttendanceSummaryDTO;
@@ -13,6 +15,8 @@ import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
+
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -56,7 +60,7 @@ public class TicketService {
 
     // ─── CRUD
     // ─────────────────────────────────────────────────────────────────────
-
+    @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
     public Ticket createTicket(Ticket ticket) {
         Ticket saved = ticketRepository.save(ticket);
         notifyObservers("TICKET_CREATED", Map.of("ticketId", saved.getId()));
@@ -74,6 +78,7 @@ public class TicketService {
         return ticketRepository.findAll(); // list — NOT cached
     }
 
+    @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
     public Ticket updateTicket(Long id, Ticket updated) {
         Ticket existing = getTicketById(id);
 
