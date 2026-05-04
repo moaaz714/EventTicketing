@@ -31,7 +31,8 @@ public class RedisConfig {
         configs.put("user-service::S1-F5", cfg(Duration.ofMinutes(5),  json));
         configs.put("user-service::S1-F6", cfg(Duration.ofMinutes(10), json));
         configs.put("user-service::S1-F8", cfg(Duration.ofMinutes(15), json));
-        configs.put("user-service::S1-F9", cfg(Duration.ofMinutes(10), json));
+        configs.put("user-service::S1-F9",  cfg(Duration.ofMinutes(10), json));
+        configs.put("user-service::S1-F12", cfg(Duration.ofMinutes(5),  json));
         // CRUD detail caches — key format: user-service::{entity}::{id}
         configs.put("user-service::user",           cfg(Duration.ofMinutes(15), json));
         configs.put("user-service::favorite-venue", cfg(Duration.ofMinutes(15), json));
