@@ -60,83 +60,6 @@ public class EventService {
         }
     }
 
-//    // ─── TEMP ONLY: Reindex PostgreSQL Events into Elasticsearch ─────────────────
-//    // Use this only for local testing before S2-F11 exists.
-//    // Do NOT commit/push this temporary method if it is not part of your assigned feature.
-//
-//    public int tempReindexEventsToElasticsearch() {
-//        List<Event> events = eventRepository.findAll();
-//        int indexedCount = 0;
-//
-//        String elasticsearchBaseUrl = "http://elasticsearch:9200";
-//
-//        try {
-//            restTemplate.delete(elasticsearchBaseUrl + "/events");
-//        } catch (Exception ignored) {
-//            // Index may not exist. That is fine for this temporary helper.
-//        }
-//
-//        Map<String, Object> mapping = new HashMap<>();
-//        Map<String, Object> properties = new HashMap<>();
-//
-//        properties.put("id", Map.of("type", "keyword"));
-//        properties.put("name", Map.of("type", "text"));
-//        properties.put("description", Map.of("type", "text"));
-//        properties.put("venue", Map.of("type", "text"));
-//        properties.put("category", Map.of("type", "keyword"));
-//        properties.put("status", Map.of("type", "keyword"));
-//        properties.put("eventDate", Map.of("type", "date"));
-//        properties.put("rating", Map.of("type", "double"));
-//
-//        mapping.put("mappings", Map.of("properties", properties));
-//
-//        restTemplate.put(elasticsearchBaseUrl + "/events", mapping);
-//
-//        for (Event event : events) {
-//            if (event == null || event.getId() == null) {
-//                continue;
-//            }
-//
-//            Map<String, Object> document = new HashMap<>();
-//
-//            document.put("id", String.valueOf(event.getId()));
-//            document.put("name", event.getName() == null ? "" : event.getName());
-//
-//            Map<String, Object> details = event.getDetails();
-//            Object description = details == null ? null : details.get("description");
-//            document.put("description", description == null ? "" : String.valueOf(description));
-//
-//            document.put("venue", event.getVenue() == null ? "" : event.getVenue());
-//
-//            if (event.getCategory() != null) {
-//                document.put("category", event.getCategory().name());
-//            }
-//
-//            if (event.getStatus() != null) {
-//                document.put("status", event.getStatus().name());
-//            }
-//
-//            if (event.getEventDate() != null) {
-//                document.put("eventDate", event.getEventDate().toString());
-//            }
-//
-//            if (event.getRating() != null) {
-//                document.put("rating", event.getRating());
-//            }
-//
-//            restTemplate.put(
-//                    elasticsearchBaseUrl + "/events/_doc/" + event.getId(),
-//                    document
-//            );
-//
-//            indexedCount++;
-//        }
-//
-//        cacheEviction.evictPattern("S2-F10");
-//
-//        return indexedCount;
-//    }
-
     // ─── [S2-F1] Search Events ────────────────────────────────────────────────────
 
     @Cacheable(cacheNames = "event-service::S2-F1",
@@ -199,6 +122,7 @@ public class EventService {
         cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
         notifyObservers("EVENT_DETAILS_UPDATED", Map.of("eventId", id));
 
+        syncToElasticsearch(saved, "auto_crud_update");
         return saved;
     }
 
@@ -222,6 +146,7 @@ public class EventService {
         event.setStatus(newStatus);
         eventRepository.save(event);
 
+        syncToElasticsearch(event, "auto_crud_update");
         cacheEviction.evictEntityAndFeatures("event", eventId, "S2-F1", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
         notifyObservers("EVENT_STATUS_UPDATED", Map.of("eventId", eventId, "status", newStatus.name()));
     }
@@ -317,6 +242,7 @@ public class EventService {
 
         eventRepository.save(event);
 
+        syncToElasticsearch(event, "auto_crud_update");
         cacheEviction.evictEntityAndFeatures("event", eventId, "S2-F3", "S2-F6");
         notifyObservers("EVENT_RATED", Map.of("eventId", eventId, "rating", newRating));
     }
@@ -392,6 +318,7 @@ public class EventService {
 
         notifyObservers("EVENT_CREATED", Map.of("eventId", saved.getId()));
 
+        syncToElasticsearch(saved, "auto_crud_create");
         return saved;
     }
 
@@ -415,6 +342,7 @@ public class EventService {
 
         Event saved = eventRepository.save(existingEvent);
 
+        syncToElasticsearch(saved, "auto_crud_update");
         cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
 
         return saved;
@@ -427,8 +355,12 @@ public class EventService {
 
         eventRepository.deleteById(id);
 
+        if (eventSearchRepository.existsById(String.valueOf(id))) {
+            eventSearchRepository.deleteById(String.valueOf(id));
+        }
+
         cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
-        notifyObservers("EVENT_DELETED", Map.of("eventId", id));
+        notifyObservers("EVENT_DELETED", Map.of("eventId", id)); // MS2 strictly says keep this EVENT_DELETED, not INDEXED
     }
 
     // ─── CRUD: EventSession ───────────────────────────────────────────────────────
@@ -487,4 +419,43 @@ public class EventService {
         cacheEviction.evictEntityAndFeatures("event-session", sessionId, "S2-F9");
         notifyObservers("SESSION_DELETED", Map.of("sessionId", sessionId));
     }
+
+    // ─── [S2-F11] Elasticsearch Synchronization Helper ────────────────────────────
+
+    private void syncToElasticsearch(Event pgEvent, String source) {
+        EventSearchDocument esDoc = new EventSearchDocument();
+        esDoc.setId(String.valueOf(pgEvent.getId()));
+        esDoc.setName(pgEvent.getName());
+        esDoc.setCategory(pgEvent.getCategory().name());
+        esDoc.setVenue(pgEvent.getVenue());
+        esDoc.setEventDate(pgEvent.getEventDate());
+        esDoc.setRating(pgEvent.getRating() != null ? pgEvent.getRating() : 0.0);
+        esDoc.setStatus(pgEvent.getStatus().name());
+
+        // Step c: Read the description key from the JSONB details (default empty)
+        String description = "";
+        if (pgEvent.getDetails() != null && pgEvent.getDetails().containsKey("description")) {
+            description = pgEvent.getDetails().get("description").toString();
+        }
+        esDoc.setDescription(description);
+
+        // Step d: Create or update the document in Elasticsearch
+        eventSearchRepository.save(esDoc);
+
+        // Step f: Log INDEXED event to MongoDB via Observer
+        List<String> indexedFields = List.of("id", "name", "category", "venue", "description", "eventDate", "rating", "status");
+        notifyObservers("INDEXED", Map.of(
+                "eventId", pgEvent.getId(),
+                "indexedFields", indexedFields,
+                "source", source
+        ));
+    }
+
+    // Explicit endpoint method (Steps b & c)
+    public void explicitIndexEvent(Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+        syncToElasticsearch(event, "explicit");
+    }
+
 }

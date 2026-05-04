@@ -47,6 +47,13 @@ public class UserService {
         return saved;
     }
 
+    public Long getIdByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED, "Unknown caller"))
+                .getId();
+    }
+
     // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
 
     @Cacheable(cacheNames = "user-service::user", key = "#id")

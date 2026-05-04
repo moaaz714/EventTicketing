@@ -12,7 +12,9 @@ import com.team22.eventticketing.booking.repository.BookingRepository;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,6 +30,17 @@ public class bookingController {
     public bookingController(BookingService bookingService, BookingRepository bookingRepository) {
         this.bookingService = bookingService;
         this.bookingRepository = bookingRepository;
+    }
+
+    private void assertOwnerOrAdmin(Long bookingUserId) {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (isAdmin) return;
+        Long callerId = (Long) auth.getDetails();
+        if (!callerId.equals(bookingUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
     }
 
     @GetMapping("/health")
@@ -75,7 +88,9 @@ public class bookingController {
 
     @GetMapping("/{id}")
     public ResponseEntity<Booking> findById(@PathVariable Long id) {
-        return ResponseEntity.ok(bookingService.findById(id));
+        Booking booking = bookingService.findById(id);
+        assertOwnerOrAdmin(booking.getUserId());
+        return ResponseEntity.ok(booking);
     }
 
     // ─── Read all (optionally filtered by userId) ─────────────────────────────────
@@ -95,6 +110,7 @@ public class bookingController {
     public ResponseEntity<Booking> update(
             @PathVariable Long id,
             @RequestBody Booking patch) {
+        assertOwnerOrAdmin(bookingService.findById(id).getUserId());
         return ResponseEntity.ok(bookingService.update(id, patch));
     }
 
@@ -102,6 +118,7 @@ public class bookingController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
+        assertOwnerOrAdmin(bookingService.findById(id).getUserId());
         bookingService.delete(id);
         return ResponseEntity.noContent().build();
     }
@@ -109,6 +126,7 @@ public class bookingController {
     // ─── S3-F4: Complete Booking ──────────────────────────────────────────────────
     @PutMapping("/{id}/complete")
     public ResponseEntity<Booking> completeBooking(@PathVariable Long id) {
+        assertOwnerOrAdmin(bookingService.findById(id).getUserId());
         return ResponseEntity.ok(bookingService.completeBooking(id));
     }
 
@@ -146,6 +164,7 @@ public class bookingController {
 
     @PutMapping("/{id}/cancel")
     public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
+        assertOwnerOrAdmin(bookingService.findById(id).getUserId());
         bookingService.cancelBooking(id);
         return ResponseEntity.ok().build();
     }
@@ -156,6 +175,7 @@ public class bookingController {
             @PathVariable Long bookingId,
             @RequestBody List<BookingItemRequest> requests) {
 
+        assertOwnerOrAdmin(bookingService.findById(bookingId).getUserId());
         Booking updatedBooking = bookingService.addItemsToBooking(bookingId, requests);
         return ResponseEntity.ok(updatedBooking);
     }
@@ -163,6 +183,14 @@ public class bookingController {
     // ─── Get Booking Details ──────────────────────────────────────────────────────
     @GetMapping("/{id}/details")
     public ResponseEntity<BookingDetailsDTO> getBookingDetails(@PathVariable Long id) {
+        assertOwnerOrAdmin(bookingService.findById(id).getUserId());
         return ResponseEntity.ok(bookingService.getBookingDetails(id));
+    }
+    //-- End point for the second feature in the booking service in milestone 2
+    @PostMapping("/{bookingId}/record-attendance")
+    public ResponseEntity<?> recordAttendance(@PathVariable Long bookingId) {
+        assertOwnerOrAdmin(bookingService.findById(bookingId).getUserId());
+        bookingService.recordAttendance(bookingId);
+        return ResponseEntity.ok("Attendance recorded");
     }
 }

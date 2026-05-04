@@ -262,5 +262,13 @@ public class eventController {
     public void init() {
         System.out.println("EVENT CONTROLLER LOADED");
     }
+
+    // [S2-F11] Index Event for Search
+
+    @PostMapping("/{id}/index")
+    public ResponseEntity<Void> indexEventExplicitly(@PathVariable Long id) {
+        eventService.explicitIndexEvent(id);
+        return ResponseEntity.ok().build();
+    }
 }
 
