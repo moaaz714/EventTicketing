@@ -237,7 +237,7 @@ public class TicketService {
 
         // 3. Structural Pattern: Delegate DTO creation to the Adapter
         CassandraRowAdapter adapter = new CassandraRowAdapter();
-        return adapter.EventAttendanceSummaryDTOadapt((Row) data);
+        return adapter.adapt(data);
     }
 
     // ─── [S4-F9] Unused Upcoming Tickets (combined)

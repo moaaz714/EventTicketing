@@ -105,6 +105,7 @@ public class TicketScanService {
         if(startTime != null && endTime != null) { events = cassandraRepository.findByKeyTicketIdAndKeyTimestampBetween(ticketId, startTime, endTime);}
         else if (startTime != null) { events = cassandraRepository.findByKeyTicketIdAndKeyTimestampGreaterThanEqual(ticketId, startTime);}
         else if (endTime != null) { events = cassandraRepository.findByKeyTicketIdAndKeyTimestampLessThanEqual(ticketId, endTime); }
+        
         else { events = cassandraRepository.findByKeyTicketId(ticketId); }
 
         // Adapt to DTOs

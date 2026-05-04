@@ -11,23 +11,16 @@ import java.time.ZoneId;
 
 public class CassandraRowAdapter {
 
-    public EventAttendanceSummaryDTO EventAttendanceSummaryDTOadapt(Row row) {
+public EventAttendanceSummaryDTO adapt(Map<String, Object> row) {
 
-        return EventAttendanceSummaryDTO.builder()
-                .eventId(row.getLong("event_id"))
-                .totalTickets(row.getLong("total_tickets"))
-                .usedTickets(row.getLong("used_tickets"))
-                .validTickets(row.getLong("valid_tickets"))
-                .lastCheckIn(
-                        row.getInstant("last_check_in") != null
-                                ? LocalDateTime.ofInstant(
-                                row.getInstant("last_check_in"),
-                                ZoneId.systemDefault()
-                        )
-                                : null
-                )
-                .build();
-    }
+                return EventAttendanceSummaryDTO.builder()
+                                .eventId(((Number) row.get("eventId")).longValue())
+                                .totalTickets(((Number) row.get("total")).longValue())
+                                .usedTickets(((Number) row.get("used")).longValue())
+                                .validTickets(((Number) row.get("valid")).longValue())
+                                .lastCheckIn((java.time.LocalDateTime) row.get("last_checkin"))
+                                .build();
+        }
 
     public TicketScanDTO adapt(TicketScanEvent event) {
         return TicketScanDTO.builder().timestamp(event.getKey().getTimestamp())
