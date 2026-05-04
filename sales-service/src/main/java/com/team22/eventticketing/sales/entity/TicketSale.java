@@ -1,52 +1,44 @@
 package com.team22.eventticketing.sales.entity;
 
 import com.fasterxml.jackson.annotation.JsonManagedReference;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.team22.eventticketing.sales.entity.enums.PaymentMethod;
-import com.team22.eventticketing.sales.entity.enums.SaleStatus;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-// You can remove the JsonIgnore import now
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-/**
- * Represents a ticket sale transaction.
- *
- * Table: ticket_sales
- *
- * bookingId and userId are plain Long FK references — not JPA-managed relationships
- * because Booking and User live in different services.
- *
- * JSONB: transactionDetails stores gateway response, card info, receipt URL, etc.
- *
- * Relationship: One TicketSale → Many SalePromotions.
- * TicketSale is the inverse side (mappedBy = "ticketSale").
- * SalePromotion is the owner side (holds FK ticket_sale_id).
- */
 @Entity
 @Table(name = "ticket_sales")
 public class TicketSale {
 
-    // ─── Primary Key ──────────────────────────────────────────────────────────────
+    public enum PaymentMethod {
+        CREDIT_CARD,
+        DEBIT_CARD,
+        PAYPAL,
+        WALLET
+    }
+
+
+    public enum SaleStatus {
+        PENDING,
+        COMPLETED,
+        FAILED,
+        REFUNDED
+    }
+
+
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    // ─── Cross-Service FK References (plain Long — not JPA-managed) ──────────────
 
     @Column(nullable = false)
     private Long bookingId;
 
     @Column(nullable = false)
     private Long userId;
-
-    // ─── Core Fields ──────────────────────────────────────────────────────────────
 
     @Column(nullable = false)
     private Double amount;
@@ -59,26 +51,10 @@ public class TicketSale {
     @Column(nullable = false)
     private SaleStatus status;
 
-    // ─── JSONB Column ─────────────────────────────────────────────────────────────
 
-    /**
-     * Stores flexible transaction metadata as JSONB.
-     *
-     * Example keys:
-     *   - gatewayResponse  (String)  e.g. "approved" or "declined"
-     *   - cardLastFour     (String)  e.g. "4242"
-     *   - receiptUrl       (String)  URL to receipt
-     *   - failureReason    (String)  reason if FAILED
-     *   - bookingReference (String)  e.g. "BK-2026-0042"
-     *   - retryAttempt     (Integer) number of retry attempts
-     *   - refundReason     (String)  set on refund (S5-F2)
-     *   - refundedAt       (String)  ISO timestamp set on refund (S5-F2)
-     */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> transactionDetails = new HashMap<>();
-
-    // ─── Audit ───────────────────────────────────────────────────────────────────
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -90,19 +66,9 @@ public class TicketSale {
         }
     }
 
-    // ─── Relationships ────────────────────────────────────────────────────────────
-
-    /**
-     * Inverse side of the TicketSale ↔ SalePromotion bidirectional relationship.
-     * SalePromotion is the owner side (holds FK ticket_sale_id).
-     * @JsonIgnore prevents circular serialisation.
-     */
     @JsonManagedReference
-    //@JsonIgnore
     @OneToMany(mappedBy = "ticketSale", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SalePromotion> salePromotions = new ArrayList<>();
-
-    // ─── Constructors ─────────────────────────────────────────────────────────────
 
     public TicketSale() {}
 
@@ -113,8 +79,6 @@ public class TicketSale {
         this.method = method;
         this.status = status;
     }
-
-    // ─── Getters & Setters ────────────────────────────────────────────────────────
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

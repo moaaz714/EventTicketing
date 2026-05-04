@@ -5,13 +5,12 @@ import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
 import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
 import com.team22.eventticketing.booking.dto.BookingItemDTO;
 import com.team22.eventticketing.booking.dto.BookingItemRequest;
-import com.team22.eventticketing.booking.model.Booking;
-import com.team22.eventticketing.booking.model.BookingItem;
-import com.team22.eventticketing.booking.model.BookingItemStatus;
-import com.team22.eventticketing.booking.model.BookingStatus;
+import com.team22.eventticketing.booking.model.*;
 import com.team22.eventticketing.booking.observer.EntityObserver;
 import com.team22.eventticketing.booking.repository.BookingItemRepository;
 import com.team22.eventticketing.booking.repository.BookingRepository;
+import com.team22.eventticketing.booking.repository.EventNodeRepository;
+import com.team22.eventticketing.booking.repository.UserNodeRepository;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -23,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -38,14 +38,22 @@ public class BookingService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final List<EntityObserver> observers = new ArrayList<>();
 
+
+    //Injecting nodejs variables
+    private final UserNodeRepository userNodeRepository;
+    private final EventNodeRepository eventNodeRepository;
+
     public BookingService(BookingRepository bookingRepository,
                           BookingItemRepository bookingItemRepository,
                           CacheEvictionService cacheEviction,
-                          RedisTemplate<String, Object> redisTemplate) {
+                          RedisTemplate<String, Object> redisTemplate,
+                          EventNodeRepository eventNodeRepository, UserNodeRepository userNodeRepository) {
         this.bookingRepository = bookingRepository;
         this.bookingItemRepository = bookingItemRepository;
         this.cacheEviction = cacheEviction;
         this.redisTemplate = redisTemplate;
+        this.eventNodeRepository= eventNodeRepository;
+        this.userNodeRepository=  userNodeRepository;
     }
 
     public void register(EntityObserver observer) { observers.add(observer); }
@@ -369,5 +377,70 @@ public class BookingService {
         } catch (Exception ignored) {}
 
         return result;
+    }
+
+    //---- Service method for the second feature in booking service for milestone 2
+    @Transactional
+    public void recordAttendance(Long bookingId) {
+        Booking booking = findById(bookingId);
+
+        if (booking.getStatus() != BookingStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only COMPLETED bookings can be recorded");
+        }
+
+        if (booking.getEventId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Booking has no event assigned");
+        }
+
+        Long userId = booking.getUserId();
+        Long eventId = booking.getEventId();
+
+        UserNode user = userNodeRepository.findById(userId)
+                .orElseGet(() -> new UserNode(userId, "unknown", new HashSet<>()));
+
+        EventNode event = eventNodeRepository.findById(eventId)
+                .orElseGet(() -> new EventNode(eventId, "unknown", "unknown"));
+
+        if (user.getAttendedEvents() == null) {
+            user.setAttendedEvents(new HashSet<>());
+        }
+
+        AttendedRelationship rel = user.getAttendedEvents().stream()
+                .filter(r -> r.getEvent() != null && eventId.equals(r.getEvent().getEventId()))
+                .findFirst()
+                .orElse(null);
+
+        if (rel != null
+                && rel.getRecorded_booking_ids() != null
+                && rel.getRecorded_booking_ids().contains(bookingId)) {
+            return;
+        }
+
+        if (rel == null) {
+            rel = new AttendedRelationship();
+            rel.setAttendanceCount(1);
+            rel.setLastAttendedDate(LocalDateTime.now());
+            rel.setRecorded_booking_ids(new ArrayList<>(List.of(bookingId)));
+            rel.setEvent(event);
+            user.getAttendedEvents().add(rel);
+        } else {
+            if (rel.getRecorded_booking_ids() == null) {
+                rel.setRecorded_booking_ids(new ArrayList<>());
+            }
+            rel.setAttendanceCount(rel.getAttendanceCount() == null ? 1 : rel.getAttendanceCount() + 1);
+            rel.setLastAttendedDate(LocalDateTime.now());
+            rel.getRecorded_booking_ids().add(bookingId);
+        }
+
+        eventNodeRepository.save(event);
+        userNodeRepository.save(user);
+
+        notifyObservers("INTERACTION_RECORDED", Map.of(
+                "bookingId", bookingId,
+                "userId", userId,
+                "eventId", eventId
+        ));
     }
 }

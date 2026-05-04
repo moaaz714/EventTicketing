@@ -2,7 +2,7 @@ package com.team22.eventticketing.sales.service;
 
 import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
 import com.team22.eventticketing.sales.entity.Promotion;
-import com.team22.eventticketing.sales.entity.enums.DiscountType;
+import com.team22.eventticketing.sales.entity.*;
 import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.PromotionRepository;
 import org.springframework.cache.annotation.Cacheable;
@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -87,12 +88,22 @@ public class PromotionService {
         return rows.stream().map(row -> {
             Long promotionId       = ((Number) row[0]).longValue();
             String code            = (String) row[1];
-            DiscountType discType  = DiscountType.valueOf((String) row[2]);
+            Promotion.DiscountType discType  = Promotion.DiscountType.valueOf((String) row[2]);
             Double discountValue   = ((Number) row[3]).doubleValue();
             int timesUsed          = ((Number) row[4]).intValue();
             Double totalDiscount   = row[5] != null ? ((Number) row[5]).doubleValue() : 0.0;
-            Boolean active         = (Boolean) row[6];
-            LocalDateTime expiry   = ((Timestamp) row[7]).toLocalDateTime();
+            Boolean active         = row[6] instanceof Boolean b ? b : Boolean.valueOf(row[6].toString());
+            LocalDateTime expiry;
+            Object expiryObj = row[7];
+            if (expiryObj instanceof Timestamp ts) {
+                expiry = ts.toLocalDateTime();
+            } else if (expiryObj instanceof LocalDateTime ldt) {
+                expiry = ldt;
+            } else if (expiryObj instanceof OffsetDateTime odt) {
+                expiry = odt.toLocalDateTime();
+            } else {
+                expiry = LocalDateTime.parse(expiryObj.toString().replace(" ", "T"));
+            }
             boolean expired        = expiry.isBefore(LocalDateTime.now());
 
             return PromotionUsageDTO.builder()

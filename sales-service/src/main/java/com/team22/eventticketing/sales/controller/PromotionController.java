@@ -1,10 +1,10 @@
 package com.team22.eventticketing.sales.controller;
 
+import com.team22.eventticketing.sales.dto.PromotionUsageDTO;
 import com.team22.eventticketing.sales.entity.Promotion;
 import com.team22.eventticketing.sales.service.PromotionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 @RestController
@@ -21,6 +21,11 @@ public class PromotionController {
     @ResponseStatus(HttpStatus.CREATED)
     public Promotion create(@RequestBody Promotion promotion) {
         return promotionService.create(promotion);
+    }
+
+    @GetMapping("/top-used")
+    public List<PromotionUsageDTO> getTopUsedPromotions(@RequestParam(defaultValue = "10") int limit) {
+        return promotionService.getTopUsedPromotions(limit);
     }
 
     @GetMapping("/{id}")
