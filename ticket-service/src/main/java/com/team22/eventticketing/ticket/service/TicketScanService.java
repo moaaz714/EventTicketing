@@ -4,12 +4,15 @@ import com.team22.eventticketing.ticket.model.dto.TicketScanRequestDTO;
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketScanEvent;
 import com.team22.eventticketing.ticket.model.TicketScanEventKey;
+import com.team22.eventticketing.ticket.observer.MongoEventLogger;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 import com.team22.eventticketing.ticket.repository.TicketScanEventRepository;
 import io.jsonwebtoken.Claims;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 public class TicketScanService {
@@ -17,13 +20,16 @@ public class TicketScanService {
     private final TicketRepository ticketRepository;
     private final TicketScanEventRepository cassandraRepo;
     private final JwtService jwtService;
+    private final MongoEventLogger mongoEventLogger;
 
     public TicketScanService(TicketRepository ticketRepository,
                              TicketScanEventRepository cassandraRepo,
-                             JwtService jwtService) {
+                             JwtService jwtService,
+                             MongoEventLogger mongoEventLogger) {
         this.ticketRepository = ticketRepository;
         this.cassandraRepo = cassandraRepo;
         this.jwtService = jwtService;
+        this.mongoEventLogger = mongoEventLogger;
     }
 
     public void recordScan(Long ticketId, String token, TicketScanRequestDTO request) {
@@ -64,6 +70,16 @@ public class TicketScanService {
         //  4. Save to Cassandra
         cassandraRepo.save(event);
 
-        // (Optional Mongo logging — can be added later)
+        // 5. Log to Mongo (TicketEvent)
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("ticketId", ticketId);
+        payload.put("scanType", request.getScanType());
+        payload.put("gate", request.getGate());
+        payload.put("section", request.getSection());
+        payload.put("seatNumber", request.getSeatNumber());
+        payload.put("notes", request.getNotes());
+
+        mongoEventLogger.onEvent("TICKET_SCANNED", payload);
     }
 }
