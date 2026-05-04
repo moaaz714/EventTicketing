@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -18,6 +19,7 @@ import com.team22.eventticketing.ticket.model.TicketScanEvent;
 import com.team22.eventticketing.ticket.model.TicketScanEventKey;
 import com.team22.eventticketing.ticket.model.dto.TicketScanDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketScanRequestDTO;
+import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.observer.MongoEventLogger;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 import com.team22.eventticketing.ticket.repository.TicketScanEventRepository;
@@ -39,6 +41,25 @@ public class TicketScanService {
         this.jwtService = jwtService;
         this.mongoEventLogger = mongoEventLogger;
     }
+
+    // Add these fields
+    private final List<EntityObserver> observers = new ArrayList<>();
+
+    // Add these methods
+    public void register(EntityObserver observer) {
+        observers.add(observer);
+    }
+
+    public void unregister(EntityObserver observer) {
+        observers.remove(observer);
+    }
+
+    private void notifyObservers(String action, Object payload) {
+        for (EntityObserver o : observers) {
+            o.onEvent(action, payload);
+        }
+    }
+
 
     // ─── [S4-F11] Record Ticket Scan (write) ─────────────────────────────────
     @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
@@ -90,6 +111,8 @@ public class TicketScanService {
         payload.put("notes", request.getNotes());
 
         mongoEventLogger.onEvent("TICKET_SCANNED", payload);
+
+        
     }
 
     // ─── [S4-F12] Get Ticket Scan History (read) ───────────────────────────────

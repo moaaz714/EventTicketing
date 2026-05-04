@@ -6,7 +6,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.service.TicketScanService;
-import com.team22.eventticketing.ticket.service.TicketScanService;
 
 
 import org.springframework.web.bind.annotation.*;
@@ -189,7 +188,8 @@ public class ticketController {
 
         ticketScanService.recordScan(id, token, request);
 
-        return ResponseEntity.ok("Scan event recorded");
+        
+        return ResponseEntity.status(HttpStatus.CREATED).body("Scan event recorded");
     }
 
     // S4-F12
