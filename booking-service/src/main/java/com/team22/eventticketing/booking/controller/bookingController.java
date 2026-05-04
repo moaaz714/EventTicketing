@@ -1,14 +1,12 @@
 package com.team22.eventticketing.booking.controller;
 
-import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
-import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
-import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
-import com.team22.eventticketing.booking.dto.BookingItemRequest;
-import com.team22.eventticketing.booking.dto.CostEstimateRequest;
+import com.team22.eventticketing.booking.dto.*;
 import com.team22.eventticketing.booking.model.Booking;
 import com.team22.eventticketing.booking.model.BookingStatus;
+import com.team22.eventticketing.booking.security.AuthContext;
 import com.team22.eventticketing.booking.service.BookingService;
 import com.team22.eventticketing.booking.repository.BookingRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -170,5 +168,15 @@ public class bookingController {
     public ResponseEntity<?> recordAttendance(@PathVariable Long bookingId) {
         bookingService.recordAttendance(bookingId);
         return ResponseEntity.ok("Attendance recorded");
+    }
+
+    @GetMapping("/recommendations")
+    public ResponseEntity<List<EventRecommendationDTO>> getRecommendations(
+            @RequestParam Long userId,
+            @RequestParam(required = false) Integer limit,
+            HttpServletRequest request) {
+
+        AuthContext ctx = (AuthContext) request.getAttribute("authContext");
+        return ResponseEntity.ok(bookingService.getRecommendations(userId, limit, ctx));
     }
 }
