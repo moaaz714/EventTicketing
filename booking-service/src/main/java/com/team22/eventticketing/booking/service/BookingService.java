@@ -17,6 +17,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.team22.eventticketing.booking.repository.UserNodeCustomRepository;
+
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -24,6 +26,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.data.neo4j.core.Neo4jClient;
+
 @Service
 public class BookingService {
 
@@ -39,18 +43,22 @@ public class BookingService {
     //Injecting nodejs variables
     private final UserNodeRepository userNodeRepository;
     private final EventNodeRepository eventNodeRepository;
+    private final UserNodeCustomRepository userNodeCustomRepository;
 
     public BookingService(BookingRepository bookingRepository,
                           BookingItemRepository bookingItemRepository,
                           CacheEvictionService cacheEviction,
                           RedisTemplate<String, Object> redisTemplate,
-                          EventNodeRepository eventNodeRepository, UserNodeRepository userNodeRepository) {
+                          EventNodeRepository eventNodeRepository, UserNodeRepository userNodeRepository,List<EntityObserver> observers,UserNodeCustomRepository userNodeCustomRepository) {
         this.bookingRepository = bookingRepository;
         this.bookingItemRepository = bookingItemRepository;
         this.cacheEviction = cacheEviction;
         this.redisTemplate = redisTemplate;
         this.eventNodeRepository= eventNodeRepository;
         this.userNodeRepository=  userNodeRepository;
+        this.observers.addAll(observers);
+        this.userNodeCustomRepository = userNodeCustomRepository;
+
     }
 
     public void register(EntityObserver observer) { observers.add(observer); }
@@ -376,126 +384,76 @@ public class BookingService {
         return result;
     }
 
-    //---- Service method for the second feature in booking service for milestone 2
-    @Transactional
-    public void recordAttendance(Long bookingId) {
-        Booking booking = findById(bookingId);
 
+    public void recordAttendance(Long bookingId) {
+        // 1) Load booking from PostgreSQL
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Booking not found with id: " + bookingId
+                ));
+
+        // 2) Booking must be COMPLETED
         if (booking.getStatus() != BookingStatus.COMPLETED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Only COMPLETED bookings can be recorded");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Booking must be COMPLETED"
+            );
         }
 
+        // 3) Booking must have an assigned event
         if (booking.getEventId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Booking has no event assigned");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Booking has no assigned event"
+            );
         }
 
         Long userId = booking.getUserId();
         Long eventId = booking.getEventId();
 
-        UserNode user = userNodeRepository.findById(userId)
-                .orElseGet(() -> new UserNode(userId, "unknown", new HashSet<>()));
-
-        EventNode event = eventNodeRepository.findById(eventId)
-                .orElseGet(() -> new EventNode(eventId, "unknown", "unknown"));
-
-        if (user.getAttendedEvents() == null) {
-            user.setAttendedEvents(new HashSet<>());
+        // 4) Native SQL lookups for cross-service data
+        String userName = bookingRepository.findUserNameById(userId);
+        if (userName == null || userName.isBlank()) {
+            userName = "Unknown";
         }
 
-        AttendedRelationship rel = user.getAttendedEvents().stream()
-                .filter(r -> r.getEvent() != null && eventId.equals(r.getEvent().getEventId()))
-                .findFirst()
-                .orElse(null);
+        List<Object[]> eventDetails = bookingRepository.findEventDetailsById(eventId);
+        String eventName = "Unknown";
+        String eventCategory = "UNKNOWN";
 
-        if (rel != null
-                && rel.getRecorded_booking_ids() != null
-                && rel.getRecorded_booking_ids().contains(bookingId)) {
-            return;
-        }
-
-        if (rel == null) {
-            rel = new AttendedRelationship();
-            rel.setAttendanceCount(1);
-            rel.setLastAttendedDate(LocalDateTime.now());
-            rel.setRecorded_booking_ids(new ArrayList<>(List.of(bookingId)));
-            rel.setEvent(event);
-            user.getAttendedEvents().add(rel);
-        } else {
-            if (rel.getRecorded_booking_ids() == null) {
-                rel.setRecorded_booking_ids(new ArrayList<>());
+        if (eventDetails != null && !eventDetails.isEmpty()) {
+            Object[] row = eventDetails.get(0);
+            if (row.length > 0 && row[0] != null) {
+                eventName = row[0].toString();
             }
-            rel.setAttendanceCount(rel.getAttendanceCount() == null ? 1 : rel.getAttendanceCount() + 1);
-            rel.setLastAttendedDate(LocalDateTime.now());
-            rel.getRecorded_booking_ids().add(bookingId);
-        }
-
-        eventNodeRepository.save(event);
-        userNodeRepository.save(user);
-
-        notifyObservers("INTERACTION_RECORDED", Map.of(
-                "bookingId", bookingId,
-                "userId", userId,
-                "eventId", eventId
-        ));
-    }
-
-
-    public List<EventRecommendationDTO> getRecommendations(Long userId, Integer limit, AuthContext ctx) {
-
-        // Step b — ownership check
-        Long callerId = ctx.getUserId();
-        String role = ctx.getUserRole();
-        if (!callerId.equals(userId) && !"ADMIN".equals(role)) {
-            throw new AccessDeniedException("Forbidden");
-        }
-
-        // Step c — verify user exists in PG
-        if (!bookingRepository.existsUserById(userId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
-        }
-
-        // Step f — default limit
-        int effectiveLimit = (limit == null) ? 5 : limit;
-
-        // Step g — check cache first
-        String cacheKey = "booking-service::S3-F12::" + userId + "::" + effectiveLimit;
-        try {
-            Object cached = redisTemplate.opsForValue().get(cacheKey);
-            if (cached instanceof List<?> list) {
-                return (List<EventRecommendationDTO>) list;
+            if (row.length > 1 && row[1] != null) {
+                eventCategory = row[1].toString();
             }
-        } catch (Exception ignored) {}
-
-        // Step d — traverse Neo4j graph
-        List<org.neo4j.driver.Record> records = userNodeRepository.findRecommendations(userId, effectiveLimit);
-
-        // Step d + e — adapt each record and enrich from PG
-        Neo4jRecordAdapter adapter = new Neo4jRecordAdapter();
-        List<EventRecommendationDTO> results = new ArrayList<>();
-
-        for (org.neo4j.driver.Record record : records) {
-            EventRecommendationDTO dto = adapter.adapt(record);
-
-            Object[] eventDetails = bookingRepository.findEventDetailsById(dto.getEventId());
-            if (eventDetails != null) {
-                dto.setName((String) eventDetails[1]);
-                dto.setCategory((String) eventDetails[2]);
-                dto.setEventDate(eventDetails[3] != null
-                        ? ((java.sql.Timestamp) eventDetails[3]).toLocalDateTime()
-                        : null);
-            }
-
-            results.add(dto);
         }
 
-        // Step g — store in cache for 5 minutes
-        try {
-            redisTemplate.opsForValue().set(cacheKey, results, Duration.ofMinutes(5));
-        } catch (Exception ignored) {}
+        System.out.println("userId=" + userId + ", eventId=" + eventId + ", bookingId=" + bookingId);
 
-        // Step h — return (empty list if no recommendations)
-        return results;
+        // 5) Neo4j idempotency check
+        if (userNodeCustomRepository.countRecorded(userId, eventId, bookingId) > 0) {
+            return; // idempotent no-op
+        }
+
+        // 6-8) Write to Neo4j using raw driver — bypasses broken SDN template
+        userNodeCustomRepository.recordAttendance(
+                userId, userName,
+                eventId, eventName, eventCategory,
+                bookingId
+        );
+
+        // 9) Emit Mongo event
+        notifyObservers(
+                "INTERACTION_RECORDED",
+                Map.of(
+                        "bookingId", bookingId,
+                        "userId", userId,
+                        "eventId", eventId
+                )
+        );
     }
 }

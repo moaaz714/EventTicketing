@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/bookings") // Requirement 4.a
@@ -187,9 +188,26 @@ public class bookingController {
     //-- End point for the second feature in the booking service in milestone 2
     @PostMapping("/{bookingId}/record-attendance")
     public ResponseEntity<?> recordAttendance(@PathVariable Long bookingId) {
-        assertOwnerOrAdmin(bookingService.findById(bookingId).getUserId());
+
+        // 1. Fetch from PostgreSQL directly
+        // This bypasses any potential Redis cache issues and ensures we have
+        // the latest status from the relational database.
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId));
+
+        // 2. Security: Verify that the user owns this booking or is an ADMIN.
+        assertOwnerOrAdmin(booking.getUserId());
+
+        // 3. Delegate the complex polyglot logic to the Service layer
+        // This includes updating Neo4j and triggering the MongoDB observer[cite: 12].
         bookingService.recordAttendance(bookingId);
-        return ResponseEntity.ok("Attendance recorded");
+
+        // 4. Return standard success response
+        return ResponseEntity.ok(Map.of(
+                "status", "success",
+                "message", "Attendance recorded successfully"
+        ));
     }
 
     @GetMapping("/recommendations")
