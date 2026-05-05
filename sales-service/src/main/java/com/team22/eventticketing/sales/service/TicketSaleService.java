@@ -44,7 +44,11 @@ public class TicketSaleService {
 
     public TicketSale create(TicketSale ticketSale) {
         TicketSale saved = ticketSaleRepository.save(ticketSale);
-        notifyObservers("SALE_CREATED", Map.of("saleId", saved.getId()));
+        Map<String, Object> createdPayload = new HashMap<>();
+        createdPayload.put("saleId", saved.getId());
+        if (saved.getMethod() != null)  createdPayload.put("method", saved.getMethod().name());
+        if (saved.getAmount() != null)  createdPayload.put("amount", saved.getAmount());
+        notifyObservers("SALE_CREATED", createdPayload);
         return saved;
     }
 
@@ -192,7 +196,12 @@ public class TicketSaleService {
         TicketSale saved = ticketSaleRepository.save(sale);
         cacheEviction.evictEntityAndFeatures("ticket-sale", id,
                 "S5-F1", "S5-F3", "S5-F6", "S5-F8", "S5-F10", "S5-F11");
-        notifyObservers("SALE_RETRIED", Map.of("saleId", saved.getId()));
+        Map<String, Object> retryPayload = new HashMap<>();
+        retryPayload.put("saleId", saved.getId());
+        if (saved.getMethod() != null) retryPayload.put("method", saved.getMethod().name());
+        if (saved.getAmount() != null) retryPayload.put("amount", saved.getAmount());
+        notifyObservers("SALE_RETRIED",       retryPayload);
+        notifyObservers("PAYMENT_PROCESSED",  retryPayload);
         return saved;
     }
 

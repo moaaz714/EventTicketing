@@ -11,6 +11,7 @@ public class PaymentAuditEvent implements MongoEvent {
 
     @Id
     private String id;
+    private Long saleId;
     private Instant timestamp;
     private String action;
     private Map<String, Object> details;
@@ -27,7 +28,17 @@ public class PaymentAuditEvent implements MongoEvent {
         this.amount = amount;
     }
 
+    public PaymentAuditEvent(Long saleId, String action, Map<String, Object> details, String method, Double amount) {
+        this.timestamp = Instant.now();
+        this.saleId = saleId;
+        this.action = action;
+        this.details = details;
+        this.method = method;
+        this.amount = amount;
+    }
+
     @Override public String getId() { return id; }
+    public Long getSaleId() { return saleId; }
     @Override public Instant getTimestamp() { return timestamp; }
     @Override public String getAction() { return action; }
     @Override public Map<String, Object> getDetails() { return details; }
@@ -35,6 +46,7 @@ public class PaymentAuditEvent implements MongoEvent {
     public Double getAmount() { return amount; }
 
     public void setId(String id) { this.id = id; }
+    public void setSaleId(Long saleId) { this.saleId = saleId; }
     public void setTimestamp(Instant timestamp) { this.timestamp = timestamp; }
     public void setAction(String action) { this.action = action; }
     public void setDetails(Map<String, Object> details) { this.details = details; }
