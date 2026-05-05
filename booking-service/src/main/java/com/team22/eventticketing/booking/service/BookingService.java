@@ -1,24 +1,22 @@
 package com.team22.eventticketing.booking.service;
 
-import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
-import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
-import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
-import com.team22.eventticketing.booking.dto.BookingItemDTO;
-import com.team22.eventticketing.booking.dto.BookingItemRequest;
+import com.team22.eventticketing.booking.adapter.Neo4jRecordAdapter;
+import com.team22.eventticketing.booking.dto.*;
 import com.team22.eventticketing.booking.model.*;
 import com.team22.eventticketing.booking.observer.EntityObserver;
 import com.team22.eventticketing.booking.repository.BookingItemRepository;
 import com.team22.eventticketing.booking.repository.BookingRepository;
 import com.team22.eventticketing.booking.repository.EventNodeRepository;
 import com.team22.eventticketing.booking.repository.UserNodeRepository;
+import com.team22.eventticketing.booking.security.AuthContext;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -26,7 +24,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
 @Service
 public class BookingService {
 
@@ -442,5 +439,63 @@ public class BookingService {
                 "userId", userId,
                 "eventId", eventId
         ));
+    }
+
+
+    public List<EventRecommendationDTO> getRecommendations(Long userId, Integer limit, AuthContext ctx) {
+
+        // Step b — ownership check
+        Long callerId = ctx.getUserId();
+        String role = ctx.getUserRole();
+        if (!callerId.equals(userId) && !"ADMIN".equals(role)) {
+            throw new AccessDeniedException("Forbidden");
+        }
+
+        // Step c — verify user exists in PG
+        if (!bookingRepository.existsUserById(userId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        }
+
+        // Step f — default limit
+        int effectiveLimit = (limit == null) ? 5 : limit;
+
+        // Step g — check cache first
+        String cacheKey = "booking-service::S3-F12::" + userId + "::" + effectiveLimit;
+        try {
+            Object cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached instanceof List<?> list) {
+                return (List<EventRecommendationDTO>) list;
+            }
+        } catch (Exception ignored) {}
+
+        // Step d — traverse Neo4j graph
+        List<org.neo4j.driver.Record> records = userNodeRepository.findRecommendations(userId, effectiveLimit);
+
+        // Step d + e — adapt each record and enrich from PG
+        Neo4jRecordAdapter adapter = new Neo4jRecordAdapter();
+        List<EventRecommendationDTO> results = new ArrayList<>();
+
+        for (org.neo4j.driver.Record record : records) {
+            EventRecommendationDTO dto = adapter.adapt(record);
+
+            Object[] eventDetails = bookingRepository.findEventDetailsById(dto.getEventId());
+            if (eventDetails != null) {
+                dto.setName((String) eventDetails[1]);
+                dto.setCategory((String) eventDetails[2]);
+                dto.setEventDate(eventDetails[3] != null
+                        ? ((java.sql.Timestamp) eventDetails[3]).toLocalDateTime()
+                        : null);
+            }
+
+            results.add(dto);
+        }
+
+        // Step g — store in cache for 5 minutes
+        try {
+            redisTemplate.opsForValue().set(cacheKey, results, Duration.ofMinutes(5));
+        } catch (Exception ignored) {}
+
+        // Step h — return (empty list if no recommendations)
+        return results;
     }
 }
