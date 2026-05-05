@@ -444,7 +444,6 @@ public class BookingService {
 
     public List<EventRecommendationDTO> getRecommendations(Long userId, Integer limit, AuthContext ctx) {
 
-        // Step b — ownership check
         Long callerId = ctx.getUserId();
         String role = ctx.getUserRole();
         if (!callerId.equals(userId) && !"ADMIN".equals(role)) {
