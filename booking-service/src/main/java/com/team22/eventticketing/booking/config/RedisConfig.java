@@ -41,8 +41,7 @@ public class RedisConfig {
         configs.put("booking-service::booking-item", cfg(Duration.ofMinutes(15), json));
 
         // --- M2 Features ---
-        // S4-F10 uses JDK Serialization -> ZERO ClassCastExceptions!
-        configs.put("booking-service::S3-F10", cfg(Duration.ofMinutes(10), json));
+        configs.put("booking-service::S3-F10", cfg(Duration.ofMinutes(10), jdkSerializer));
 
         return RedisCacheManager.builder(factory)
                 .withInitialCacheConfigurations(configs)

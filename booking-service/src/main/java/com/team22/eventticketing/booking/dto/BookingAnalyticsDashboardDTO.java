@@ -2,9 +2,13 @@ package com.team22.eventticketing.booking.dto;
 
 import com.team22.eventticketing.booking.model.BookingStatus;
 
+import java.io.Serializable;
 import java.util.Map;
 
-public class BookingAnalyticsDashboardDTO {
+public class BookingAnalyticsDashboardDTO implements Serializable {
+    // 1. ADD THIS: It acts as a version control ID for binary serialization
+    private static final long serialVersionUID = 1L;
+
     Long totalBookings;
     Double totalRevenue;
     Double averageBookingValue;
