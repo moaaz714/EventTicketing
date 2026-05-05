@@ -1,10 +1,6 @@
 package com.team22.eventticketing.booking.controller;
 
-import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
-import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
-import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
-import com.team22.eventticketing.booking.dto.BookingItemRequest;
-import com.team22.eventticketing.booking.dto.CostEstimateRequest;
+import com.team22.eventticketing.booking.dto.*;
 import com.team22.eventticketing.booking.model.Booking;
 import com.team22.eventticketing.booking.model.BookingStatus;
 import com.team22.eventticketing.booking.service.BookingService;
@@ -16,6 +12,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -51,10 +48,15 @@ public class bookingController {
     @GetMapping("/search")
     public ResponseEntity<List<Booking>> searchBookings(
             @RequestParam(required = false) BookingStatus status,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
-        List<Booking> results = bookingService.searchBookings(status, startDate, endDate);
+        LocalDateTime start = (startDate != null) ? startDate.atStartOfDay() : null;
+        LocalDateTime end   = (endDate != null) ? endDate.atTime(23, 59, 59) : null;
+
+        System.out.println("====== NEW CODE IS RUNNING! Start2: " + start + " End: " + end + " ======");
+
+        List<Booking> results = bookingService.searchBookings(status, start, end);
         return ResponseEntity.ok(results);
     }
 
@@ -192,5 +194,23 @@ public class bookingController {
         assertOwnerOrAdmin(bookingService.findById(bookingId).getUserId());
         bookingService.recordAttendance(bookingId);
         return ResponseEntity.ok("Attendance recorded");
+    }
+
+    @GetMapping("/analytics/dashboard")
+    public ResponseEntity<BookingAnalyticsDashboardDTO> getDashboard(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        // Validation
+        if (startDate.isAfter(endDate)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Start date cannot be after end date");
+        }
+
+        // Milestone 2 Date Expansion [00:00:00 to 23:59:59.999]
+        LocalDateTime start = (startDate != null) ? startDate.atStartOfDay() : null;
+        LocalDateTime end   = (endDate != null) ? endDate.atTime(23, 59, 59) : null;
+
+        BookingAnalyticsDashboardDTO dashboard = bookingService.getDashboard(start, end);
+        return ResponseEntity.ok(dashboard);
     }
 }

@@ -121,4 +121,17 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     """, nativeQuery = true)
     int findMaxEventOrderByBookingId(@Param("bookingId") Long bookingId);
 
+    @Query(value = """
+    SELECT 
+        status, 
+        COUNT(*) as statusCount, 
+        COALESCE(SUM(CASE WHEN status = 'COMPLETED' THEN total_amount ELSE 0 END), 0) as statusRevenue
+    FROM bookings 
+    WHERE booking_date BETWEEN :start AND :end
+    GROUP BY status
+    """, nativeQuery = true)
+    List<Object[]> getDashboardAggregation(
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
 }

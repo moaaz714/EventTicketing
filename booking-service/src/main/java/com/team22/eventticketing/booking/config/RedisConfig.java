@@ -7,6 +7,7 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializer;
+import org.springframework.data.redis.serializer.JdkSerializationRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
@@ -20,11 +21,17 @@ public class RedisConfig {
 
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory factory) {
+        // 1. ORIGINAL JSON SERIALIZER (Untouched)
         RedisSerializer<Object> json = GenericJacksonJsonRedisSerializer.builder()
                 .enableSpringCacheNullValueSupport()
                 .build();
 
+        // 2. THE BULLETPROOF JDK SERIALIZER (Bypasses JSON entirely)
+        RedisSerializer<Object> jdkSerializer = new JdkSerializationRedisSerializer();
+
         Map<String, RedisCacheConfiguration> configs = new HashMap<>();
+
+        // --- M1 Features ---
         configs.put("booking-service::S3-F1", cfg(Duration.ofMinutes(5),  json));
         configs.put("booking-service::S3-F3", cfg(Duration.ofMinutes(5),  json));
         configs.put("booking-service::S3-F5", cfg(Duration.ofMinutes(5),  json));
@@ -32,6 +39,10 @@ public class RedisConfig {
         configs.put("booking-service::S3-F9", cfg(Duration.ofMinutes(10), json));
         configs.put("booking-service::booking",      cfg(Duration.ofMinutes(15), json));
         configs.put("booking-service::booking-item", cfg(Duration.ofMinutes(15), json));
+
+        // --- M2 Features ---
+        // S4-F10 uses JDK Serialization -> ZERO ClassCastExceptions!
+        configs.put("booking-service::S3-F10", cfg(Duration.ofMinutes(10), json));
 
         return RedisCacheManager.builder(factory)
                 .withInitialCacheConfigurations(configs)

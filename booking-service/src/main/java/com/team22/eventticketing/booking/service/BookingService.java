@@ -1,10 +1,7 @@
 package com.team22.eventticketing.booking.service;
 
-import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
-import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
-import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
-import com.team22.eventticketing.booking.dto.BookingItemDTO;
-import com.team22.eventticketing.booking.dto.BookingItemRequest;
+import com.team22.eventticketing.booking.adapter.AnalyticsDashboardTarget;
+import com.team22.eventticketing.booking.dto.*;
 import com.team22.eventticketing.booking.model.*;
 import com.team22.eventticketing.booking.observer.EntityObserver;
 import com.team22.eventticketing.booking.repository.BookingItemRepository;
@@ -36,6 +33,7 @@ public class BookingService {
     private final BookingItemRepository bookingItemRepository;
     private final CacheEvictionService cacheEviction;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final AnalyticsDashboardTarget dashboardAdapter;
     private final List<EntityObserver> observers = new ArrayList<>();
 
 
@@ -43,7 +41,7 @@ public class BookingService {
     private final UserNodeRepository userNodeRepository;
     private final EventNodeRepository eventNodeRepository;
 
-    public BookingService(BookingRepository bookingRepository,
+    public BookingService(BookingRepository bookingRepository,AnalyticsDashboardTarget dashboardAdapter,
                           BookingItemRepository bookingItemRepository,
                           CacheEvictionService cacheEviction,
                           RedisTemplate<String, Object> redisTemplate,
@@ -54,6 +52,7 @@ public class BookingService {
         this.redisTemplate = redisTemplate;
         this.eventNodeRepository= eventNodeRepository;
         this.userNodeRepository=  userNodeRepository;
+        this.dashboardAdapter= dashboardAdapter;
     }
 
     public void register(EntityObserver observer) { observers.add(observer); }
@@ -65,8 +64,10 @@ public class BookingService {
 
     // ─── [S3-F1] Search Bookings ──────────────────────────────────────────────────
 
-    @Cacheable(cacheNames = "booking-service::S3-F1",
-            key = "T(String).valueOf(#status) + ':' + T(String).valueOf(#startDate) + ':' + T(String).valueOf(#endDate)")
+    @Cacheable(
+            cacheNames = "booking-service::S3-F1",
+            key = "(#status != null ? #status.name() : 'ALL') + ':' + #startDate.toString() + ':' + #endDate.toString()"
+    )
     public List<Booking> searchBookings(BookingStatus status, LocalDateTime startDate, LocalDateTime endDate) {
         if (status != null) {
             return bookingRepository.findByStatusAndBookingDateBetweenOrderByBookingDateDesc(status, startDate, endDate);
@@ -318,7 +319,7 @@ public class BookingService {
 
         String eventStatus = bookingRepository.findEventStatusById(eventId);
         if (eventStatus == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event with ID " + eventId + " not found");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event with ID " + eventId + "Event not found");
         }
 
         if (booking.getStatus() != BookingStatus.PENDING) {
@@ -335,7 +336,7 @@ public class BookingService {
 
         Booking saved = bookingRepository.save(booking);
         cacheEviction.evictEntityAndFeatures("booking", bookingId, "S3-F1", "S3-F9", "S3-F10");
-        notifyObservers("BOOKING_CONFIRMED", Map.of("bookingId", saved.getId(), "eventId", eventId));
+//        notifyObservers("BOOKING_CONFIRMED", Map.of("bookingId", saved.getId(), "eventId", eventId));
         return saved;
     }
 
@@ -442,5 +443,47 @@ public class BookingService {
                 "userId", userId,
                 "eventId", eventId
         ));
+    }
+
+    @Cacheable(
+            cacheNames = "booking-service::S3-F10",
+            key = "#startDate.toString() + ':' + #endDate.toString()"
+    )
+    public BookingAnalyticsDashboardDTO getDashboard(LocalDateTime startDate, LocalDateTime endDate) {
+
+        // 1. Fetch raw data from PostgreSQL
+        List<Object[]> results = bookingRepository.getDashboardAggregation(startDate, endDate);
+
+
+        Map<BookingStatus, Long> statusMap = new java.util.HashMap<>();
+        long totalBookings = 0;
+        double totalRevenue = 0;
+
+        // 2. Adapter Pattern: Map the SQL rows to Java types
+        for (Object[] row : results) {
+            BookingStatus status = BookingStatus.valueOf((String) row[0]);
+            long count = ((Number) row[1]).longValue();
+            double revenue = ((Number) row[2]).doubleValue();
+
+            statusMap.put(status, count);
+            totalBookings += count;
+            totalRevenue += revenue;
+        }
+
+        // 3. Calculate derived business metrics
+        long completed = statusMap.getOrDefault(BookingStatus.COMPLETED, 0L);
+        long converted = statusMap.getOrDefault(BookingStatus.CONFIRMED, 0L) +
+                statusMap.getOrDefault(BookingStatus.CHECKED_IN, 0L) +
+                completed;
+
+        double avgValue = completed > 0 ? totalRevenue / completed : 0.0;
+        double convRate = totalBookings > 0 ? ((double) converted / totalBookings) * 100 : 0.0;
+
+//        // 4. Observer Pattern: Log the view event to MongoDB
+        notifyObservers("ANALYTICS_VIEWED", Map.of("startDate", startDate, "endDate", endDate));
+
+        BookingAnalyticsDashboardDTO dashboardData = dashboardAdapter.adaptRawData(results);
+        // 5. Builder Pattern: Return the fully assembled DTO
+        return dashboardData;
     }
 }
