@@ -21,13 +21,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/bookings") // Requirement 4.a
-public class BookingController { // FIXED: Capitalized class name to match Java conventions
+public class bookingController { // FIXED: Capitalized class name to match Java conventions
 
     private final BookingRepository bookingRepository;
     private final BookingService bookingService;
 
     // FIXED: Constructor name must exactly match the class name
-    public BookingController(BookingService bookingService, BookingRepository bookingRepository) {
+    public bookingController(BookingService bookingService, BookingRepository bookingRepository) {
         this.bookingService = bookingService;
         this.bookingRepository = bookingRepository;
     }
