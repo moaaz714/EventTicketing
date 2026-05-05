@@ -27,7 +27,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.data.neo4j.core.Neo4jClient;
-
+import com.team22.eventticketing.booking.repository.UserNodeRecommendationRepository;
+import com.team22.eventticketing.booking.dto.EventRecommendationDTO;
+import com.team22.eventticketing.booking.security.AuthContext;
+import jakarta.servlet.http.HttpServletRequest;
 @Service
 public class BookingService {
 
@@ -44,12 +47,18 @@ public class BookingService {
     private final UserNodeRepository userNodeRepository;
     private final EventNodeRepository eventNodeRepository;
     private final UserNodeCustomRepository userNodeCustomRepository;
+    private final UserNodeRecommendationRepository userNodeRecommendationRepository;
 
     public BookingService(BookingRepository bookingRepository,
                           BookingItemRepository bookingItemRepository,
                           CacheEvictionService cacheEviction,
                           RedisTemplate<String, Object> redisTemplate,
-                          EventNodeRepository eventNodeRepository, UserNodeRepository userNodeRepository,List<EntityObserver> observers,UserNodeCustomRepository userNodeCustomRepository) {
+                          EventNodeRepository eventNodeRepository,
+                          UserNodeRepository userNodeRepository,
+                          List<EntityObserver> observers,
+                          UserNodeCustomRepository userNodeCustomRepository,
+                          UserNodeRecommendationRepository userNodeRecommendationRepository
+    ) {
         this.bookingRepository = bookingRepository;
         this.bookingItemRepository = bookingItemRepository;
         this.cacheEviction = cacheEviction;
@@ -58,6 +67,7 @@ public class BookingService {
         this.userNodeRepository=  userNodeRepository;
         this.observers.addAll(observers);
         this.userNodeCustomRepository = userNodeCustomRepository;
+        this.userNodeRecommendationRepository = userNodeRecommendationRepository;
 
     }
 
@@ -455,5 +465,67 @@ public class BookingService {
                         "eventId", eventId
                 )
         );
+    }
+
+
+
+
+    public List<EventRecommendationDTO> getRecommendations(Long userId, Integer limit, AuthContext ctx) {
+
+        Long callerId = ctx.getUserId();
+        String role = ctx.getUserRole();
+        if (!callerId.equals(userId) && !"ADMIN".equals(role)) {
+            throw new AccessDeniedException("Forbidden");
+        }
+
+        // Step c — verify user exists in PG
+        if (!bookingRepository.existsUserById(userId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        }
+
+        // Step f — default limit
+        int effectiveLimit = (limit == null) ? 5 : limit;
+
+        // Step g — check cache first
+        String cacheKey = "booking-service::S3-F12::" + userId + "::" + effectiveLimit;
+        try {
+            Object cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached instanceof List<?> list) {
+                return (List<EventRecommendationDTO>) list;
+            }
+        } catch (Exception ignored) {}
+
+        // Step d — traverse Neo4j graph
+        List<org.neo4j.driver.Record> records = userNodeRecommendationRepository.findRecommendations(userId, effectiveLimit);
+
+        // Step d + e — adapt each record and enrich from PG
+        Neo4jRecordAdapter adapter = new Neo4jRecordAdapter();
+        List<EventRecommendationDTO> results = new ArrayList<>();
+
+        for (org.neo4j.driver.Record record : records) {
+            EventRecommendationDTO dto = adapter.adapt(record);
+
+            List<Object[]> rows = bookingRepository.findEventDetailsById(dto.getEventId());
+            if (rows != null && !rows.isEmpty()) {
+                Object[] row = rows.get(0);
+                dto.setName(row[0] != null ? (String) row[0] : null);
+                dto.setCategory(row[1] != null ? (String) row[1] : null);
+                if (row[2] instanceof java.sql.Timestamp ts) {
+                    dto.setEventDate(ts.toLocalDateTime());
+                } else if (row[2] instanceof java.sql.Date d) {
+                    dto.setEventDate(d.toLocalDate().atStartOfDay());
+                }
+            }
+
+            results.add(dto);
+        }
+
+        // Step g — store in cache for 5 minutes
+        try {
+            redisTemplate.opsForValue().set(cacheKey, results, Duration.ofMinutes(5));
+        } catch (Exception ignored) {}
+
+        // Step h — return (empty list if no recommendations)
+        return results;
     }
 }

@@ -209,6 +209,24 @@ public class bookingController {
                 "message", "Attendance recorded successfully"
         ));
     }
+    @GetMapping("/recommendations")
+    public ResponseEntity<List<EventRecommendationDTO>> getRecommendations(
+            @RequestParam Long userId,
+            @RequestParam(required = false) Integer limit,
+            HttpServletRequest request) {
 
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        Long callerId = (Long) auth.getDetails();
+        String role = auth.getAuthorities().stream()
+                .findFirst()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .orElse("ATTENDEE");
+
+        AuthContext ctx = new AuthContext(request, "USER");
+        ctx.setUserId(callerId);
+        ctx.setUserRole(role);
+
+        return ResponseEntity.ok(bookingService.getRecommendations(userId, limit, ctx));
+    }
 
 }
