@@ -3,8 +3,10 @@ package com.team22.eventticketing.booking.controller;
 import com.team22.eventticketing.booking.dto.*;
 import com.team22.eventticketing.booking.model.Booking;
 import com.team22.eventticketing.booking.model.BookingStatus;
+import com.team22.eventticketing.booking.security.AuthContext;
 import com.team22.eventticketing.booking.service.BookingService;
 import com.team22.eventticketing.booking.repository.BookingRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,16 +17,17 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/bookings") // Requirement 4.a
-public class bookingController {
+public class BookingController { // FIXED: Capitalized class name to match Java conventions
 
     private final BookingRepository bookingRepository;
     private final BookingService bookingService;
 
-    // Fixed constructor for dependency injection
-    public bookingController(BookingService bookingService, BookingRepository bookingRepository) {
+    // FIXED: Constructor name must exactly match the class name
+    public BookingController(BookingService bookingService, BookingRepository bookingRepository) {
         this.bookingService = bookingService;
         this.bookingRepository = bookingRepository;
     }
@@ -34,6 +37,7 @@ public class bookingController {
         boolean isAdmin = auth.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
         if (isAdmin) return;
+
         Long callerId = (Long) auth.getDetails();
         if (!callerId.equals(bookingUserId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
@@ -54,7 +58,7 @@ public class bookingController {
         LocalDateTime start = (startDate != null) ? startDate.atStartOfDay() : null;
         LocalDateTime end   = (endDate != null) ? endDate.atTime(23, 59, 59) : null;
 
-        System.out.println("====== NEW CODE IS RUNNING! Start2: " + start + " End: " + end + " ======");
+        // FIXED: Removed the leftover debugging System.out.println from the merge
 
         List<Booking> results = bookingService.searchBookings(status, start, end);
         return ResponseEntity.ok(results);
@@ -188,14 +192,30 @@ public class bookingController {
         assertOwnerOrAdmin(bookingService.findById(id).getUserId());
         return ResponseEntity.ok(bookingService.getBookingDetails(id));
     }
-    //-- End point for the second feature in the booking service in milestone 2
+
+    // ─── Milestone 2: Record Attendance ───────────────────────────────────────────
     @PostMapping("/{bookingId}/record-attendance")
     public ResponseEntity<?> recordAttendance(@PathVariable Long bookingId) {
-        assertOwnerOrAdmin(bookingService.findById(bookingId).getUserId());
+
+        // 1. Fetch from PostgreSQL directly
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId));
+
+        // 2. Security: Verify that the user owns this booking or is an ADMIN.
+        assertOwnerOrAdmin(booking.getUserId());
+
+        // 3. Delegate the complex polyglot logic to the Service layer
         bookingService.recordAttendance(bookingId);
-        return ResponseEntity.ok("Attendance recorded");
+
+        // 4. Return standard success response
+        return ResponseEntity.ok(Map.of(
+                "status", "success",
+                "message", "Attendance recorded successfully"
+        ));
     }
 
+    // ─── Milestone 2: Analytics Dashboard ─────────────────────────────────────────
     @GetMapping("/analytics/dashboard")
     public ResponseEntity<BookingAnalyticsDashboardDTO> getDashboard(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -206,11 +226,32 @@ public class bookingController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Start date cannot be after end date");
         }
 
-        // Milestone 2 Date Expansion [00:00:00 to 23:59:59.999]
+        // Date Expansion [00:00:00 to 23:59:59.999]
         LocalDateTime start = (startDate != null) ? startDate.atStartOfDay() : null;
         LocalDateTime end   = (endDate != null) ? endDate.atTime(23, 59, 59) : null;
 
         BookingAnalyticsDashboardDTO dashboard = bookingService.getDashboard(start, end);
         return ResponseEntity.ok(dashboard);
+    }
+
+    // ─── Milestone 2: Recommendations ─────────────────────────────────────────────
+    @GetMapping("/recommendations")
+    public ResponseEntity<List<EventRecommendationDTO>> getRecommendations(
+            @RequestParam Long userId,
+            @RequestParam(required = false) Integer limit,
+            HttpServletRequest request) {
+
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        Long callerId = (Long) auth.getDetails();
+        String role = auth.getAuthorities().stream()
+                .findFirst()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .orElse("ATTENDEE");
+
+        AuthContext ctx = new AuthContext(request, "USER");
+        ctx.setUserId(callerId);
+        ctx.setUserRole(role);
+
+        return ResponseEntity.ok(bookingService.getRecommendations(userId, limit, ctx));
     }
 }

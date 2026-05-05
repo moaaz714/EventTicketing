@@ -49,7 +49,8 @@ public class SalesService {
 
     // ─── [S5-F4] Process booking payment (write — invalidates) ───────────────────
     @Transactional
-    public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method, String cardLastFour) {
+    public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method,
+                                            String cardLastFour, boolean simulateFailure) {
         String bookingStatus = ticketSaleRepository.findBookingStatus(bookingId);
 
         if (bookingStatus == null) {
@@ -68,15 +69,24 @@ public class SalesService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Booking not found"));
 
-        ticketSale.setStatus(TicketSale.SaleStatus.COMPLETED);
-
         Map<String, Object> transactionDetails = new HashMap<>();
         transactionDetails.put("method", method.name());
+        if (cardLastFour != null) transactionDetails.put("cardLastFour", cardLastFour);
 
-        if (cardLastFour != null) {
-            transactionDetails.put("cardLastFour", cardLastFour);
+        if (simulateFailure) {
+            ticketSale.setStatus(TicketSale.SaleStatus.FAILED);
+            transactionDetails.put("gatewayResponse", "declined");
+            transactionDetails.put("failedAt", LocalDateTime.now().toString());
+            ticketSale.setTransactionDetails(transactionDetails);
+            TicketSale saved = ticketSaleRepository.save(ticketSale);
+            cacheEviction.evictEntityAndFeatures("ticket-sale", saved.getId(),
+                    "S5-F1", "S5-F3", "S5-F6", "S5-F10", "S5-F11");
+            notifyObservers("SALE_FAILED", Map.of("saleId", saved.getId(), "bookingId", bookingId,
+                    "method", method.name(), "amount", saved.getAmount() != null ? saved.getAmount() : 0.0));
+            return saved;
         }
 
+        ticketSale.setStatus(TicketSale.SaleStatus.COMPLETED);
         transactionDetails.put("gatewayResponse", "approved");
         transactionDetails.put("paidAt", LocalDateTime.now().toString());
         ticketSale.setTransactionDetails(transactionDetails);
@@ -87,6 +97,10 @@ public class SalesService {
         notifyObservers("PAYMENT_PROCESSED", Map.of("saleId", saved.getId(), "bookingId", bookingId,
                 "method", method.name(), "amount", saved.getAmount() != null ? saved.getAmount() : 0.0));
         return saved;
+    }
+
+    public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method, String cardLastFour) {
+        return processBookingPayment(bookingId, method, cardLastFour, false);
     }
 
     // ─── [S5-F6] Revenue Report (report — cached) ────────────────────────────────

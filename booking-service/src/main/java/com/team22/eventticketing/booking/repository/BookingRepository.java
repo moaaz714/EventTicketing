@@ -134,4 +134,19 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
 
+
+    // S3-F11: Fetch cross-service user data natively
+    @Query(value = "SELECT name FROM users WHERE id = :userId", nativeQuery = true)
+    String findUserNameById(@Param("userId") Long userId);
+
+    // S3-F11: Fetch cross-service event data natively
+    @Query(value = "SELECT name, category,event_date  FROM events WHERE id = :eventId", nativeQuery = true)
+    List<Object[]> findEventDetailsById(@Param("eventId") Long eventId);
+
+
+    // f 12
+    @Query(value = "SELECT COUNT(*) > 0 FROM users WHERE id = :userId", nativeQuery = true)
+    boolean existsUserById(@Param("userId") Long userId);
+
+
 }

@@ -6,7 +6,7 @@ import org.springframework.data.neo4j.core.schema.Relationship;
 
 import java.util.Set;
 
-@Node
+@Node("UserNode") // OR "Event" ?
 public class UserNode {
 
     @Id
