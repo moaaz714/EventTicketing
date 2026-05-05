@@ -210,13 +210,5 @@ public class bookingController {
         ));
     }
 
-    @GetMapping("/recommendations")
-    public ResponseEntity<List<EventRecommendationDTO>> getRecommendations(
-            @RequestParam Long userId,
-            @RequestParam(required = false) Integer limit,
-            HttpServletRequest request) {
 
-        AuthContext ctx = (AuthContext) request.getAttribute("authContext");
-        return ResponseEntity.ok(bookingService.getRecommendations(userId, limit, ctx));
-    }
 }
