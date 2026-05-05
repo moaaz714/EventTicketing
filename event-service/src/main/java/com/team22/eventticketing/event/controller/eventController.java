@@ -15,6 +15,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.team22.eventticketing.event.dto.EventDashboardDTO;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -218,5 +219,11 @@ public class eventController {
     public ResponseEntity<Void> indexEventExplicitly(@PathVariable Long id) {
         eventService.explicitIndexEvent(id);
         return ResponseEntity.ok().build();
+    }
+
+    // [S2-F12] Event Performance Dashboard
+    @GetMapping("/{id}/dashboard")
+    public ResponseEntity<EventDashboardDTO> getDashboard(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.getEventDashboard(id));
     }
 }

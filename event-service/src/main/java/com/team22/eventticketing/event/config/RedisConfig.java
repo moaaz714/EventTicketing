@@ -32,6 +32,7 @@ public class RedisConfig {
         configs.put("event-service::S2-F9", cfg(Duration.ofMinutes(10), json));
         configs.put("event-service::event",         cfg(Duration.ofMinutes(15), json));
         configs.put("event-service::event-session", cfg(Duration.ofMinutes(15), json));
+        configs.put("event-service::S2-F12", cfg(Duration.ofMinutes(10), json));
 
         return RedisCacheManager.builder(factory)
                 .withInitialCacheConfigurations(configs)
