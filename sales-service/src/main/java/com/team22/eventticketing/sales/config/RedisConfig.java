@@ -37,6 +37,7 @@ public class RedisConfig {
         configs.put("sales-service::S5-F8", cfg(Duration.ofMinutes(15), json));
         configs.put("sales-service::S5-F9",  cfg(Duration.ofMinutes(10), json));
         configs.put("sales-service::S5-F10", cfg(Duration.ofMinutes(10), json));
+        configs.put("sales-service::S5-F11", cfg(Duration.ofMinutes(10), json));
         configs.put("sales-service::ticket-sale",    cfg(Duration.ofMinutes(15), json));
         configs.put("sales-service::promotion",      cfg(Duration.ofMinutes(15), json));
         configs.put("sales-service::sale-promotion", cfg(Duration.ofMinutes(15), json));

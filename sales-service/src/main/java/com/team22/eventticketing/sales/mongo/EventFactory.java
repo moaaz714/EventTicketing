@@ -43,6 +43,7 @@ public class EventFactory {
         String action = (String) params.get("action");
         String method = (String) params.get("method");
         Double amount = params.get("amount") != null ? ((Number) params.get("amount")).doubleValue() : null;
-        return new PaymentAuditEvent(action, params, method, amount);
+        Long saleId = params.get("saleId") != null ? ((Number) params.get("saleId")).longValue() : null;
+        return new PaymentAuditEvent(saleId, action, params, method, amount);
     }
 }
