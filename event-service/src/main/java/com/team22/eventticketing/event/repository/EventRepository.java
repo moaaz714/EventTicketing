@@ -109,4 +109,35 @@ public interface EventRepository extends JpaRepository<Event, Long> {
         LIMIT :limit
         """, nativeQuery = true)
     List<Object[]> findTopRatedEvents(@Param("limit") int limit);
+
+
+    // Total bookings count
+    @Query(value = "SELECT COUNT(*) FROM bookings WHERE event_id = :eventId", nativeQuery = true)
+    long countBookingsByEventId(@Param("eventId") Long eventId);
+
+    // Total revenue (COMPLETED only)
+    @Query(value = """
+    SELECT COALESCE(SUM(total_amount), 0)
+    FROM bookings
+    WHERE event_id = :eventId AND status = 'COMPLETED'
+""", nativeQuery = true)
+    double sumRevenueByEventId(@Param("eventId") Long eventId);
+
+    // Total tickets sold
+    @Query(value = """
+    SELECT COUNT(t.id)
+    FROM tickets t
+    JOIN bookings b ON t.booking_id = b.id
+    WHERE b.event_id = :eventId
+""", nativeQuery = true)
+    long countTicketsByEventId(@Param("eventId") Long eventId);
+
+    // USED tickets
+    @Query(value = """
+    SELECT COUNT(t.id)
+    FROM tickets t
+    JOIN bookings b ON t.booking_id = b.id
+    WHERE b.event_id = :eventId AND t.status = 'USED'
+""", nativeQuery = true)
+    long countUsedTicketsByEventId(@Param("eventId") Long eventId);
 }

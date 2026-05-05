@@ -1,20 +1,19 @@
 package com.team22.eventticketing.booking.service;
 
-import com.team22.eventticketing.booking.dto.BookingAnalyticsDTO;
-import com.team22.eventticketing.booking.dto.BookingCostEstimateDTO;
-import com.team22.eventticketing.booking.dto.BookingDetailsDTO;
-import com.team22.eventticketing.booking.dto.BookingItemDTO;
-import com.team22.eventticketing.booking.dto.BookingItemRequest;
+import com.team22.eventticketing.booking.adapter.Neo4jRecordAdapter;
+import com.team22.eventticketing.booking.dto.*;
 import com.team22.eventticketing.booking.model.*;
 import com.team22.eventticketing.booking.observer.EntityObserver;
 import com.team22.eventticketing.booking.repository.BookingItemRepository;
 import com.team22.eventticketing.booking.repository.BookingRepository;
 import com.team22.eventticketing.booking.repository.EventNodeRepository;
 import com.team22.eventticketing.booking.repository.UserNodeRepository;
+import com.team22.eventticketing.booking.security.AuthContext;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;

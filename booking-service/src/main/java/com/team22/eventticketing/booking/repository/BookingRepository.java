@@ -120,6 +120,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     WHERE booking_id = :bookingId
     """, nativeQuery = true)
     int findMaxEventOrderByBookingId(@Param("bookingId") Long bookingId);
+    // quering the shared databse across all systems for the third feature in milestone 2
+    @Query(value = "SELECT COUNT(*) > 0 FROM users WHERE id = :userId", nativeQuery = true)
+    boolean existsUserById(@Param("userId") Long userId);
+    @Query(value = "SELECT id, name, category, event_date FROM events WHERE id = :eventId", nativeQuery = true)
+    Object[] findEventDetailsById(@Param("eventId") Long eventId);
+}
 
 
     // S3-F11: Fetch cross-service user data natively
