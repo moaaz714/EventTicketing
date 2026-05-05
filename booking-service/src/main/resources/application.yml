@@ -1,4 +1,7 @@
 spring:
+  web:
+    error:
+      include-message: always
   datasource:
     url: jdbc:postgresql://postgres:5432/eventticketingdb
     username: postgres

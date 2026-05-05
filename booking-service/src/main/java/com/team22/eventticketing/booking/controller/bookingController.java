@@ -14,19 +14,20 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/bookings") // Requirement 4.a
-public class bookingController {
+public class BookingController { // FIXED: Capitalized class name to match Java conventions
 
     private final BookingRepository bookingRepository;
     private final BookingService bookingService;
 
-    // Fixed constructor for dependency injection
-    public bookingController(BookingService bookingService, BookingRepository bookingRepository) {
+    // FIXED: Constructor name must exactly match the class name
+    public BookingController(BookingService bookingService, BookingRepository bookingRepository) {
         this.bookingService = bookingService;
         this.bookingRepository = bookingRepository;
     }
@@ -36,6 +37,7 @@ public class bookingController {
         boolean isAdmin = auth.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
         if (isAdmin) return;
+
         Long callerId = (Long) auth.getDetails();
         if (!callerId.equals(bookingUserId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
@@ -50,10 +52,15 @@ public class bookingController {
     @GetMapping("/search")
     public ResponseEntity<List<Booking>> searchBookings(
             @RequestParam(required = false) BookingStatus status,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
-        List<Booking> results = bookingService.searchBookings(status, startDate, endDate);
+        LocalDateTime start = (startDate != null) ? startDate.atStartOfDay() : null;
+        LocalDateTime end   = (endDate != null) ? endDate.atTime(23, 59, 59) : null;
+
+        // FIXED: Removed the leftover debugging System.out.println from the merge
+
+        List<Booking> results = bookingService.searchBookings(status, start, end);
         return ResponseEntity.ok(results);
     }
 
@@ -185,13 +192,12 @@ public class bookingController {
         assertOwnerOrAdmin(bookingService.findById(id).getUserId());
         return ResponseEntity.ok(bookingService.getBookingDetails(id));
     }
-    //-- End point for the second feature in the booking service in milestone 2
+
+    // ─── Milestone 2: Record Attendance ───────────────────────────────────────────
     @PostMapping("/{bookingId}/record-attendance")
     public ResponseEntity<?> recordAttendance(@PathVariable Long bookingId) {
 
         // 1. Fetch from PostgreSQL directly
-        // This bypasses any potential Redis cache issues and ensures we have
-        // the latest status from the relational database.
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId));
@@ -200,7 +206,6 @@ public class bookingController {
         assertOwnerOrAdmin(booking.getUserId());
 
         // 3. Delegate the complex polyglot logic to the Service layer
-        // This includes updating Neo4j and triggering the MongoDB observer[cite: 12].
         bookingService.recordAttendance(bookingId);
 
         // 4. Return standard success response
@@ -209,6 +214,27 @@ public class bookingController {
                 "message", "Attendance recorded successfully"
         ));
     }
+
+    // ─── Milestone 2: Analytics Dashboard ─────────────────────────────────────────
+    @GetMapping("/analytics/dashboard")
+    public ResponseEntity<BookingAnalyticsDashboardDTO> getDashboard(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        // Validation
+        if (startDate.isAfter(endDate)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Start date cannot be after end date");
+        }
+
+        // Date Expansion [00:00:00 to 23:59:59.999]
+        LocalDateTime start = (startDate != null) ? startDate.atStartOfDay() : null;
+        LocalDateTime end   = (endDate != null) ? endDate.atTime(23, 59, 59) : null;
+
+        BookingAnalyticsDashboardDTO dashboard = bookingService.getDashboard(start, end);
+        return ResponseEntity.ok(dashboard);
+    }
+
+    // ─── Milestone 2: Recommendations ─────────────────────────────────────────────
     @GetMapping("/recommendations")
     public ResponseEntity<List<EventRecommendationDTO>> getRecommendations(
             @RequestParam Long userId,
@@ -228,5 +254,4 @@ public class bookingController {
 
         return ResponseEntity.ok(bookingService.getRecommendations(userId, limit, ctx));
     }
-
 }

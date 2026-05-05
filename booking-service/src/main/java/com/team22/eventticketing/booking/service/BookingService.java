@@ -1,5 +1,6 @@
 package com.team22.eventticketing.booking.service;
 
+import com.team22.eventticketing.booking.adapter.AnalyticsDashboardTarget;
 import com.team22.eventticketing.booking.adapter.Neo4jRecordAdapter;
 import com.team22.eventticketing.booking.dto.*;
 import com.team22.eventticketing.booking.model.*;
@@ -8,6 +9,8 @@ import com.team22.eventticketing.booking.repository.BookingItemRepository;
 import com.team22.eventticketing.booking.repository.BookingRepository;
 import com.team22.eventticketing.booking.repository.EventNodeRepository;
 import com.team22.eventticketing.booking.repository.UserNodeRepository;
+import com.team22.eventticketing.booking.repository.UserNodeCustomRepository;
+import com.team22.eventticketing.booking.repository.UserNodeRecommendationRepository;
 import com.team22.eventticketing.booking.security.AuthContext;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.cache.annotation.Cacheable;
@@ -17,20 +20,14 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import com.team22.eventticketing.booking.repository.UserNodeCustomRepository;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.springframework.data.neo4j.core.Neo4jClient;
-import com.team22.eventticketing.booking.repository.UserNodeRecommendationRepository;
-import com.team22.eventticketing.booking.dto.EventRecommendationDTO;
-import com.team22.eventticketing.booking.security.AuthContext;
-import jakarta.servlet.http.HttpServletRequest;
+
 @Service
 public class BookingService {
 
@@ -40,16 +37,17 @@ public class BookingService {
     private final BookingItemRepository bookingItemRepository;
     private final CacheEvictionService cacheEviction;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final AnalyticsDashboardTarget dashboardAdapter;
     private final List<EntityObserver> observers = new ArrayList<>();
 
-
-    //Injecting nodejs variables
+    // Neo4j Repositories
     private final UserNodeRepository userNodeRepository;
     private final EventNodeRepository eventNodeRepository;
-    private final UserNodeCustomRepository userNodeCustomRepository;
-    private final UserNodeRecommendationRepository userNodeRecommendationRepository;
+    private final UserNodeCustomRepository userNodeCustomRepository; // FIXED: Added missing field
+    private final UserNodeRecommendationRepository userNodeRecommendationRepository; // FIXED: Added missing field
 
     public BookingService(BookingRepository bookingRepository,
+                          AnalyticsDashboardTarget dashboardAdapter,
                           BookingItemRepository bookingItemRepository,
                           CacheEvictionService cacheEviction,
                           RedisTemplate<String, Object> redisTemplate,
@@ -57,18 +55,18 @@ public class BookingService {
                           UserNodeRepository userNodeRepository,
                           List<EntityObserver> observers,
                           UserNodeCustomRepository userNodeCustomRepository,
-                          UserNodeRecommendationRepository userNodeRecommendationRepository
-    ) {
+                          UserNodeRecommendationRepository userNodeRecommendationRepository) {
+
         this.bookingRepository = bookingRepository;
         this.bookingItemRepository = bookingItemRepository;
         this.cacheEviction = cacheEviction;
         this.redisTemplate = redisTemplate;
-        this.eventNodeRepository= eventNodeRepository;
-        this.userNodeRepository=  userNodeRepository;
+        this.eventNodeRepository = eventNodeRepository;
+        this.userNodeRepository = userNodeRepository;
+        this.dashboardAdapter = dashboardAdapter;
         this.observers.addAll(observers);
         this.userNodeCustomRepository = userNodeCustomRepository;
         this.userNodeRecommendationRepository = userNodeRecommendationRepository;
-
     }
 
     public void register(EntityObserver observer) { observers.add(observer); }
@@ -80,8 +78,10 @@ public class BookingService {
 
     // ─── [S3-F1] Search Bookings ──────────────────────────────────────────────────
 
-    @Cacheable(cacheNames = "booking-service::S3-F1",
-            key = "T(String).valueOf(#status) + ':' + T(String).valueOf(#startDate) + ':' + T(String).valueOf(#endDate)")
+    @Cacheable(
+            cacheNames = "booking-service::S3-F1",
+            key = "(#status != null ? #status.name() : 'ALL') + ':' + #startDate.toString() + ':' + #endDate.toString()"
+    )
     public List<Booking> searchBookings(BookingStatus status, LocalDateTime startDate, LocalDateTime endDate) {
         if (status != null) {
             return bookingRepository.findByStatusAndBookingDateBetweenOrderByBookingDateDesc(status, startDate, endDate);
@@ -333,7 +333,7 @@ public class BookingService {
 
         String eventStatus = bookingRepository.findEventStatusById(eventId);
         if (eventStatus == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event with ID " + eventId + " not found");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event with ID " + eventId + "Event not found");
         }
 
         if (booking.getStatus() != BookingStatus.PENDING) {
@@ -350,7 +350,6 @@ public class BookingService {
 
         Booking saved = bookingRepository.save(booking);
         cacheEviction.evictEntityAndFeatures("booking", bookingId, "S3-F1", "S3-F9", "S3-F10");
-        notifyObservers("BOOKING_CONFIRMED", Map.of("bookingId", saved.getId(), "eventId", eventId));
         return saved;
     }
 
@@ -394,16 +393,15 @@ public class BookingService {
         return result;
     }
 
+    // ─── Milestone 2: Record Attendance ───────────────────────────────────────────
 
     public void recordAttendance(Long bookingId) {
-        // 1) Load booking from PostgreSQL
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Booking not found with id: " + bookingId
                 ));
 
-        // 2) Booking must be COMPLETED
         if (booking.getStatus() != BookingStatus.COMPLETED) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -411,7 +409,6 @@ public class BookingService {
             );
         }
 
-        // 3) Booking must have an assigned event
         if (booking.getEventId() == null) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -422,7 +419,6 @@ public class BookingService {
         Long userId = booking.getUserId();
         Long eventId = booking.getEventId();
 
-        // 4) Native SQL lookups for cross-service data
         String userName = bookingRepository.findUserNameById(userId);
         if (userName == null || userName.isBlank()) {
             userName = "Unknown";
@@ -442,21 +438,16 @@ public class BookingService {
             }
         }
 
-        System.out.println("userId=" + userId + ", eventId=" + eventId + ", bookingId=" + bookingId);
-
-        // 5) Neo4j idempotency check
         if (userNodeCustomRepository.countRecorded(userId, eventId, bookingId) > 0) {
             return; // idempotent no-op
         }
 
-        // 6-8) Write to Neo4j using raw driver — bypasses broken SDN template
         userNodeCustomRepository.recordAttendance(
                 userId, userName,
                 eventId, eventName, eventCategory,
                 bookingId
         );
 
-        // 9) Emit Mongo event
         notifyObservers(
                 "INTERACTION_RECORDED",
                 Map.of(
@@ -467,8 +458,7 @@ public class BookingService {
         );
     }
 
-
-
+    // ─── Milestone 2: Recommendations ─────────────────────────────────────────────
 
     public List<EventRecommendationDTO> getRecommendations(Long userId, Integer limit, AuthContext ctx) {
 
@@ -478,15 +468,12 @@ public class BookingService {
             throw new AccessDeniedException("Forbidden");
         }
 
-        // Step c — verify user exists in PG
         if (!bookingRepository.existsUserById(userId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
         }
 
-        // Step f — default limit
         int effectiveLimit = (limit == null) ? 5 : limit;
 
-        // Step g — check cache first
         String cacheKey = "booking-service::S3-F12::" + userId + "::" + effectiveLimit;
         try {
             Object cached = redisTemplate.opsForValue().get(cacheKey);
@@ -495,10 +482,8 @@ public class BookingService {
             }
         } catch (Exception ignored) {}
 
-        // Step d — traverse Neo4j graph
         List<org.neo4j.driver.Record> records = userNodeRecommendationRepository.findRecommendations(userId, effectiveLimit);
 
-        // Step d + e — adapt each record and enrich from PG
         Neo4jRecordAdapter adapter = new Neo4jRecordAdapter();
         List<EventRecommendationDTO> results = new ArrayList<>();
 
@@ -516,16 +501,31 @@ public class BookingService {
                     dto.setEventDate(d.toLocalDate().atStartOfDay());
                 }
             }
-
             results.add(dto);
         }
 
-        // Step g — store in cache for 5 minutes
         try {
             redisTemplate.opsForValue().set(cacheKey, results, Duration.ofMinutes(5));
         } catch (Exception ignored) {}
 
-        // Step h — return (empty list if no recommendations)
         return results;
+    }
+
+    // ─── Milestone 2: Analytics Dashboard (S3-F10) ───────────────────────────────
+
+    @Cacheable(
+            cacheNames = "booking-service::S3-F10",
+            key = "#startDate.toString() + ':' + #endDate.toString()"
+    )
+    public BookingAnalyticsDashboardDTO getDashboard(LocalDateTime startDate, LocalDateTime endDate) {
+
+        // 1. Fetch raw data from PostgreSQL
+        List<Object[]> results = bookingRepository.getDashboardAggregation(startDate, endDate);
+
+        // 2. Observer Pattern: Log the view event to MongoDB
+        notifyObservers("ANALYTICS_VIEWED", Map.of("startDate", startDate, "endDate", endDate));
+
+        // 3. Adapter Pattern: Map the SQL rows to Java types & return directly
+        return dashboardAdapter.adaptRawData(results);
     }
 }
