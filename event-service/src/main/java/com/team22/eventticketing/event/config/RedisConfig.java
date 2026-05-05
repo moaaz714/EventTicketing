@@ -10,6 +10,7 @@ import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializ
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -21,6 +22,11 @@ public class RedisConfig {
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory factory) {
         RedisSerializer<Object> json = GenericJacksonJsonRedisSerializer.builder()
+                .enableDefaultTyping(BasicPolymorphicTypeValidator.builder()
+                        .allowIfSubType("com.team22.eventticketing")
+                        .allowIfSubType("java.util")
+                        .allowIfSubType("java.lang")
+                        .build())
                 .enableSpringCacheNullValueSupport()
                 .build();
 
@@ -30,6 +36,7 @@ public class RedisConfig {
         configs.put("event-service::S2-F5", cfg(Duration.ofMinutes(5),  json));
         configs.put("event-service::S2-F6", cfg(Duration.ofMinutes(10), json));
         configs.put("event-service::S2-F9", cfg(Duration.ofMinutes(10), json));
+        configs.put("event-service::S2-F10", cfg(Duration.ofMinutes(5), json));
         configs.put("event-service::event",         cfg(Duration.ofMinutes(15), json));
         configs.put("event-service::event-session", cfg(Duration.ofMinutes(15), json));
         configs.put("event-service::S2-F12", cfg(Duration.ofMinutes(10), json));
@@ -43,6 +50,11 @@ public class RedisConfig {
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
         RedisSerializer<Object> json = GenericJacksonJsonRedisSerializer.builder()
+                .enableDefaultTyping(BasicPolymorphicTypeValidator.builder()
+                        .allowIfSubType("com.team22.eventticketing")
+                        .allowIfSubType("java.util")
+                        .allowIfSubType("java.lang")
+                        .build())
                 .enableSpringCacheNullValueSupport()
                 .build();
         RedisTemplate<String, Object> template = new RedisTemplate<>();

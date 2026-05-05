@@ -28,8 +28,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_MONGODB_URI: mongodb://root:rootpass@mongo:27017/eventticketingmongo?authSource=admin
     depends_on:
       postgres:
+        condition: service_healthy
+      mongo:
         condition: service_healthy
     restart: on-failure
 
@@ -43,8 +46,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_MONGODB_URI: mongodb://root:rootpass@mongo:27017/eventticketingmongo?authSource=admin
     depends_on:
       postgres:
+        condition: service_healthy
+      mongo:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
@@ -130,7 +136,7 @@ services:
       discovery.type: single-node
       xpack.security.enabled: "false"
       # Memory limit applied here:
-      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      ES_JAVA_OPTS: "-Xms200m -Xmx200m"
     volumes:
       - es-data:/usr/share/elasticsearch/data
     healthcheck:

@@ -6,10 +6,12 @@ import com.team22.eventticketing.event.dto.TopEventDTO;
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
 import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.model.EventCategory;
+import com.team22.eventticketing.event.model.EventSearchDocument;
 import com.team22.eventticketing.event.model.EventSession;
 import com.team22.eventticketing.event.model.EventStatus;
 import com.team22.eventticketing.event.observer.EntityObserver;
 import com.team22.eventticketing.event.repository.EventRepository;
+import com.team22.eventticketing.event.repository.EventSearchRepository;
 import com.team22.eventticketing.event.repository.EventSessionRepository;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -32,25 +34,33 @@ public class EventService {
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final EventRepository eventRepository;
+    private final EventSearchRepository eventSearchRepository;
     private final EventSessionRepository eventSessionRepository;
     private final CacheEvictionService cacheEviction;
     private final List<EntityObserver> observers = new ArrayList<>();
-    private final EventSearchRepository eventSearchRepository;
 
     public EventService(EventRepository eventRepository,
+                        EventSearchRepository eventSearchRepository,
                         EventSessionRepository eventSessionRepository,
-                        CacheEvictionService cacheEviction,EventSearchRepository eventSearchRepository) {
+                        CacheEvictionService cacheEviction) {
         this.eventRepository = eventRepository;
+        this.eventSearchRepository = eventSearchRepository;
         this.eventSessionRepository = eventSessionRepository;
         this.cacheEviction = cacheEviction;
-        this.eventSearchRepository = eventSearchRepository;
     }
 
-    public void register(EntityObserver observer) { observers.add(observer); }
-    public void unregister(EntityObserver observer) { observers.remove(observer); }
+    public void register(EntityObserver observer) {
+        observers.add(observer);
+    }
+
+    public void unregister(EntityObserver observer) {
+        observers.remove(observer);
+    }
 
     private void notifyObservers(String action, Object payload) {
-        for (EntityObserver o : observers) o.onEvent(action, payload);
+        for (EntityObserver o : observers) {
+            o.onEvent(action, payload);
+        }
     }
 
     // ─── [S2-F1] Search Events ────────────────────────────────────────────────────
@@ -100,16 +110,21 @@ public class EventService {
 
     public Event updateEventDetails(Long id, Map<String, Object> newDetails) {
         Event event = eventRepository.findById(id)
-                // Fixed: Now throws 404 instead of 500 for TC_S2_18
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
         Map<String, Object> existingDetails = event.getDetails();
-        if (existingDetails == null) existingDetails = new HashMap<>();
+        if (existingDetails == null) {
+            existingDetails = new HashMap<>();
+        }
+
         existingDetails.putAll(newDetails);
         event.setDetails(existingDetails);
+
         Event saved = eventRepository.save(event);
+
         cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
         notifyObservers("EVENT_DETAILS_UPDATED", Map.of("eventId", id));
+
         syncToElasticsearch(saved, "auto_crud_update");
         return saved;
     }
@@ -133,6 +148,7 @@ public class EventService {
 
         event.setStatus(newStatus);
         eventRepository.save(event);
+
         syncToElasticsearch(event, "auto_crud_update");
         cacheEviction.evictEntityAndFeatures("event", eventId, "S2-F1", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
         notifyObservers("EVENT_STATUS_UPDATED", Map.of("eventId", eventId, "status", newStatus.name()));
@@ -154,6 +170,7 @@ public class EventService {
             String name = (String) row[1];
             Double rating = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
             Long totalBookings = row[3] == null ? 0L : ((Number) row[3]).longValue();
+
             result.add(TopEventDTO.builder()
                     .eventId(eventId)
                     .name(name)
@@ -181,9 +198,15 @@ public class EventService {
             double totalRevenue = row[1] == null ? 0.0 : ((Number) row[1]).doubleValue();
             double avg = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
 
-
-
+            return EventRevenueDTO.builder()
+                    .eventId(eventId)
+                    .name(event.getName())
+                    .totalBookings(totalBookings)
+                    .totalRevenue(totalRevenue)
+                    .averageBookingAmount(avg)
+                    .build();
         }
+
         return EventRevenueDTO.builder()
                 .eventId(eventId)
                 .name(event.getName())
@@ -191,11 +214,10 @@ public class EventService {
                 .totalRevenue(0.0)
                 .averageBookingAmount(0.0)
                 .build();
-
-
     }
 
     // ─── [S2-F7] Rate an Event (write — invalidates) ──────────────────────────────
+
     @Transactional
     public void rateEvent(Long eventId, Long bookingId, Double newRating) {
         if (newRating < 1.0 || newRating > 5.0) {
@@ -220,7 +242,9 @@ public class EventService {
 
         event.setTotalRatings(newCount);
         event.setRating(updatedAverage);
+
         eventRepository.save(event);
+
         syncToElasticsearch(event, "auto_crud_update");
         cacheEviction.evictEntityAndFeatures("event", eventId, "S2-F3", "S2-F6");
         notifyObservers("EVENT_RATED", Map.of("eventId", eventId, "rating", newRating));
@@ -249,12 +273,19 @@ public class EventService {
         }
 
         session.setVerified(true);
-        if (session.getMetadata() == null) session.setMetadata(new HashMap<>());
+
+        if (session.getMetadata() == null) {
+            session.setMetadata(new HashMap<>());
+        }
+
         session.getMetadata().put("verifiedAt", LocalDateTime.now().toString());
         session.getMetadata().put("verifiedBy", verifiedByUserId);
+
         eventSessionRepository.save(session);
+
         notifyObservers("SESSION_VERIFIED", Map.of("eventId", eventId, "sessionId", sessionId));
         cacheEviction.evictEntityAndFeatures("event-session", sessionId, "S2-F9");
+
         return event;
     }
 
@@ -270,7 +301,7 @@ public class EventService {
                             .filter(session -> session.getVerified() != null && !session.getVerified())
                             .toList();
 
-            return  EventSessionAlertDTO.builder()
+            return EventSessionAlertDTO.builder()
                     .eventId(event.getId())
                     .eventName(event.getName())
                     .eventStatus(event.getStatus())
@@ -284,9 +315,12 @@ public class EventService {
 
     public Event createEvent(Event event) {
         Event saved = eventRepository.save(event);
+
         cacheEviction.evictPattern("S2-F1");
         cacheEviction.evictPattern("S2-F10");
+
         notifyObservers("EVENT_CREATED", Map.of("eventId", saved.getId()));
+
         syncToElasticsearch(saved, "auto_crud_create");
         return saved;
     }
@@ -298,27 +332,31 @@ public class EventService {
     }
 
     public List<Event> getAllEvents() {
-        return eventRepository.findAll(); // list — NOT cached
+        return eventRepository.findAll();
     }
 
-    // Fixed:
     public Event updateEvent(Long id, Event updatedEvent) {
         Event existingEvent = getEventById(id);
+
         existingEvent.setName(updatedEvent.getName());
         existingEvent.setVenue(updatedEvent.getVenue());
         existingEvent.setEventDate(updatedEvent.getEventDate());
         existingEvent.setCategory(updatedEvent.getCategory());
+
         Event saved = eventRepository.save(existingEvent);
+
         syncToElasticsearch(saved, "auto_crud_update");
-        return eventRepository.save(existingEvent);
+        cacheEviction.evictEntityAndFeatures("event", id, "S2-F1", "S2-F3", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
+
+        return saved;
     }
 
     public void deleteEvent(Long id) {
         if (!eventRepository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found with id: " + id);
         }
-        eventRepository.deleteById(id);
 
+        eventRepository.deleteById(id);
 
         if (eventSearchRepository.existsById(String.valueOf(id))) {
             eventSearchRepository.deleteById(String.valueOf(id));
@@ -332,9 +370,13 @@ public class EventService {
 
     public EventSession createEventSession(Long eventId, EventSession session) {
         Event event = getEventById(eventId);
+
         session.setEvent(event);
+
         EventSession saved = eventSessionRepository.save(session);
+
         notifyObservers("SESSION_CREATED", Map.of("eventId", eventId, "sessionId", saved.getId()));
+
         return saved;
     }
 
@@ -349,7 +391,6 @@ public class EventService {
         return event.getEventSessions();
     }
 
-    // Fixed:
     public EventSession getEventSessionById(Long eventId, Long sessionId) {
         EventSession session = eventSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session not found"));
@@ -357,24 +398,27 @@ public class EventService {
         if (!session.getEvent().getId().equals(eventId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Session does not belong to this event");
         }
+
         return session;
     }
 
-    // Fixed:
     public EventSession updateEventSession(Long eventId, Long sessionId, EventSession updatedSession) {
-        EventSession existingSession = getEventSessionById(eventId, sessionId); // Validates existence and ownership
+        EventSession existingSession = getEventSessionById(eventId, sessionId);
+
         existingSession.setTitle(updatedSession.getTitle());
         existingSession.setSpeaker(updatedSession.getSpeaker());
         existingSession.setStartTime(updatedSession.getStartTime());
         existingSession.setEndTime(updatedSession.getEndTime());
         existingSession.setCapacity(updatedSession.getCapacity());
+
         return eventSessionRepository.save(existingSession);
     }
 
-    // Fixed:
     public void deleteEventSession(Long eventId, Long sessionId) {
-        getEventSessionById(eventId, sessionId); // Ensures it exists and matches eventId before deleting
+        getEventSessionById(eventId, sessionId);
+
         eventSessionRepository.deleteById(sessionId);
+
         cacheEviction.evictEntityAndFeatures("event-session", sessionId, "S2-F9");
         notifyObservers("SESSION_DELETED", Map.of("sessionId", sessionId));
     }

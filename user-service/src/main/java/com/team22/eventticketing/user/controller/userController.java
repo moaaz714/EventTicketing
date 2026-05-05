@@ -1,5 +1,6 @@
 package com.team22.eventticketing.user.controller;
 
+import com.team22.eventticketing.user.dto.ActivityFeedResponse;
 import com.team22.eventticketing.user.dto.UserBookingSummaryDTO;
 import com.team22.eventticketing.user.dto.UserProfileDTO;
 import com.team22.eventticketing.user.entity.Role;
@@ -8,7 +9,10 @@ import com.team22.eventticketing.user.service.FavoriteVenueService;
 import com.team22.eventticketing.user.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -23,6 +27,18 @@ public class userController {
     public userController(UserService userService, FavoriteVenueService favoriteVenueService) {
         this.userService = userService;
         this.favoriteVenueService = favoriteVenueService;
+    }
+
+    private void assertOwnerOrAdmin(Long resourceId) {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (isAdmin) return;
+        String email = (String) auth.getPrincipal();
+        Long callerId = userService.getIdByEmail(email);
+        if (!callerId.equals(resourceId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
     }
 
     // ─── Create ──────────────────────────────────────────────────────────────────
@@ -43,6 +59,7 @@ public class userController {
 
     @GetMapping("/{id}")
     public ResponseEntity<User> findById(@PathVariable Long id) {
+        assertOwnerOrAdmin(id);
         return ResponseEntity.ok(userService.findById(id));
     }
 
@@ -52,6 +69,7 @@ public class userController {
     public ResponseEntity<User> update(
             @PathVariable Long id,
             @RequestBody User patch) {
+        assertOwnerOrAdmin(id);
         return ResponseEntity.ok(userService.update(id, patch));
     }
 
@@ -59,6 +77,7 @@ public class userController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
+        assertOwnerOrAdmin(id);
         userService.delete(id);
         return ResponseEntity.noContent().build();
     }
@@ -148,5 +167,28 @@ public class userController {
             return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(userService.updateRole(id, role));
+    }
+
+    // ─── [S1-F12] Get User Activity Feed ─────────────────────────────────────────
+
+    @GetMapping("/{id}/activity")
+    public ResponseEntity<ActivityFeedResponse> getActivityFeed(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (!isAdmin) {
+            Long callerId = (Long) auth.getDetails();
+            if (!callerId.equals(id)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+            }
+        }
+
+        userService.findById(id); // throws 404 if user not found
+
+        return ResponseEntity.ok(userService.getActivityFeed(id, page, size));
     }
 }

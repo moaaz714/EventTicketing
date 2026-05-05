@@ -1,8 +1,9 @@
 package com.team22.eventticketing.ticket.model.dto;
 
 import java.util.Map;
+import java.io.Serializable;
 
-public class TicketAnalyticsDTO {
+public class TicketAnalyticsDTO implements Serializable {
 
     // All fields defined in the M2 spec
     private final Long totalIssued;
@@ -12,6 +13,7 @@ public class TicketAnalyticsDTO {
     private final Long cancelledCount;
     private final Double attendanceRate;
     private final Map<String, Long> ticketsByStatus;
+    private static final long serialVersionUID = 1L;
 
     // Private constructor enforcing the use of the Builder
     private TicketAnalyticsDTO(Builder builder) {

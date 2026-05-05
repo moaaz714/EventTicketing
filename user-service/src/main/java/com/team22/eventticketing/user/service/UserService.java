@@ -1,13 +1,20 @@
 package com.team22.eventticketing.user.service;
 
+import com.team22.eventticketing.user.dto.ActivityFeedResponse;
+import com.team22.eventticketing.user.dto.AuthEventDTO;
 import com.team22.eventticketing.user.dto.UserBookingSummaryDTO;
 import com.team22.eventticketing.user.dto.TopAttendeeDTO;
 import com.team22.eventticketing.user.dto.UserProfileDTO;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
+import com.team22.eventticketing.user.mongo.AuthEvent;
 import com.team22.eventticketing.user.observer.EntityObserver;
+import com.team22.eventticketing.user.repository.AuthEventRepository;
 import com.team22.eventticketing.user.repository.UserRepository;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -23,12 +30,16 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final AuthEventRepository authEventRepository;
     private final CacheEvictionService cacheEviction;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final List<EntityObserver> observers = new ArrayList<>();
 
-    public UserService(UserRepository userRepository, CacheEvictionService cacheEviction) {
+    public UserService(UserRepository userRepository,
+                       AuthEventRepository authEventRepository,
+                       CacheEvictionService cacheEviction) {
         this.userRepository = userRepository;
+        this.authEventRepository = authEventRepository;
         this.cacheEviction = cacheEviction;
     }
 
@@ -45,6 +56,13 @@ public class UserService {
         User saved = userRepository.save(user);
         notifyObservers("REGISTERED", Map.of("userId", saved.getId(), "email", saved.getEmail() != null ? saved.getEmail() : ""));
         return saved;
+    }
+
+    public Long getIdByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED, "Unknown caller"))
+                .getId();
     }
 
     // ─── [CRUD] Read by ID ────────────────────────────────────────────────────────
@@ -104,8 +122,41 @@ public class UserService {
         }
 
         User user = findById(id);
+        String oldRole = user.getRole().name();
         user.setRole(newRole);
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        cacheEviction.evictDetail("user", id);
+        cacheEviction.evictPattern("S1-F12::" + id);
+        notifyObservers("ROLE_CHANGED", Map.of(
+                "userId", saved.getId(),
+                "oldRole", oldRole,
+                "newRole", newRole.name()
+        ));
+        return saved;
+    }
+
+    // ─── [S1-F12] Get User Activity Feed ─────────────────────────────────────────
+
+    @Cacheable(cacheNames = "user-service::S1-F12", key = "#userId + '::' + #page + '::' + #size")
+    public ActivityFeedResponse getActivityFeed(Long userId, int page, int size) {
+        if (page < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page must be >= 0");
+        if (size <= 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "size must be > 0");
+        if (size > 100) size = 100;
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<AuthEvent> events = authEventRepository.findByUserIdOrderByTimestampDesc(userId, pageable);
+
+        List<AuthEventDTO> content = events.getContent().stream()
+                .map(e -> new AuthEventDTO(
+                        e.getId(),
+                        e.getTimestamp(),
+                        e.getAction(),
+                        e.getDetails(),
+                        e.getUserId(),
+                        e.getEmail()))
+                .collect(Collectors.toList());
+
+        return new ActivityFeedResponse(content, page, size, events.getTotalElements());
     }
 
     // ─── [S1-F1] Search ───────────────────────────────────────────────────────────
