@@ -70,23 +70,22 @@ public class TicketScanService {
         try {
             claims = jwtService.extractClaims(token);
         } catch (Exception e) {
-            throw new RuntimeException("Unauthorized");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or missing token");
         }
 
-        // (optional role check)
         String role = (String) claims.get("role");
         if (role == null) {
-            throw new RuntimeException("Unauthorized");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token");
         }
 
-        // 2. Fetch ticket from PostgreSQL
+        // 2. Fetch ticket
         Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found: " + ticketId)
+                );
 
         // 3. Create Cassandra entity
-        TicketScanEventKey key = new TicketScanEventKey(
-                ticketId,
-                Instant.now());
+        TicketScanEventKey key = new TicketScanEventKey(ticketId, Instant.now());
 
         TicketScanEvent event = new TicketScanEvent();
         event.setKey(key);
@@ -97,11 +96,10 @@ public class TicketScanService {
         event.setSeatNumber(request.getSeatNumber());
         event.setNotes(request.getNotes());
 
-        // 4. Save to Cassandra
+        // 4. Save Cassandra
         cassandraRepository.save(event);
 
-        // 5. Log to Mongo (TicketEvent)
-
+        // 5. Mongo logging (FIXED)
         Map<String, Object> payload = new HashMap<>();
         payload.put("ticketId", ticketId);
         payload.put("scanType", request.getScanType());
@@ -110,9 +108,7 @@ public class TicketScanService {
         payload.put("seatNumber", request.getSeatNumber());
         payload.put("notes", request.getNotes());
 
-        mongoEventLogger.onEvent("TICKET_SCANNED", payload);
-
-        
+        mongoEventLogger.onEvent("TRACKING_RECORDED", payload);
     }
 
     // ─── [S4-F12] Get Ticket Scan History (read) ───────────────────────────────
