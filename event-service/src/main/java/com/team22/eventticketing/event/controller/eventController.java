@@ -16,6 +16,7 @@ import jakarta.annotation.PostConstruct;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.team22.eventticketing.event.dto.EventDashboardDTO;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -270,5 +271,10 @@ public class eventController {
         eventService.explicitIndexEvent(id);
         return ResponseEntity.ok().build();
     }
-}
 
+    // [S2-F12] Event Performance Dashboard
+    @GetMapping("/{id}/dashboard")
+    public ResponseEntity<EventDashboardDTO> getDashboard(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.getEventDashboard(id));
+    }
+}

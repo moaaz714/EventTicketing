@@ -19,6 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import com.team22.eventticketing.event.repository.EventSearchRepository;
+import com.team22.eventticketing.event.model.EventSearchDocument;
+import com.team22.eventticketing.event.dto.EventDashboardDTO;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -456,6 +459,60 @@ public class EventService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
         syncToElasticsearch(event, "explicit");
+    }
+
+    public EventDashboardDTO getEventDashboard(Long eventId) {
+
+        EventDashboardDTO dto = getEventDashboardData(eventId);
+
+        //  MUST LOG OUTSIDE CACHE
+        notifyObservers("DASHBOARD_VIEWED", Map.of("eventId", eventId));
+
+        return dto;
+    }
+
+
+
+
+    @Cacheable(
+            cacheNames = "event-service::S2-F12",
+            key = "#eventId"
+    )
+    public EventDashboardDTO getEventDashboardData(Long eventId) {
+
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+
+        long totalBookings = eventRepository.countBookingsByEventId(eventId);
+
+        double totalRevenue = eventRepository.sumRevenueByEventId(eventId);
+
+        long totalTicketsSold = eventRepository.countTicketsByEventId(eventId);
+
+        long usedTickets = eventRepository.countUsedTicketsByEventId(eventId);
+
+        double attendanceRate = totalTicketsSold == 0
+                ? 0.0
+                : (double) usedTickets / totalTicketsSold;
+
+//        return  new EventDashboardDTO(
+//                event.getId(),
+//                event.getName(),
+//                totalBookings,
+//                totalTicketsSold,
+//                totalRevenue,
+//                attendanceRate,
+//                event.getRating() != null ? event.getRating() : 0.0
+//        );
+        return EventDashboardDTO.builder()
+                .eventId(event.getId())
+                .name(event.getName())
+                .totalBookings(totalBookings)
+                .totalTicketsSold(totalTicketsSold)
+                .totalRevenue(totalRevenue)
+                .averageAttendanceRate(attendanceRate)
+                .averageRating(event.getRating() != null ? event.getRating() : 0.0)
+                .build();
     }
 
 }
