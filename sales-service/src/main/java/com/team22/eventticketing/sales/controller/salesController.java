@@ -62,11 +62,12 @@ public class salesController {
     @PostMapping("/booking/{bookingId}")
     public ResponseEntity<TicketSale> payBooking(
             @PathVariable Long bookingId,
-            @RequestBody Map<String, String> body
+            @RequestBody Map<String, String> body,
+            @RequestParam(defaultValue = "false") boolean simulateFailure
     ) {
         PaymentMethod method = PaymentMethod.valueOf(body.get("method").toUpperCase());
         String cardLastFour = body.get("cardLastFour");
-        TicketSale sale = salesService.processBookingPayment(bookingId, method, cardLastFour);
+        TicketSale sale = salesService.processBookingPayment(bookingId, method, cardLastFour, simulateFailure);
         return new ResponseEntity<>(sale, HttpStatus.CREATED);
     }
 
