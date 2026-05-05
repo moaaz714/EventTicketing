@@ -8,6 +8,8 @@ public class TierRevenueDTO {
     private long ticketsSold;
     private double averageRevenuePerSale;
 
+    public TierRevenueDTO() {}
+
     public TierRevenueDTO(Builder builder) {
         this.tier = builder.tier;
         this.totalRevenue = builder.totalRevenue;
@@ -39,4 +41,10 @@ public class TierRevenueDTO {
     public long getSaleCount() { return saleCount; }
     public long getTicketsSold() { return ticketsSold; }
     public double getAverageRevenuePerSale() { return averageRevenuePerSale; }
+
+    public void setTier(String tier) { this.tier = tier; }
+    public void setTotalRevenue(double totalRevenue) { this.totalRevenue = totalRevenue; }
+    public void setSaleCount(long saleCount) { this.saleCount = saleCount; }
+    public void setTicketsSold(long ticketsSold) { this.ticketsSold = ticketsSold; }
+    public void setAverageRevenuePerSale(double averageRevenuePerSale) { this.averageRevenuePerSale = averageRevenuePerSale; }
 }

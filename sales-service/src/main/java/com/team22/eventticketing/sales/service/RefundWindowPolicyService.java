@@ -94,20 +94,18 @@ public class RefundWindowPolicyService {
         // 6. Full or Partial — update the sale
         sale.setStatus(TicketSale.SaleStatus.REFUNDED);
 
-        Map<String, Object> details = sale.getTransactionDetails();
-        if (details == null) {
-            details = new HashMap<>();
-            sale.setTransactionDetails(details);
-        }
+        Map<String, Object> details = new HashMap<>(
+                sale.getTransactionDetails() != null ? sale.getTransactionDetails() : new HashMap<>());
         details.put("refundAmount", result.getRefundAmount());
         details.put("refundPolicy", result.getStrategyName());
         details.put("refundReason", reason);
         details.put("refundedAt", LocalDateTime.now().toString());
+        sale.setTransactionDetails(details);
 
         TicketSale saved = ticketSaleRepository.save(sale);
 
         // 7. Log REFUNDED to MongoDB via observer
-        notifyObservers("SALE_REFUNDED_WINDOW_POLICY", Map.of(
+        notifyObservers("SALE_REFUNDED", Map.of(
                 "saleId", saleId,
                 "method", saved.getMethod() != null ? saved.getMethod().name() : "",
                 "amount", saved.getAmount() != null ? saved.getAmount() : 0.0,

@@ -39,7 +39,9 @@ public class SaleAuditTrailService {
         List<AuditEventDTO> auditEvents = events.stream()
                 .map(e -> new AuditEventDTO(
                         normalizeAction(e.getAction()),
-                        LocalDateTime.ofInstant(e.getTimestamp(), ZoneOffset.UTC),
+                        e.getTimestamp() != null
+                                ? LocalDateTime.ofInstant(e.getTimestamp(), ZoneOffset.UTC)
+                                : null,
                         e.getMethod(),
                         e.getAmount(),
                         e.getDetails()
