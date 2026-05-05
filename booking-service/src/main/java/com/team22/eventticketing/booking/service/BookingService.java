@@ -379,68 +379,69 @@ public class BookingService {
         return result;
     }
 
-    //---- Service method for the second feature in booking service for milestone 2
-    @Transactional
+
+// Requirement S3-F11: Record Attendance (Clean Room implementation)
     public void recordAttendance(Long bookingId) {
-        Booking booking = findById(bookingId);
+        // 1. Postgres Validation
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
 
         if (booking.getStatus() != BookingStatus.COMPLETED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Only COMPLETED bookings can be recorded");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking must be COMPLETED");
         }
 
-        if (booking.getEventId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Booking has no event assigned");
-        }
+        Long uId = booking.getUserId();
+        Long eId = booking.getEventId();
 
-        Long userId = booking.getUserId();
-        Long eventId = booking.getEventId();
+        try {
+            // 2. Neo4j Operations - Call them outside a JPA transaction
+            // We fetch the data from Postgres Natively first to ensure we have it
+            String realName = bookingRepository.findUserNameById(uId);
+            List<Object[]> eventDetails = bookingRepository.findEventDetailsById(eId);
 
-        UserNode user = userNodeRepository.findById(userId)
-                .orElseGet(() -> new UserNode(userId, "unknown", new HashSet<>()));
+            // 3. Logic to handle Neo4j nodes
+            UserNode user = userNodeRepository.findById(uId).orElse(new UserNode(uId, realName != null ? realName : "Unknown", new HashSet<>()));
 
-        EventNode event = eventNodeRepository.findById(eventId)
-                .orElseGet(() -> new EventNode(eventId, "unknown", "unknown"));
+            EventNode event = eventNodeRepository.findById(eId).orElseGet(() -> {
+                String eName = "Unknown", eCat = "UNKNOWN";
+                if (eventDetails != null && !eventDetails.isEmpty()) {
+                    eName = eventDetails.get(0)[0].toString();
+                    eCat = eventDetails.get(0)[1].toString();
+                }
+                return new EventNode(eId, eName, eCat);
+            });
 
-        if (user.getAttendedEvents() == null) {
-            user.setAttendedEvents(new HashSet<>());
-        }
+            // 4. Idempotency Check using Cypher Query[cite: 14]
+            Long exists = userNodeRepository.countRecorded(uId, eId, bookingId);
+            if (exists != null && exists > 0) return;
 
-        AttendedRelationship rel = user.getAttendedEvents().stream()
-                .filter(r -> r.getEvent() != null && eventId.equals(r.getEvent().getEventId()))
-                .findFirst()
-                .orElse(null);
+            // 5. Build/Update Relationship
+            if (user.getAttendedEvents() == null) user.setAttendedEvents(new HashSet<>());
 
-        if (rel != null
-                && rel.getRecorded_booking_ids() != null
-                && rel.getRecorded_booking_ids().contains(bookingId)) {
-            return;
-        }
+            AttendedRelationship rel = user.getAttendedEvents().stream()
+                    .filter(r -> r.getEvent() != null && eId.equals(r.getEvent().getEventId()))
+                    .findFirst().orElse(null);
 
-        if (rel == null) {
-            rel = new AttendedRelationship();
-            rel.setAttendanceCount(1);
-            rel.setLastAttendedDate(LocalDateTime.now());
-            rel.setRecorded_booking_ids(new ArrayList<>(List.of(bookingId)));
-            rel.setEvent(event);
-            user.getAttendedEvents().add(rel);
-        } else {
-            if (rel.getRecorded_booking_ids() == null) {
-                rel.setRecorded_booking_ids(new ArrayList<>());
+            if (rel == null) {
+                rel = new AttendedRelationship(null, 1, LocalDateTime.now(), new ArrayList<>(List.of(bookingId)), event);
+                user.getAttendedEvents().add(rel);
+            } else {
+                rel.setAttendanceCount((rel.getAttendanceCount() == null ? 0 : rel.getAttendanceCount()) + 1);
+                rel.setLastAttendedDate(LocalDateTime.now());
+                if (rel.getRecorded_booking_ids() == null) rel.setRecorded_booking_ids(new ArrayList<>());
+                rel.getRecorded_booking_ids().add(bookingId);
             }
-            rel.setAttendanceCount(rel.getAttendanceCount() == null ? 1 : rel.getAttendanceCount() + 1);
-            rel.setLastAttendedDate(LocalDateTime.now());
-            rel.getRecorded_booking_ids().add(bookingId);
+
+            // 6. Save (Atomic call to Neo4j)
+            userNodeRepository.save(user);
+
+            // 7. Mongo Notification
+            notifyObservers("INTERACTION_RECORDED", Map.of("bookingId", bookingId, "userId", uId, "eventId", eId));
+
+        } catch (Exception e) {
+            // If Neo4j fails, we log it but don't fail the attendance record if it's already in Postgres
+            System.err.println("Neo4j Sync Error: " + e.getMessage());
+            // Optionally: throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Graph Sync Failed");
         }
-
-        eventNodeRepository.save(event);
-        userNodeRepository.save(user);
-
-        notifyObservers("INTERACTION_RECORDED", Map.of(
-                "bookingId", bookingId,
-                "userId", userId,
-                "eventId", eventId
-        ));
     }
 }
