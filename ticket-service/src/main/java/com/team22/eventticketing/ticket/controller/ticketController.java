@@ -197,9 +197,11 @@ public class ticketController {
     // S4-F12
     @GetMapping("/{id}/scans")
     public ResponseEntity<List<TicketScanDTO>> getScanHistory(
-            @PathVariable Long id,
-            @RequestParam(required = false) Instant startTime,
-            @RequestParam(required = false) Instant endTime) {
-        return ResponseEntity.ok(ticketScanService.getScanHistory(id, startTime, endTime));
-    }
+        @PathVariable Long id,
+        @RequestParam(required = false) String startTime,
+        @RequestParam(required = false) String endTime) {
+            Instant start = startTime != null ? Instant.parse(startTime) : null;
+            Instant end   = endTime   != null ? Instant.parse(endTime)   : null;
+            return ResponseEntity.ok(ticketScanService.getScanHistory(id, start, end));
+        }
 }
