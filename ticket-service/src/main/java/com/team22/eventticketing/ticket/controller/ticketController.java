@@ -7,8 +7,8 @@ import org.springframework.http.ResponseEntity;
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.service.TicketScanService;
 
-
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import com.team22.eventticketing.ticket.service.TicketService;
 import com.team22.eventticketing.ticket.observer.MongoEventLogger;
 
@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.time.Instant;
 
-
 @RestController
 @RequestMapping("/api/tickets")
 public class ticketController {
@@ -26,7 +25,9 @@ public class ticketController {
     private final TicketService ticketService;
     private final MongoEventLogger eventLogger;
     private final TicketScanService ticketScanService;
-    public ticketController(TicketService ticketService, MongoEventLogger eventLogger, TicketScanService ticketScanService) {
+
+    public ticketController(TicketService ticketService, MongoEventLogger eventLogger,
+            TicketScanService ticketScanService) {
         this.ticketService = ticketService;
         this.eventLogger = eventLogger;
         this.ticketScanService = ticketScanService;
@@ -109,7 +110,9 @@ public class ticketController {
 
     @DeleteMapping("/purge")
     public Map<String, Object> purgeTickets(@RequestParam("olderThanDays") int olderThanDays) {
-
+        if (olderThanDays < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "olderThanDays must be non-negative");
+        }
         int count = ticketService.purgeExpiredTickets(olderThanDays);
 
         Map<String, Object> response = new HashMap<>();
@@ -172,13 +175,13 @@ public class ticketController {
         TicketAnalyticsDTO response = ticketService.getAnalytics(startDate, endDate);
         return ResponseEntity.ok(response);
     }
+
     // S4-F11
     @PostMapping("/{id}/scan")
     public ResponseEntity<?> scanTicket(
             @PathVariable Long id,
             @RequestHeader("Authorization") String authHeader,
-            @RequestBody TicketScanRequestDTO request
-    ) {
+            @RequestBody TicketScanRequestDTO request) {
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing or invalid token");
@@ -188,7 +191,6 @@ public class ticketController {
 
         ticketScanService.recordScan(id, token, request);
 
-        
         return ResponseEntity.status(HttpStatus.CREATED).body("Scan event recorded");
     }
 
