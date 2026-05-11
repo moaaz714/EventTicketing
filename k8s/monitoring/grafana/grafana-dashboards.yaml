@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+data:
+  # Team: Replace the empty {} below with your actual exported Grafana JSON
+  user-dashboard.json: |
+    {}
+  event-dashboard.json: |
+    {}
+  booking-dashboard.json: |
+    {}
+  ticket-dashboard.json: |
+    {}
+  sales-dashboard.json: |
+    {}
