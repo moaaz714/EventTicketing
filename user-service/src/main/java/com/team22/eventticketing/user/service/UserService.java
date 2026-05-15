@@ -11,6 +11,7 @@ import com.team22.eventticketing.user.mongo.AuthEvent;
 import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.AuthEventRepository;
 import com.team22.eventticketing.user.repository.UserRepository;
+import feign.BookingServiceClient;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,15 +33,18 @@ public class UserService {
     private final UserRepository userRepository;
     private final AuthEventRepository authEventRepository;
     private final CacheEvictionService cacheEviction;
+    private final BookingServiceClient bookingServiceClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final List<EntityObserver> observers = new ArrayList<>();
 
     public UserService(UserRepository userRepository,
                        AuthEventRepository authEventRepository,
-                       CacheEvictionService cacheEviction) {
+                       CacheEvictionService cacheEviction,
+                       BookingServiceClient bookingServiceClient) {
         this.userRepository = userRepository;
         this.authEventRepository = authEventRepository;
         this.cacheEviction = cacheEviction;
+        this.bookingServiceClient = bookingServiceClient;
     }
 
     public void register(EntityObserver observer) { observers.add(observer); }
@@ -282,19 +286,12 @@ public class UserService {
                     "Category must not be blank");
         }
 
-        Map<Long, Long> completedCounts = userRepository.countCompletedBookingsPerUser()
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> ((Number) row[0]).longValue(),
-                        row -> ((Number) row[1]).longValue()
-                ));
-
         return userRepository.findAllUsers().stream()
                 .filter(u -> {
                     Object v = u.getPreferences().get("favoriteCategory");
                     return v != null && v.toString().equals(category);
                 })
-                .filter(u -> completedCounts.getOrDefault(u.getId(), 0L) >= minBookings)
+                .filter(u -> bookingServiceClient.getTotalBookingCount(u.getId(), "COMPLETED") >= minBookings)
                 .collect(Collectors.toList());
     }
 }
