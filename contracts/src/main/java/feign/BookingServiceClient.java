@@ -37,4 +37,8 @@ public interface BookingServiceClient {
 
     @GetMapping("/api/bookings/{bookingId}/items")
     List<BookingItemDTO> getBookingItems(@PathVariable("bookingId") Long bookingId);
+
+
+
+
 }

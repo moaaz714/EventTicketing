@@ -4,6 +4,7 @@ import com.datastax.oss.driver.api.core.cql.Row;
 import com.team22.eventticketing.ticket.adapter.CassandraRowAdapter;
 import com.team22.eventticketing.ticket.adapter.ObjectArrayDtoAdapter;
 import com.team22.eventticketing.ticket.adapter.PostgresRowAdapter;
+
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketScanEvent;
 import com.team22.eventticketing.ticket.model.TicketStatus;
@@ -16,6 +17,7 @@ import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 
+import feign.BookingServiceClient;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -39,10 +41,12 @@ public class TicketService {
     private final TicketRepository ticketRepository;
     private final CacheEvictionService cacheEviction;
     private final List<EntityObserver> observers = new ArrayList<>();
+    private final BookingServiceClient bookingServiceClient;
 
-    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction) {
+    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction, BookingServiceClient bookingServiceClient) {
         this.ticketRepository = ticketRepository;
         this.cacheEviction = cacheEviction;
+        this.bookingServiceClient = bookingServiceClient;
     }
 
     public void register(EntityObserver observer) {
@@ -156,14 +160,19 @@ public class TicketService {
 
     @Cacheable(cacheNames = "ticket-service::S4-F1", key = "#bookingId")
     public Ticket getLatestTicketByBooking(Long bookingId) {
-        boolean bookingExists = ticketRepository.existsBookingById(bookingId);
-        if (!bookingExists) {
+
+        try {
+            bookingServiceClient.getBooking(bookingId);
+        } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
         }
+
         return ticketRepository
                 .findTopByBookingIdOrderByIssuedAtDesc(bookingId)
                 .orElseThrow(
-                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No tickets found for this booking"));
+                        () -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "No tickets found for this booking"));
     }
 
     // ─── [S4-F2] Issue Ticket (write) ────────────────────────────────────────────
