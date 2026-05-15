@@ -4,6 +4,13 @@ import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
 import com.team22.eventticketing.sales.strategy.*;
+import dto.BookingDTO;
+import dto.EventDTO;
+import feign.BookingServiceClient;
+import feign.EventServiceClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,15 +26,23 @@ import java.util.Map;
 @Service
 public class RefundWindowPolicyService {
 
+    private static final Logger log = LoggerFactory.getLogger(RefundWindowPolicyService.class);
+
     private final TicketSaleRepository ticketSaleRepository;
     private final CacheEvictionService cacheEviction;
+    private final BookingServiceClient bookingServiceClient;
+    private final EventServiceClient eventServiceClient;
     private final List<EntityObserver> observers = new ArrayList<>();
     private final RefundStrategySelector strategySelector = new RefundStrategySelector();
 
     public RefundWindowPolicyService(TicketSaleRepository ticketSaleRepository,
-                                     CacheEvictionService cacheEviction) {
+                                     CacheEvictionService cacheEviction,
+                                     BookingServiceClient bookingServiceClient,
+                                     EventServiceClient eventServiceClient) {
         this.ticketSaleRepository = ticketSaleRepository;
         this.cacheEviction = cacheEviction;
+        this.bookingServiceClient = bookingServiceClient;
+        this.eventServiceClient = eventServiceClient;
     }
 
     public void register(EntityObserver observer) { observers.add(observer); }
@@ -40,86 +55,115 @@ public class RefundWindowPolicyService {
     @Transactional
     public TicketSale processRefundWithWindowPolicy(Long saleId, String reason) {
 
-        // 1. Find the sale — 404 if not found
-        TicketSale sale = ticketSaleRepository.findById(saleId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "TicketSale not found with id: " + saleId));
+        MDC.put("saleId", saleId.toString());
+        try {
+            // 1. Find the sale
+            TicketSale sale = ticketSaleRepository.findById(saleId)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND, "TicketSale not found with id: " + saleId));
 
-        // 2. Must be COMPLETED — 400 otherwise
-        if (sale.getStatus() != TicketSale.SaleStatus.COMPLETED) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Only COMPLETED sales can be refunded");
-        }
+            // 2. Must be COMPLETED
+            if (sale.getStatus() != TicketSale.SaleStatus.COMPLETED) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "Only COMPLETED sales can be refunded");
+            }
 
-        // 3. Fetch eventDate via native SQL join — 400 if booking has no event
-        LocalDateTime eventDate = ticketSaleRepository.findEventDateBySaleId(saleId);
-        if (eventDate == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "booking has no associated event");
-        }
+            // 3. M3: Feign → booking-service to get eventId
+            MDC.put("bookingId", sale.getBookingId().toString());
+            BookingDTO booking;
+            try {
+                log.info("Calling BookingServiceClient.getBooking with args={}", sale.getBookingId());
+                booking = bookingServiceClient.getBooking(sale.getBookingId());
+                log.info("BookingServiceClient.getBooking returned successfully");
+            } catch (feign.FeignException.NotFound e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "booking has no associated event");
+            } catch (feign.FeignException e) {
+                log.warn("Feign call to booking-service failed: {}", e.getMessage());
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "Booking service temporarily unavailable");
+            } finally {
+                MDC.remove("bookingId");
+            }
 
-        // 4. Compute hours until event and select strategy
-        long hoursUntilEvent = Duration.between(LocalDateTime.now(), eventDate).toHours();
-        RefundStrategy strategy = strategySelector.select(hoursUntilEvent);
-        RefundRequest request = new RefundRequest(reason);
-        RefundResult result = strategy.calculateRefund(sale, request, eventDate);
+            if (booking.eventId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "booking has no associated event");
+            }
 
-        // 5. NoRefundStrategy path — log, invalidate, then throw 400
-        if (strategy instanceof NoRefundStrategy) {
-            Map<String, Object> details = new HashMap<>();
-            details.put("saleId", saleId);
-            details.put("strategyName", result.getStrategyName());
-            details.put("denialReason", "refund window expired");
-            details.put("hoursUntilEvent", hoursUntilEvent);
-            details.put("method", sale.getMethod() != null ? sale.getMethod().name() : null);
-            details.put("amount", sale.getAmount());
+            // 4. M3: Feign → event-service to get eventDate
+            EventDTO event;
+            try {
+                log.info("Calling EventServiceClient.getEvent with args={}", booking.eventId());
+                event = eventServiceClient.getEvent(booking.eventId());
+                log.info("EventServiceClient.getEvent returned successfully");
+            } catch (feign.FeignException.NotFound e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "booking has no associated event");
+            } catch (feign.FeignException e) {
+                log.warn("Feign call to event-service failed: {}", e.getMessage());
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "Event service temporarily unavailable");
+            }
 
-            // Log REFUND_DENIED to MongoDB BEFORE throwing
-            notifyObservers("REFUND_DENIED", Map.of(
+            LocalDateTime eventDate = event.eventDate();
+            if (eventDate == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "booking has no associated event");
+            }
+
+            // 5. Compute hours until event and select strategy
+            long hoursUntilEvent = Duration.between(LocalDateTime.now(), eventDate).toHours();
+            RefundStrategy strategy = strategySelector.select(hoursUntilEvent);
+            RefundRequest request = new RefundRequest(reason);
+            RefundResult result = strategy.calculateRefund(sale, request, eventDate);
+
+            // 6. NoRefundStrategy path
+            if (strategy instanceof NoRefundStrategy) {
+                notifyObservers("REFUND_DENIED", Map.of(
+                        "saleId", saleId,
+                        "method", sale.getMethod() != null ? sale.getMethod().name() : "",
+                        "amount", sale.getAmount() != null ? sale.getAmount() : 0.0,
+                        "strategyName", result.getStrategyName(),
+                        "hoursUntilEvent", hoursUntilEvent
+                ));
+                cacheEviction.evictPattern("S5-F10");
+                cacheEviction.evictDetail("S5-F11", saleId);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "refund window expired");
+            }
+
+            // 7. Full or Partial — update the sale
+            sale.setStatus(TicketSale.SaleStatus.REFUNDED);
+
+            Map<String, Object> details = new HashMap<>(
+                    sale.getTransactionDetails() != null ? sale.getTransactionDetails() : new HashMap<>());
+            details.put("refundAmount", result.getRefundAmount());
+            details.put("refundPolicy", result.getStrategyName());
+            details.put("refundReason", reason);
+            details.put("refundedAt", LocalDateTime.now().toString());
+            sale.setTransactionDetails(details);
+
+            TicketSale saved = ticketSaleRepository.save(sale);
+            log.info("TicketSale {} saved with status={}", saved.getId(), saved.getStatus());
+
+            notifyObservers("SALE_REFUNDED", Map.of(
                     "saleId", saleId,
-                    "method", sale.getMethod() != null ? sale.getMethod().name() : "",
-                    "amount", sale.getAmount() != null ? sale.getAmount() : 0.0,
+                    "method", saved.getMethod() != null ? saved.getMethod().name() : "",
+                    "amount", saved.getAmount() != null ? saved.getAmount() : 0.0,
                     "strategyName", result.getStrategyName(),
-                    "hoursUntilEvent", hoursUntilEvent
+                    "refundAmount", result.getRefundAmount(),
+                    "hoursUntilEvent", hoursUntilEvent,
+                    "reason", reason != null ? reason : ""
             ));
 
-            // Invalidate caches BEFORE throwing
             cacheEviction.evictPattern("S5-F10");
             cacheEviction.evictDetail("S5-F11", saleId);
+            cacheEviction.evictDetail("ticket-sale", saleId);
 
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "refund window expired");
+            return saved;
+
+        } finally {
+            MDC.remove("saleId");
         }
-
-        // 6. Full or Partial — update the sale
-        sale.setStatus(TicketSale.SaleStatus.REFUNDED);
-
-        Map<String, Object> details = new HashMap<>(
-                sale.getTransactionDetails() != null ? sale.getTransactionDetails() : new HashMap<>());
-        details.put("refundAmount", result.getRefundAmount());
-        details.put("refundPolicy", result.getStrategyName());
-        details.put("refundReason", reason);
-        details.put("refundedAt", LocalDateTime.now().toString());
-        sale.setTransactionDetails(details);
-
-        TicketSale saved = ticketSaleRepository.save(sale);
-
-        // 7. Log REFUNDED to MongoDB via observer
-        notifyObservers("SALE_REFUNDED", Map.of(
-                "saleId", saleId,
-                "method", saved.getMethod() != null ? saved.getMethod().name() : "",
-                "amount", saved.getAmount() != null ? saved.getAmount() : 0.0,
-                "strategyName", result.getStrategyName(),
-                "refundAmount", result.getRefundAmount(),
-                "hoursUntilEvent", hoursUntilEvent,
-                "reason", reason != null ? reason : ""
-        ));
-
-        // 8. Invalidate caches
-        cacheEviction.evictPattern("S5-F10");
-        cacheEviction.evictDetail("S5-F11", saleId);
-        cacheEviction.evictDetail("ticket-sale", saleId);
-
-        return saved;
     }
 }

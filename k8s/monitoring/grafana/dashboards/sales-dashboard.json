@@ -1,0 +1,127 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": {
+    "list": []
+  },
+  "description": "Sales Service Dashboard — LogQL Panels",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Sales Service — Error Rate (per minute)",
+      "description": "Count of ERROR-level log lines from sales-service per minute. Spike detection: if sales-service logs many ERRORs in one minute something is wrong.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"sales-service\", level=\"ERROR\"} | json [1m]))",
+          "legendFormat": "errors/min",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Sales Service — Feign Call Outcomes",
+      "description": "Successful Feign responses vs FeignException catches. Detect when user-service or booking-service or event-service is degraded.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"sales-service\"} | json | message =~ \".*returned successfully.*\" [5m]))",
+          "legendFormat": "Feign success",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"sales-service\"} | json | message =~ \".*Feign call to.*failed.*\" [5m]))",
+          "legendFormat": "Feign failures",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Sales Service — RabbitMQ Payment Event Audit",
+      "description": "Payment events published and consumed filtered by routing key. Shows how many payment.initiated, payment.completed, payment.failed, payment.refunded events were processed.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"sales-service\"} | json | message =~ \".*Published.*\" [5m]))",
+          "legendFormat": "events published",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"sales-service\"} | json | message =~ \".*Consuming.*\" [5m]))",
+          "legendFormat": "events consumed",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"sales-service\"} | json | routingKey =~ \"payment.*\" [5m]))",
+          "legendFormat": "payment.* routing key",
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        }
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["eventticketing", "sales-service", "logql"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Sales Service Dashboard",
+  "uid": "sales-service-dashboard",
+  "version": 1
+}
