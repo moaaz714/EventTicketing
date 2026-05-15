@@ -179,8 +179,9 @@ public class TicketService {
 
     public Ticket issueTicket(Long bookingId, String attendeeName, String ticketCode,
             Map<String, Object> metadata) {
-        boolean exists = ticketRepository.existsBookingById(bookingId);
-        if (!exists) {
+        try {
+            bookingServiceClient.getBooking(bookingId);
+        } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
         }
         if (ticketRepository.existsByTicketCode(ticketCode)) {

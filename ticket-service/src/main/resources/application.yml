@@ -32,6 +32,6 @@
 
   feign:
     booking-service:
-      url: http://booking-service:8080
+      url: http://booking-service:8083
 
 
