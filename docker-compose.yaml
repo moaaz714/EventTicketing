@@ -82,12 +82,19 @@ services:
     ports:
       - "8084:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/etdb-tickets
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+
+      SPRING_DATA_MONGODB_URI: mongodb://root:rootpass@mongo:27017/etdb-tickets-mongo?authSource=admin
+
+      SPRING_CASSANDRA_KEYSPACE_NAME: etdb_tickets_ks
+
     depends_on:
       postgres:
         condition: service_healthy
+
+
 
   # Sales Service (Port 8085)
   sales-service:
