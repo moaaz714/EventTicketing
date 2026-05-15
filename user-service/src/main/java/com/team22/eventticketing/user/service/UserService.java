@@ -11,6 +11,8 @@ import com.team22.eventticketing.user.mongo.AuthEvent;
 import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.AuthEventRepository;
 import com.team22.eventticketing.user.repository.UserRepository;
+import dto.BookingSummaryDTO;
+import feign.BookingServiceClient;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,15 +34,18 @@ public class UserService {
     private final UserRepository userRepository;
     private final AuthEventRepository authEventRepository;
     private final CacheEvictionService cacheEviction;
+    private final BookingServiceClient bookingServiceClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final List<EntityObserver> observers = new ArrayList<>();
 
     public UserService(UserRepository userRepository,
                        AuthEventRepository authEventRepository,
-                       CacheEvictionService cacheEviction) {
+                       CacheEvictionService cacheEviction,
+                       BookingServiceClient bookingServiceClient) {
         this.userRepository = userRepository;
         this.authEventRepository = authEventRepository;
         this.cacheEviction = cacheEviction;
+        this.bookingServiceClient = bookingServiceClient;
     }
 
     public void register(EntityObserver observer) { observers.add(observer); }
@@ -192,23 +197,15 @@ public class UserService {
     @Cacheable(cacheNames = "user-service::S1-F3", key = "#id")
     public UserBookingSummaryDTO getBookingSummary(Long id) {
         User user = findById(id);
-
-        Object[] row = userRepository.getBookingSummaryByUserId(id).get(0);
-
-        long totalBookings          = ((Number) row[0]).longValue();
-        long completedBookings      = ((Number) row[1]).longValue();
-        long cancelledBookings      = ((Number) row[2]).longValue();
-        double totalSpent           = ((Number) row[3]).doubleValue();
-        double averageBookingAmount = ((Number) row[4]).doubleValue();
-
+        BookingSummaryDTO summary = bookingServiceClient.getUserBookingSummary(id);
         return UserBookingSummaryDTO.builder()
                 .userId(user.getId())
                 .name(user.getName())
-                .totalBookings(totalBookings)
-                .completedBookings(completedBookings)
-                .cancelledBookings(cancelledBookings)
-                .totalSpent(totalSpent)
-                .averageBookingAmount(averageBookingAmount)
+                .totalBookings(summary.totalBookings())
+                .completedBookings(summary.completedBookings())
+                .cancelledBookings(summary.cancelledBookings())
+                .totalSpent(summary.totalSpent().doubleValue())
+                .averageBookingAmount(summary.averageBookingAmount().doubleValue())
                 .build();
     }
 
