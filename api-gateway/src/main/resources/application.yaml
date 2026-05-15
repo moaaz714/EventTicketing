@@ -24,3 +24,9 @@ spring:
           uri: http://sales-service:8080
           predicates:
             - Path=/api/sales/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info"
