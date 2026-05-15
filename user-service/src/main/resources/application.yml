@@ -19,6 +19,21 @@ jwt:
   secret: ${JWT_SECRET:24966c8a763b3a3f7f264cefb93d95159184e8c5e2af5c94e05387371d47a3fd=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
 
+spring:
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+
 feign:
   booking-service:
     url: ${BOOKING_SERVICE_URL:http://booking-service:8080}
