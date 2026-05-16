@@ -7,6 +7,7 @@ import com.team22.eventticketing.user.dto.TopAttendeeDTO;
 import com.team22.eventticketing.user.dto.UserProfileDTO;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
+import com.team22.eventticketing.user.messaging.UserEventPublisher;
 import com.team22.eventticketing.user.mongo.AuthEvent;
 import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.AuthEventRepository;
@@ -37,17 +38,20 @@ public class UserService {
     private final AuthEventRepository authEventRepository;
     private final CacheEvictionService cacheEviction;
     private final BookingServiceClient bookingServiceClient;
+    private final UserEventPublisher userEventPublisher;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final List<EntityObserver> observers = new ArrayList<>();
 
     public UserService(UserRepository userRepository,
                        AuthEventRepository authEventRepository,
                        CacheEvictionService cacheEviction,
-                       BookingServiceClient bookingServiceClient) {
+                       BookingServiceClient bookingServiceClient,
+                       UserEventPublisher userEventPublisher) {
         this.userRepository = userRepository;
         this.authEventRepository = authEventRepository;
         this.cacheEviction = cacheEviction;
         this.bookingServiceClient = bookingServiceClient;
+        this.userEventPublisher = userEventPublisher;
     }
 
     public void register(EntityObserver observer) { observers.add(observer); }
@@ -264,7 +268,7 @@ public class UserService {
     public User deactivateUser(Long id) {
         User user = findById(id);
 
-        long activeBookings = userRepository.countActiveBookingsByUserId(id);
+        int activeBookings = bookingServiceClient.getActiveBookingCount(id);
         if (activeBookings > 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User has active bookings");
         }
@@ -273,6 +277,7 @@ public class UserService {
         User saved = userRepository.save(user);
         cacheEviction.evictEntityAndFeatures("user", id, "S1-F1", "S1-F3", "S1-F5", "S1-F6", "S1-F8", "S1-F9");
         notifyObservers("USER_DEACTIVATED", Map.of("userId", saved.getId()));
+        userEventPublisher.publishUserDeactivated(saved.getId());
         return saved;
     }
 
