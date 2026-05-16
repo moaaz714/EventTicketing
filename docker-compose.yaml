@@ -88,6 +88,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      cassandra:
+        condition: service_healthy
 
   # Sales Service (Port 8085)
   sales-service:
@@ -178,20 +180,21 @@ services:
     ports:
       - "9042:9042"
     environment:
-      CASSANDRA_CLUSTER_NAME: eventticketingcluster
-      CASSANDRA_DC: datacenter1
-      CASSANDRA_KEYSPACE: eventticketingks
-      # Memory limits applied here:
-      MAX_HEAP_SIZE: 200M
-      HEAP_NEWSIZE: 128M
-    volumes:
-      - cassandra-data:/var/lib/cassandra
+      - CASSANDRA_CLUSTER_NAME=eventticketingcluster
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_KEYSPACE=eventticketingks
+      # Use JVM_OPTS to force the heap smaller if MAX_HEAP_SIZE is being ignored
+      - JVM_OPTS=-Xms256M -Xmx256M
+      - MAX_HEAP_SIZE=256M
+    deploy:
+      resources:
+        limits:
+          memory: 1024M # Give the container 1GB total, but the Java app only 256MB
     healthcheck:
-      test: [ "CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES'" ]
-      interval: 15s
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES'"]
+      interval: 30s
       timeout: 10s
       retries: 10
-      start_period: 60s
 
 volumes:
   pgdata:
