@@ -469,19 +469,69 @@ public class TicketService {
     // ─── [S4-F9] Unused Upcoming Tickets (combined)
     // ───────────────────────────────
 
+//    @Cacheable(cacheNames = "ticket-service::S4-F9", key = "'all'")
+//    public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
+//
+//        // Fetch the raw data from PostgreSQL
+//        List<Map<String, Object>> results = ticketRepository.findUnusedUpcomingTicketsNative();
+//
+//        // Instantiate the correct structural adapter
+//        PostgresRowAdapter adapter = new PostgresRowAdapter();
+//
+//        // Stream and adapt the results
+//        return results.stream()
+//                .map(adapter::adapt)
+//                .toList();
+//    }
     @Cacheable(cacheNames = "ticket-service::S4-F9", key = "'all'")
     public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
 
-        // Fetch the raw data from PostgreSQL
-        List<Map<String, Object>> results = ticketRepository.findUnusedUpcomingTicketsNative();
+        List<Ticket> tickets =
+                ticketRepository.findByStatus(TicketStatus.VALID);
 
-        // Instantiate the correct structural adapter
-        PostgresRowAdapter adapter = new PostgresRowAdapter();
+        List<UnusedTicketDTO> results = new ArrayList<>();
 
-        // Stream and adapt the results
-        return results.stream()
-                .map(adapter::adapt)
-                .toList();
+        Map<Long, EventDTO> eventCache = new HashMap<>();
+
+        for (Ticket ticket : tickets) {
+
+            try {
+
+                Long eventId = ticket.getEventId();
+
+                EventDTO event;
+
+                if (eventCache.containsKey(eventId)) {
+
+                    event = eventCache.get(eventId);
+
+                } else {
+
+                    event = eventServiceClient.getEvent(eventId);
+
+                    eventCache.put(eventId, event);
+                }
+
+                if ("UPCOMING".equalsIgnoreCase(event.status())) {
+
+                    UnusedTicketDTO dto = UnusedTicketDTO.builder()
+                            .ticketId(ticket.getId())
+                            .attendeeName(ticket.getAttendeeName())
+                            .ticketCode(ticket.getTicketCode())
+                            .bookingId(ticket.getBookingId())
+                            .eventName(event.name())
+                            .eventDate(event.eventDate())
+                            .build();
+
+                    results.add(dto);
+                }
+
+            } catch (Exception ignored) {
+
+            }
+        }
+
+        return results;
     }
 
     // ─── [S4-F6] Ticket History (date range report)
