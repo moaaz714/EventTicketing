@@ -33,5 +33,7 @@
   feign:
     booking-service:
       url: http://booking-service:8083
+    event-service:
+      url: http://localhost:8082
 
 

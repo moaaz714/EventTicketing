@@ -18,6 +18,7 @@ import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 
 import feign.BookingServiceClient;
+import feign.EventServiceClient;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -42,11 +43,13 @@ public class TicketService {
     private final CacheEvictionService cacheEviction;
     private final List<EntityObserver> observers = new ArrayList<>();
     private final BookingServiceClient bookingServiceClient;
+    private final EventServiceClient eventServiceClient;
 
-    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction, BookingServiceClient bookingServiceClient) {
+    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction, BookingServiceClient bookingServiceClient, EventServiceClient eventServiceClient) {
         this.ticketRepository = ticketRepository;
         this.cacheEviction = cacheEviction;
         this.bookingServiceClient = bookingServiceClient;
+        this.eventServiceClient = eventServiceClient;
     }
 
     public void register(EntityObserver observer) {
@@ -119,8 +122,12 @@ public class TicketService {
         Long bookingId = request.getBookingId();
         List<TicketItemDTO> items = request.getTickets();
 
-        if (!ticketRepository.bookingExistsById(bookingId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId);
+        try {
+            bookingServiceClient.getBooking(bookingId);
+        } catch (Exception e) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Booking not found with id: " + bookingId);
         }
 
         Set<String> codesInBatch = new HashSet<>();

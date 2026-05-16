@@ -1,6 +1,7 @@
 package com.team22.eventticketing.ticket.repository;
 
 import com.team22.eventticketing.ticket.model.Ticket;
+import com.team22.eventticketing.ticket.model.TicketStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -18,7 +19,7 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
     // get latest ticket
     Optional<Ticket> findTopByBookingIdOrderByIssuedAtDesc(Long bookingId);
-
+    List<Ticket> findByStatus(TicketStatus status);
     // Check if booking exists (cross-table query)
     @Query(value = "SELECT COUNT(*) > 0 FROM bookings WHERE id = :bookingId", nativeQuery = true)
     boolean existsBookingById(@Param("bookingId") Long bookingId);
