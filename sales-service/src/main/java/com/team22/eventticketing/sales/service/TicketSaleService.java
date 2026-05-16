@@ -140,6 +140,7 @@ public class TicketSaleService {
     }
 
     // ─── [S5-F3] User Ticket Sale Summary — M3: Feign replaces SQL user check ────
+// S5-F3: M3 — Feign replaces SQL user check (55-5679)
 
     @Cacheable(cacheNames = "sales-service::S5-F3", key = "#userId")
     public UserSaleSummaryDTO getUserSummary(Long userId) {
