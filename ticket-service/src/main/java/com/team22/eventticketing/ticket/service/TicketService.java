@@ -122,52 +122,103 @@ public class TicketService {
     }
 
     // ─── [S4-F4] Batch Ticket Issuance (write — invalidates) ─────────────────────
-
     @Transactional
     public int batchIssueTickets(BatchTicketRequestDTO request) {
+
         Long bookingId = request.getBookingId();
+
         List<TicketItemDTO> items = request.getTickets();
 
+        // validate booking + retrieve booking data
+        BookingDTO booking;
+
         try {
-            bookingServiceClient.getBooking(bookingId);
+
+            booking = bookingServiceClient.getBooking(bookingId);
+
         } catch (Exception e) {
+
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
-                    "Booking not found with id: " + bookingId);
+                    "Booking not found with id: " + bookingId
+            );
         }
 
+        // NEW M3 FIELD
+        Long eventId = booking.eventId();
+
+        // duplicate ticket codes inside batch
         Set<String> codesInBatch = new HashSet<>();
+
         for (TicketItemDTO item : items) {
+
             if (!codesInBatch.add(item.getTicketCode())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Duplicate ticket code in batch: " + item.getTicketCode());
+
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Duplicate ticket code in batch: "
+                                + item.getTicketCode()
+                );
             }
         }
 
+        // duplicate ticket codes in DB
         for (String code : codesInBatch) {
+
             if (ticketRepository.existsByTicketCode(code)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket code already exists: " + code);
+
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Ticket code already exists: " + code
+                );
             }
         }
 
         LocalDateTime now = LocalDateTime.now();
-        List<Ticket> tickets = items.stream().map(item -> new Ticket(
-                bookingId,
-                item.getAttendeeName(),
-                item.getTicketCode(),
-                TicketStatus.VALID,
-                now,
-                item.getMetadata())).toList();
+
+        List<Ticket> tickets = items.stream().map(item -> {
+
+            Ticket ticket = new Ticket();
+
+            ticket.setBookingId(bookingId);
+
+            // NEW M3 FIELD
+            ticket.setEventId(eventId);
+
+            ticket.setAttendeeName(item.getAttendeeName());
+
+            ticket.setTicketCode(item.getTicketCode());
+
+            ticket.setStatus(TicketStatus.VALID);
+
+            ticket.setIssuedAt(now);
+
+            ticket.setMetadata(item.getMetadata());
+
+            return ticket;
+
+        }).toList();
 
         ticketRepository.saveAll(tickets);
+
         cacheEviction.evictPattern("S4-F1");
         cacheEviction.evictPattern("S4-F5");
         cacheEviction.evictPattern("S4-F6");
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
-        notifyObservers("TICKETS_BATCH_ISSUED", Map.of("bookingId", bookingId, "count", tickets.size()));
+
+        notifyObservers(
+                "TICKETS_BATCH_ISSUED",
+                Map.of(
+                        "bookingId", bookingId,
+                        "count", tickets.size()
+                )
+        );
+
         return tickets.size();
     }
+
+
 
     // ─── [S4-F1] Get Latest Ticket by Booking ────────────────────────────────────
 
@@ -190,32 +241,72 @@ public class TicketService {
 
     // ─── [S4-F2] Issue Ticket (write) ────────────────────────────────────────────
 
-    public Ticket issueTicket(Long bookingId, String attendeeName, String ticketCode,
-            Map<String, Object> metadata) {
+    public Ticket issueTicket(
+            Long bookingId,
+            String attendeeName,
+            String ticketCode,
+            Map<String, Object> metadata
+    ) {
+
+        // validate booking + retrieve booking data
+        BookingDTO booking;
+
         try {
-            bookingServiceClient.getBooking(bookingId);
+
+            booking = bookingServiceClient.getBooking(bookingId);
+
         } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
-        }
-        if (ticketRepository.existsByTicketCode(ticketCode)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket code already exists");
+
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Booking not found"
+            );
         }
 
+        // duplicate ticket code check
+        if (ticketRepository.existsByTicketCode(ticketCode)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ticket code already exists"
+            );
+        }
+
+        // create ticket
         Ticket ticket = new Ticket();
+
         ticket.setBookingId(bookingId);
+
+        // NEW M3 FIELD
+        ticket.setEventId(booking.eventId());
+
         ticket.setAttendeeName(attendeeName);
         ticket.setTicketCode(ticketCode);
+
         ticket.setMetadata(metadata);
+
         ticket.setIssuedAt(LocalDateTime.now());
+
         ticket.setStatus(TicketStatus.VALID);
 
         Ticket saved = ticketRepository.save(ticket);
+
         cacheEviction.evictPattern("S4-F1");
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
-        notifyObservers("TICKET_ISSUED", Map.of("ticketId", saved.getId(), "bookingId", bookingId));
+
+        notifyObservers(
+                "TICKET_ISSUED",
+                Map.of(
+                        "ticketId", saved.getId(),
+                        "bookingId", bookingId
+                )
+        );
+
         return saved;
     }
+
+
 
     // ─── [S4-F3] Find Nearby Tickets (location DTO)
     // ───────────────────────────────

@@ -31,6 +31,10 @@ public class Ticket {
     @Column(nullable = false)
     private LocalDateTime issuedAt; // [cite: 302]
 
+    private Long eventId;
+
+
+
     /**
      * metadata JSONB column stores: seatNumber, section, tier, gate, qrCodeUrl,
      * checkInTime [cite: 305]
@@ -109,5 +113,13 @@ public class Ticket {
 
     public void setMetadata(Map<String, Object> metadata) {
         this.metadata = metadata;
+    }
+
+    public Long getEventId() {
+        return eventId;
+    }
+
+    public void setEventId(Long eventId) {
+        this.eventId = eventId;
     }
 }
