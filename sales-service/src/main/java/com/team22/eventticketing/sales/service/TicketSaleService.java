@@ -340,7 +340,7 @@ public class TicketSaleService {
     }
 
     // ─── [S5-F4] Process Booking Payment — M3: Feign replaces SQL booking check ──
-
+// S5-F4: M3 — Feign replaces SQL booking check (55-5679)
     @Transactional
     public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method,
                                             String cardLastFour) {
