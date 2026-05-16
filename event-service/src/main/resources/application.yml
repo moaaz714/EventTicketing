@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://postgres:5432/eventticketingdb
+    url: jdbc:postgresql://event-postgres:5432/etdb-events
     username: postgres
     password: postgres
   jpa:
@@ -17,6 +17,29 @@ spring:
   elasticsearch:
     uris: http://elasticsearch:9200
 
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-retries: 3
+
+
+
+
 jwt:
   secret: ${JWT_SECRET:24966c8a763b3a3f7f264cefb93d95159184e8c5e2af5c94e05387371d47a3fd=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
+
+feign:
+  booking-service.url: ${BOOKING_SERVICE_URL:http://localhost:8083}
+  user-service.url: ${USER_SERVICE_URL:http://localhost:8081}
+  ticket-service.url: ${TICKET_SERVICE_URL:http://localhost:8084}
+  event-service.url: ${EVENT_SERVICE_URL:http://localhost:8082}

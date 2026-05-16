@@ -18,6 +18,22 @@ services:
       timeout: 5s
       retries: 10
 
+  # NEW: RabbitMQ Service (Missing from your original file)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: eventticketing-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP Port
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # User Service (Port 8081)
   user-service:
     build: ./user-service
@@ -29,14 +45,17 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_DATA_MONGODB_URI: mongodb://root:rootpass@mongo:27017/eventticketingmongo?authSource=admin
+      SPRING_RABBITMQ_HOST: rabbitmq
     depends_on:
       postgres:
         condition: service_healthy
       mongo:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     restart: on-failure
 
-  # Event Service (Port 8082)
+  # Event Service (Port 8082) - REFACTORED
   event-service:
     build: ./event-service
     container_name: event-service
@@ -47,12 +66,20 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_DATA_MONGODB_URI: mongodb://root:rootpass@mongo:27017/eventticketingmongo?authSource=admin
+      SPRING_RABBITMQ_HOST: rabbitmq
+      # Feign URLs for internal Docker networking
+      BOOKING_SERVICE_URL: http://booking-service:8080
+      USER_SERVICE_URL: http://user-service:8080
+      TICKET_SERVICE_URL: http://ticket-service:8080
+      EVENT_SERVICE_URL: http://event-service:8080
     depends_on:
       postgres:
         condition: service_healthy
       mongo:
         condition: service_healthy
       elasticsearch:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   # Booking Service (Port 8083)
@@ -65,6 +92,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_RABBITMQ_HOST: rabbitmq
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +101,8 @@ services:
       mongo:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   # Ticket Service (Port 8084)
@@ -85,8 +115,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_RABBITMQ_HOST: rabbitmq
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   # Sales Service (Port 8085)
@@ -125,7 +158,6 @@ services:
     container_name: eventticketing-redis
     ports:
       - "6379:6379"
-    # Notice the memory limits applied directly in the command here:
     command: redis-server --requirepass redispass --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: [ "CMD", "redis-cli", "-a", "redispass", "ping" ]
@@ -141,7 +173,6 @@ services:
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
-      # Memory limit applied here:
       ES_JAVA_OPTS: "-Xms200m -Xmx200m"
     volumes:
       - es-data:/usr/share/elasticsearch/data
@@ -160,7 +191,6 @@ services:
       - "7687:7687"
     environment:
       NEO4J_AUTH: neo4j/neo4jpass
-      # Memory limits applied here:
       NEO4J_server_memory_heap_max__size: 512m
       NEO4J_server_memory_heap_initial__size: 256m
     volumes:
@@ -181,7 +211,6 @@ services:
       CASSANDRA_CLUSTER_NAME: eventticketingcluster
       CASSANDRA_DC: datacenter1
       CASSANDRA_KEYSPACE: eventticketingks
-      # Memory limits applied here:
       MAX_HEAP_SIZE: 200M
       HEAP_NEWSIZE: 128M
     volumes:

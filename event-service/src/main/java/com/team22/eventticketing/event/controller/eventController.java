@@ -277,4 +277,16 @@ public class eventController {
     public ResponseEntity<EventDashboardDTO> getDashboard(@PathVariable Long id) {
         return ResponseEntity.ok(eventService.getEventDashboard(id));
     }
+
+    // S3-F3 Contract: GET /api/events/{id}/sessions/avg-capacity
+    @GetMapping("/{id}/sessions/avg-capacity")
+    public ResponseEntity<Map<String, Double>> getAverageSessionCapacity(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.getAverageSessionCapacity(id));
+    }
+
+    // S4-F3 Contract: GET /api/events/{id}/venue-coords
+    @GetMapping("/{id}/venue-coords")
+    public ResponseEntity<Map<String, Double>> getVenueCoords(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.getVenueCoords(id));
+    }
 }
