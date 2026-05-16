@@ -51,7 +51,7 @@ public class RefundWindowPolicyService {
     private void notifyObservers(String action, Object payload) {
         for (EntityObserver o : observers) o.onEvent(action, payload);
     }
-
+    // S5-F12: M3 — Feign chain replaces 3-table JOIN (55-5679)
     @Transactional
     public TicketSale processRefundWithWindowPolicy(Long saleId, String reason) {
 
