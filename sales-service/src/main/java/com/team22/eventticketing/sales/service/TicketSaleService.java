@@ -9,6 +9,7 @@ import com.team22.eventticketing.sales.entity.*;
 import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
 import dto.BookingItemDTO;
+import dto.BookingDTO;
 import feign.BookingServiceClient;
 import feign.UserServiceClient;
 import org.slf4j.Logger;
