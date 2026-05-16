@@ -425,21 +425,45 @@ public class TicketService {
 
     @Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
     public EventAttendanceSummaryDTO getSummary(Long eventId) {
-        Map<String, Object> data = ticketRepository.getAttendanceSummaryData(eventId);
 
-        // 1. Business Validation: Keep the 404 check in the service layer
-        if (data == null || ((Number) data.getOrDefault("total", 0)).longValue() == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No tickets found for event: " + eventId);
+        List<Ticket> tickets =
+                ticketRepository.findByEventId(eventId);
+
+        if (tickets.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "No tickets found for event: " + eventId
+            );
         }
 
-        // 2. Data Safety: The adapter expects "eventId" to be inside the map.
-        // If your repository query doesn't explicitly return it, this prevents a
-        // NullPointerException.
-        data.putIfAbsent("eventId", eventId);
+        long totalTickets = tickets.size();
 
-        // 3. Structural Pattern: Delegate DTO creation to the Adapter
-        CassandraRowAdapter adapter = new CassandraRowAdapter();
-        return adapter.adapt(data);
+        long usedTickets = tickets.stream()
+                .filter(t -> t.getStatus() == TicketStatus.USED)
+                .count();
+
+        long validTickets = tickets.stream()
+                .filter(t -> t.getStatus() == TicketStatus.VALID)
+                .count();
+
+        double attendanceRate =
+                totalTickets == 0
+                        ? 0.0
+                        : ((double) usedTickets / totalTickets) * 100;
+
+        LocalDateTime lastCheckIn = tickets.stream()
+                .filter(t -> t.getStatus() == TicketStatus.USED)
+                .map(Ticket::getIssuedAt)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+
+        return EventAttendanceSummaryDTO.builder()
+                .eventId(eventId)
+                .totalTickets(totalTickets)
+                .usedTickets(usedTickets)
+                .validTickets(validTickets)
+                .lastCheckIn(lastCheckIn)
+                .build();
     }
 
     // ─── [S4-F9] Unused Upcoming Tickets (combined)
