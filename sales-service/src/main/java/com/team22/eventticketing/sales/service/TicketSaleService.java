@@ -140,6 +140,7 @@ public class TicketSaleService {
     }
 
     // ─── [S5-F3] User Ticket Sale Summary — M3: Feign replaces SQL user check ────
+// S5-F3: M3 — Feign replaces SQL user check (55-5679)
 
     @Cacheable(cacheNames = "sales-service::S5-F3", key = "#userId")
     public UserSaleSummaryDTO getUserSummary(Long userId) {
@@ -280,7 +281,7 @@ public class TicketSaleService {
                 "startDate", startDate.toString(),
                 "endDate", endDate.toString()));
     }
-
+    // S5-F10: M3 — Feign replaces SQL JOIN for tier analytics (55-5679)
     @Cacheable(cacheNames = "sales-service::S5-F10",
             key = "#startDate.toString() + ':' + #endDate.toString()")
     public List<TierRevenueDTO> getTierRevenue(LocalDate startDate, LocalDate endDate) {
@@ -338,8 +339,11 @@ public class TicketSaleService {
         return result;
     }
 
+    // [S5-F4] Process Booking Payment lives in SalesService.processBookingPayment
+    // (the live POST /api/sales/booking/{bookingId} path). The previous duplicate
+    // here was unreachable dead code and was removed during the S5-F4 refactor.
     // ─── [S5-F4] Process Booking Payment — M3: Feign replaces SQL booking check ──
-
+// S5-F4: M3 — Feign replaces SQL booking check (55-5679)
     @Transactional
     public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method,
                                             String cardLastFour) {

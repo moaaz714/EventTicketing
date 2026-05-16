@@ -5,10 +5,16 @@ import com.team22.eventticketing.sales.entity.Promotion;
 import com.team22.eventticketing.sales.entity.SalePromotion;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.entity.*;
+import com.team22.eventticketing.sales.messaging.publishers.PaymentEventPublisher;
 import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.PromotionRepository;
 import com.team22.eventticketing.sales.repository.SalePromotionRepository;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
+import dto.BookingDTO;
+import feign.BookingServiceClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,20 +30,28 @@ import java.util.Map;
 @Service
 public class SalesService {
 
+    private static final Logger log = LoggerFactory.getLogger(SalesService.class);
+
     private final TicketSaleRepository ticketSaleRepository;
     private final PromotionRepository promotionRepository;
     private final SalePromotionRepository salePromotionRepository;
     private final CacheEvictionService cacheEviction;
+    private final BookingServiceClient bookingServiceClient;
+    private final PaymentEventPublisher paymentEventPublisher;
     private final List<EntityObserver> observers = new ArrayList<>();
 
     public SalesService(TicketSaleRepository ticketSaleRepository,
                         PromotionRepository promotionRepository,
                         SalePromotionRepository salePromotionRepository,
-                        CacheEvictionService cacheEviction) {
+                        CacheEvictionService cacheEviction,
+                        BookingServiceClient bookingServiceClient,
+                        PaymentEventPublisher paymentEventPublisher) {
         this.ticketSaleRepository = ticketSaleRepository;
         this.promotionRepository = promotionRepository;
         this.salePromotionRepository = salePromotionRepository;
         this.cacheEviction = cacheEviction;
+        this.bookingServiceClient = bookingServiceClient;
+        this.paymentEventPublisher = paymentEventPublisher;
     }
 
     public void register(EntityObserver observer) { observers.add(observer); }
@@ -47,43 +61,79 @@ public class SalesService {
         for (EntityObserver o : observers) o.onEvent(action, payload);
     }
 
-    // ─── [S5-F4] Process booking payment (write — invalidates) ───────────────────
+    // ─── [S5-F4] Process booking payment — M3: Feign booking-status validation ───
+    //     + publishes payment.completed / payment.failed to payment.events
     @Transactional
     public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method,
                                             String cardLastFour, boolean simulateFailure) {
 
-        TicketSale ticketSale = ticketSaleRepository.findByBookingIdAndStatusPending(bookingId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Booking not found"));
+        MDC.put("bookingId", bookingId.toString());
+        try {
+            // M3: replace native SELECT * FROM bookings with Feign → booking-service
+            log.info("Calling BookingServiceClient.getBooking with args={}", bookingId);
+            BookingDTO booking;
+            try {
+                booking = bookingServiceClient.getBooking(bookingId);
+                log.info("BookingServiceClient.getBooking returned successfully");
+            } catch (feign.FeignException.NotFound e) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Booking not found: " + bookingId);
+            } catch (feign.FeignException e) {
+                log.warn("Feign call to booking-service failed: {}", e.getMessage());
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "Booking service temporarily unavailable");
+            }
 
-        Map<String, Object> transactionDetails = new HashMap<>();
-        transactionDetails.put("method", method.name());
-        if (cardLastFour != null) transactionDetails.put("cardLastFour", cardLastFour);
+            // In the M3 saga context the booking must be at the customer-payment step
+            if (!"PAYMENT_PENDING".equals(booking.status())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Booking is not awaiting payment. Status: " + booking.status());
+            }
 
-        if (simulateFailure) {
-            ticketSale.setStatus(TicketSale.SaleStatus.FAILED);
-            transactionDetails.put("gatewayResponse", "declined");
-            transactionDetails.put("failedAt", LocalDateTime.now().toString());
+            // Find the existing PENDING TicketSale created by the booking.completed consumer
+            TicketSale ticketSale = ticketSaleRepository.findByBookingIdAndStatusPending(bookingId)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Pending ticket sale not found for booking: " + bookingId));
+
+            Map<String, Object> transactionDetails = new HashMap<>();
+            transactionDetails.put("method", method.name());
+            if (cardLastFour != null) transactionDetails.put("cardLastFour", cardLastFour);
+
+            if (simulateFailure) {
+                ticketSale.setStatus(TicketSale.SaleStatus.FAILED);
+                transactionDetails.put("gatewayResponse", "declined");
+                transactionDetails.put("failedAt", LocalDateTime.now().toString());
+                ticketSale.setTransactionDetails(transactionDetails);
+                TicketSale saved = ticketSaleRepository.save(ticketSale);
+                log.info("TicketSale {} saved with status={}", saved.getId(), saved.getStatus());
+                cacheEviction.evictEntityAndFeatures("ticket-sale", saved.getId(),
+                        "S5-F1", "S5-F3", "S5-F6", "S5-F10", "S5-F11");
+                notifyObservers("SALE_FAILED", Map.of("saleId", saved.getId(), "bookingId", bookingId,
+                        "method", method.name(), "amount", saved.getAmount() != null ? saved.getAmount() : 0.0));
+                paymentEventPublisher.publishPaymentFailed(saved.getId(), bookingId,
+                        "payment declined");
+                return saved;
+            }
+
+            ticketSale.setMethod(method);
+            ticketSale.setStatus(TicketSale.SaleStatus.COMPLETED);
+            transactionDetails.put("gatewayResponse", "approved");
+            transactionDetails.put("paidAt", LocalDateTime.now().toString());
             ticketSale.setTransactionDetails(transactionDetails);
+
             TicketSale saved = ticketSaleRepository.save(ticketSale);
+            log.info("TicketSale {} saved with status={}", saved.getId(), saved.getStatus());
             cacheEviction.evictEntityAndFeatures("ticket-sale", saved.getId(),
                     "S5-F1", "S5-F3", "S5-F6", "S5-F10", "S5-F11");
-            notifyObservers("SALE_FAILED", Map.of("saleId", saved.getId(), "bookingId", bookingId,
+            notifyObservers("PAYMENT_PROCESSED", Map.of("saleId", saved.getId(), "bookingId", bookingId,
                     "method", method.name(), "amount", saved.getAmount() != null ? saved.getAmount() : 0.0));
+            paymentEventPublisher.publishPaymentCompleted(saved.getId(), bookingId,
+                    saved.getAmount() != null ? saved.getAmount() : 0.0);
             return saved;
+        } finally {
+            MDC.remove("bookingId");
         }
-
-        ticketSale.setStatus(TicketSale.SaleStatus.COMPLETED);
-        transactionDetails.put("gatewayResponse", "approved");
-        transactionDetails.put("paidAt", LocalDateTime.now().toString());
-        ticketSale.setTransactionDetails(transactionDetails);
-
-        TicketSale saved = ticketSaleRepository.save(ticketSale);
-        cacheEviction.evictEntityAndFeatures("ticket-sale", saved.getId(),
-                "S5-F1", "S5-F3", "S5-F6", "S5-F10", "S5-F11");
-        notifyObservers("PAYMENT_PROCESSED", Map.of("saleId", saved.getId(), "bookingId", bookingId,
-                "method", method.name(), "amount", saved.getAmount() != null ? saved.getAmount() : 0.0));
-        return saved;
     }
 
     public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method,
