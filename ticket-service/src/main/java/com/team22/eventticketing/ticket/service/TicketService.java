@@ -4,6 +4,7 @@ import com.datastax.oss.driver.api.core.cql.Row;
 import com.team22.eventticketing.ticket.adapter.CassandraRowAdapter;
 import com.team22.eventticketing.ticket.adapter.ObjectArrayDtoAdapter;
 import com.team22.eventticketing.ticket.adapter.PostgresRowAdapter;
+import com.team22.eventticketing.ticket.messaging.TicketEventPublisher;
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketScanEvent;
 import com.team22.eventticketing.ticket.model.TicketStatus;
@@ -38,11 +39,15 @@ public class TicketService {
 
     private final TicketRepository ticketRepository;
     private final CacheEvictionService cacheEviction;
+    private final TicketEventPublisher ticketEventPublisher;
     private final List<EntityObserver> observers = new ArrayList<>();
 
-    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction) {
+    public TicketService(TicketRepository ticketRepository,
+                         CacheEvictionService cacheEviction,
+                         TicketEventPublisher ticketEventPublisher) {
         this.ticketRepository = ticketRepository;
         this.cacheEviction = cacheEviction;
+        this.ticketEventPublisher = ticketEventPublisher;
     }
 
     public void register(EntityObserver observer) {
@@ -64,6 +69,11 @@ public class TicketService {
     public Ticket createTicket(Ticket ticket) {
         Ticket saved = ticketRepository.save(ticket);
         notifyObservers("TICKET_CREATED", Map.of("ticketId", saved.getId()));
+        ticketEventPublisher.publishTicketIssued(
+                saved.getId(),
+                saved.getBookingId(),
+                saved.getAttendeeName(),
+                saved.getTicketCode());
         return saved;
     }
 
@@ -82,6 +92,8 @@ public class TicketService {
     public Ticket updateTicket(Long id, Ticket updated) {
         Ticket existing = getTicketById(id);
 
+        TicketStatus previousStatus = existing.getStatus();
+
         if (updated.getBookingId() != null)
             existing.setBookingId(updated.getBookingId());
         if (updated.getAttendeeName() != null)
@@ -98,14 +110,26 @@ public class TicketService {
         Ticket saved = ticketRepository.save(existing);
         cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9", "S4-F10");
         notifyObservers("TICKET_UPDATED", Map.of("ticketId", saved.getId()));
+
+        TicketStatus newStatus = saved.getStatus();
+        if (newStatus != null && newStatus != previousStatus) {
+            if (newStatus == TicketStatus.CANCELLED) {
+                ticketEventPublisher.publishTicketCancelled(saved.getId(), saved.getBookingId());
+            } else {
+                ticketEventPublisher.publishTicketStatusChanged(
+                        saved.getId(), saved.getBookingId(), newStatus.name());
+            }
+        }
         return saved;
     }
 
     public void deleteTicket(Long id) {
         Ticket existing = getTicketById(id);
+        Long bookingId = existing.getBookingId();
         ticketRepository.delete(existing);
         cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9", "S4-F10");
         notifyObservers("TICKET_DELETED", Map.of("ticketId", id));
+        ticketEventPublisher.publishTicketCancelled(id, bookingId);
     }
 
     // ─── [S4-F4] Batch Ticket Issuance (write — invalidates) ─────────────────────
@@ -142,14 +166,21 @@ public class TicketService {
                 now,
                 item.getMetadata())).toList();
 
-        ticketRepository.saveAll(tickets);
+        List<Ticket> persisted = ticketRepository.saveAll(tickets);
         cacheEviction.evictPattern("S4-F1");
         cacheEviction.evictPattern("S4-F5");
         cacheEviction.evictPattern("S4-F6");
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
-        notifyObservers("TICKETS_BATCH_ISSUED", Map.of("bookingId", bookingId, "count", tickets.size()));
-        return tickets.size();
+        notifyObservers("TICKETS_BATCH_ISSUED", Map.of("bookingId", bookingId, "count", persisted.size()));
+        for (Ticket t : persisted) {
+            ticketEventPublisher.publishTicketIssued(
+                    t.getId(),
+                    t.getBookingId(),
+                    t.getAttendeeName(),
+                    t.getTicketCode());
+        }
+        return persisted.size();
     }
 
     // ─── [S4-F1] Get Latest Ticket by Booking ────────────────────────────────────
@@ -191,6 +222,11 @@ public class TicketService {
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
         notifyObservers("TICKET_ISSUED", Map.of("ticketId", saved.getId(), "bookingId", bookingId));
+        ticketEventPublisher.publishTicketIssued(
+                saved.getId(),
+                saved.getBookingId(),
+                saved.getAttendeeName(),
+                saved.getTicketCode());
         return saved;
     }
 

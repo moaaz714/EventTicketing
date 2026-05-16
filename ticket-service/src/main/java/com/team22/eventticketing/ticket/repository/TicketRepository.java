@@ -1,6 +1,7 @@
 package com.team22.eventticketing.ticket.repository;
 
 import com.team22.eventticketing.ticket.model.Ticket;
+import com.team22.eventticketing.ticket.model.TicketStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -67,6 +68,10 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
      * Find all tickets associated with a specific booking.
      */
     List<Ticket> findByBookingId(Long bookingId);
+
+    List<Ticket> findByBookingIdAndStatus(Long bookingId, TicketStatus status);
+
+    List<Ticket> findByEventIdAndStatus(Long eventId, TicketStatus status);
 
     /**
      * Find a ticket by its unique generated code.

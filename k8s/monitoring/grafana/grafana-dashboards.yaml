@@ -213,6 +213,117 @@ data:
   booking-dashboard.json: |
     {}
   ticket-dashboard.json: |
-    {}
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "description": "Ticket Service Dashboard — S4-Events PromQL + LogQL panels",
+      "refresh": "30s",
+      "schemaVersion": 38,
+      "tags": ["eventticketing", "ticket-service", "S4-Events", "promql", "logql"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "timezone": "browser",
+      "title": "Ticket Service Dashboard",
+      "uid": "ticket-service-dashboard",
+      "version": 1,
+      "panels": [
+        {
+          "id": 1,
+          "title": "Ticket Service — HTTP Request Rate by URI",
+          "description": "Requests per second per endpoint. Which ticket-service endpoints are under load.",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (uri) (rate(http_server_requests_seconds_count{service=\"ticket-service\"}[5m]))",
+              "legendFormat": "{{uri}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 10 }, "unit": "reqps" } }
+        },
+        {
+          "id": 2,
+          "title": "Ticket Service — HTTP P99 Latency by URI",
+          "description": "P99 request latency per endpoint. Detect slow paths — e.g. S4-F3 nearby two-stage Feign chain.",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{service=\"ticket-service\"}[5m])))",
+              "legendFormat": "{{uri}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 10 }, "unit": "s" } }
+        },
+        {
+          "id": 3,
+          "title": "Ticket Service — RabbitMQ Publish Throughput (S4 publishes)",
+          "description": "Outgoing AMQP messages per second to ticket.events exchange (ticket.issued / ticket.status-changed / ticket.cancelled).",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (exchange) (rate(spring_rabbitmq_published_total{service=\"ticket-service\"}[5m]))",
+              "legendFormat": "{{exchange}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 10 }, "unit": "ops" } }
+        },
+        {
+          "id": 4,
+          "title": "Ticket Service — RabbitMQ Consumer Activity (S4 consumes)",
+          "description": "Listener invocations on ticket.event-listener (event.status-changed) and ticket.booking-listener (booking.placed/completed/cancelled cascades).",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (queue) (rate(spring_rabbitmq_listener_seconds_count{service=\"ticket-service\"}[5m]))",
+              "legendFormat": "{{queue}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 10 }, "unit": "ops" } }
+        },
+        {
+          "id": 5,
+          "title": "Ticket Service — JVM Heap Used",
+          "description": "Heap memory in use. Memory pressure under batch issuance or cancellation cascade.",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(jvm_memory_used_bytes{service=\"ticket-service\", area=\"heap\"})",
+              "legendFormat": "heap used",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 10 }, "unit": "bytes" } }
+        },
+        {
+          "id": 6,
+          "title": "Ticket Service — Cascade Cancellation Audit (LogQL)",
+          "description": "Audit log lines for cascading ticket cancellations from booking.cancelled and event.status-changed -> CANCELLED.",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "targets": [
+            {
+              "expr": "sum(count_over_time({app=\"eventticketing\", service=\"ticket-service\"} |~ \"Cancelled .* ticket\\\\(s\\\\) cascading\" [5m]))",
+              "legendFormat": "cascade cancellations",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 10 }, "unit": "short" } }
+        }
+      ]
+    }
   sales-dashboard.json: |
     {}
