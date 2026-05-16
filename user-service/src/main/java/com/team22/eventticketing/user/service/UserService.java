@@ -13,6 +13,9 @@ import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.AuthEventRepository;
 import com.team22.eventticketing.user.repository.UserRepository;
 import feign.BookingServiceClient;
+
+import java.math.BigDecimal;
+import java.util.Comparator;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -230,14 +233,21 @@ public class UserService {
         if (start.isAfter(end)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate must not be after endDate");
         }
-        return userRepository.findTopAttendees(start.atStartOfDay(), end.atTime(23, 59, 59), limit)
-                .stream()
-                .map(row -> TopAttendeeDTO.builder()
-                        .userId(((Number) row[0]).longValue())
-                        .name((String)  row[1])
-                        .totalSpent(((Number) row[2]).doubleValue())
-                        .bookingCount(((Number) row[3]).longValue())
-                        .build()).collect(Collectors.toList());
+        return userRepository.findAllUsers().stream()
+                .map(u -> {
+                    BigDecimal total = bookingServiceClient.getUserBookingTotal(u.getId(), startDate, endDate);
+                    long bookingCount = bookingServiceClient.getTotalBookingCount(u.getId(), "COMPLETED");
+                    return TopAttendeeDTO.builder()
+                            .userId(u.getId())
+                            .name(u.getName())
+                            .totalSpent(total.doubleValue())
+                            .bookingCount(bookingCount)
+                            .build();
+                })
+                .filter(dto -> dto.getTotalSpent() > 0)
+                .sorted(Comparator.comparingDouble(TopAttendeeDTO::getTotalSpent).reversed())
+                .limit(limit)
+                .collect(Collectors.toList());
     }
 
     // ─── [CRUD] Delete ────────────────────────────────────────────────────────────
