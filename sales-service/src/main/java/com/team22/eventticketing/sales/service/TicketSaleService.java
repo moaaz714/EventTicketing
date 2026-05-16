@@ -9,7 +9,6 @@ import com.team22.eventticketing.sales.entity.*;
 import com.team22.eventticketing.sales.observer.EntityObserver;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
 import dto.BookingItemDTO;
-import dto.BookingDTO;
 import feign.BookingServiceClient;
 import feign.UserServiceClient;
 import org.slf4j.Logger;
@@ -339,6 +338,9 @@ public class TicketSaleService {
         return result;
     }
 
+    // [S5-F4] Process Booking Payment lives in SalesService.processBookingPayment
+    // (the live POST /api/sales/booking/{bookingId} path). The previous duplicate
+    // here was unreachable dead code and was removed during the S5-F4 refactor.
     // ─── [S5-F4] Process Booking Payment — M3: Feign replaces SQL booking check ──
 // S5-F4: M3 — Feign replaces SQL booking check (55-5679)
     @Transactional
