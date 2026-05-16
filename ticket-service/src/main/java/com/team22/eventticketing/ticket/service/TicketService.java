@@ -17,8 +17,14 @@ import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 
+import dto.EventDTO;
 import feign.BookingServiceClient;
 import feign.EventServiceClient;
+import dto.VenueCoordsDTO;
+import dto.BookingDTO;
+
+
+import java.util.HashMap;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -214,16 +220,101 @@ public class TicketService {
     // ─── [S4-F3] Find Nearby Tickets (location DTO)
     // ───────────────────────────────
 
-    @Cacheable(cacheNames = "ticket-service::S4-F3", key = "#lat + ':' + #lon + ':' + #radiusKm")
-    public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double radiusKm) {
+//    @Cacheable(cacheNames = "ticket-service::S4-F3", key = "#lat + ':' + #lon + ':' + #radiusKm")
+//    public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double radiusKm) {
+//
+//        List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon, radiusKm);
+//
+//        ObjectArrayDtoAdapter adapter = new ObjectArrayDtoAdapter();
+//
+//        return results.stream()
+//                .map(adapter::adapt)
+//                .collect(Collectors.toList());
+//    }
+    @Cacheable(
+            cacheNames = "ticket-service::S4-F3",
+            key = "#lat + ':' + #lon + ':' + #radiusKm"
+    )
+    public List<NearbyTicketDTO> findNearbyTickets(
+            double lat,
+            double lon,
+            double radiusKm
+    ) {
 
-        List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon, radiusKm);
+        // local postgres only
+        List<Ticket> tickets =
+                ticketRepository.findByStatus(TicketStatus.VALID);
 
-        ObjectArrayDtoAdapter adapter = new ObjectArrayDtoAdapter();
+        List<NearbyTicketDTO> results = new ArrayList<>();
 
-        return results.stream()
-                .map(adapter::adapt)
-                .collect(Collectors.toList());
+
+        // request-scoped cache
+        Map<Long, VenueCoordsDTO> venueCache = new HashMap<>();
+
+        for (Ticket ticket : tickets) {
+
+            try {
+
+                // booking-service
+                BookingDTO booking =
+                        bookingServiceClient.getBooking(ticket.getBookingId());
+
+
+                Long eventId = booking.eventId();
+                EventDTO event = eventServiceClient.getEvent(eventId);
+
+                VenueCoordsDTO venue;
+
+                // avoid repeated feign calls
+                if (venueCache.containsKey(eventId)) {
+
+                    venue = venueCache.get(eventId);
+
+                } else {
+
+                    // event-service
+                    venue =
+                            eventServiceClient.getEventVenueCoords(eventId);
+
+
+                    venueCache.put(eventId, venue);
+                }
+
+                double eventLat = venue.venueLat();
+                double eventLon = venue.venueLon();
+
+                // Euclidean distance × 111
+                double distanceKm =
+                        Math.sqrt(
+                                Math.pow(eventLat - lat, 2) +
+                                        Math.pow(eventLon - lon, 2)
+                        ) * 111;
+
+                if (distanceKm <= radiusKm) {
+
+                    NearbyTicketDTO dto = NearbyTicketDTO.builder()
+                            .ticketId(ticket.getId())
+                            .attendeeName(ticket.getAttendeeName())
+                            .bookingId(ticket.getBookingId())
+                            .eventName(event.name())
+                            .eventLat(eventLat)
+                            .eventLon(eventLon)
+                            .distanceKm(distanceKm)
+                            .build();
+
+
+                    results.add(dto);
+                }
+
+            } catch (Exception ignored) {
+
+            }
+        }
+
+        results.sort((a, b) ->
+                Double.compare(a.getDistanceKm(), b.getDistanceKm()));
+
+        return results;
     }
 
     // ─── [S4-F7] Purge Expired Tickets (write — invalidates) ─────────────────────
