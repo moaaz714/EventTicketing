@@ -29,6 +29,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+//new imports M3
+import dto.AvgCapacityDTO;
+import dto.VenueCoordsDTO;
+import feign.BookingServiceClient;
+import feign.TicketServiceClient;
+import feign.UserServiceClient;
+import feign.FeignException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class EventService {
 
@@ -38,15 +48,26 @@ public class EventService {
     private final EventSessionRepository eventSessionRepository;
     private final CacheEvictionService cacheEviction;
     private final List<EntityObserver> observers = new ArrayList<>();
+    private static final Logger log = LoggerFactory.getLogger(EventService.class);
+
+    private final BookingServiceClient bookingServiceClient;
+    private final UserServiceClient userServiceClient;
+    private final TicketServiceClient ticketServiceClient;
 
     public EventService(EventRepository eventRepository,
                         EventSearchRepository eventSearchRepository,
                         EventSessionRepository eventSessionRepository,
-                        CacheEvictionService cacheEviction) {
+                        CacheEvictionService cacheEviction,
+                        BookingServiceClient bookingServiceClient,
+                        UserServiceClient userServiceClient,
+                        TicketServiceClient ticketServiceClient) {
         this.eventRepository = eventRepository;
         this.eventSearchRepository = eventSearchRepository;
         this.eventSessionRepository = eventSessionRepository;
         this.cacheEviction = cacheEviction;
+        this.bookingServiceClient = bookingServiceClient;
+        this.userServiceClient = userServiceClient;
+        this.ticketServiceClient = ticketServiceClient;
     }
 
     public void register(EntityObserver observer) {
@@ -366,6 +387,55 @@ public class EventService {
         notifyObservers("EVENT_DELETED", Map.of("eventId", id)); // MS2 strictly says keep this EVENT_DELETED, not INDEXED
     }
 
+    // ─── [M3 S2-READ-DB] New read endpoints ───────────────────────────────────────
+
+    public AvgCapacityDTO getAverageSessionCapacity(Long eventId) {
+        if (!eventRepository.existsById(eventId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found");
+        }
+
+        Double avgCapacity = eventSessionRepository.findAverageCapacityByEventId(eventId);
+
+        log.info("Average capacity requested for eventId={}", eventId);
+
+        return new AvgCapacityDTO(avgCapacity == null ? 0.0 : avgCapacity);
+    }
+
+    public VenueCoordsDTO getVenueCoordinates(Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+
+        Map<String, Object> details = event.getDetails();
+
+        if (details == null) {
+            log.info("Venue coordinates requested for eventId={}", eventId);
+            return new VenueCoordsDTO(null, null);
+        }
+
+        Double venueLat = extractDouble(details.get("venueLat"));
+        Double venueLon = extractDouble(details.get("venueLon"));
+
+        log.info("Venue coordinates requested for eventId={}", eventId);
+
+        return new VenueCoordsDTO(venueLat, venueLon);
+    }
+
+    private Double extractDouble(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     // ─── CRUD: EventSession ───────────────────────────────────────────────────────
 
     public EventSession createEventSession(Long eventId, EventSession session) {
@@ -513,6 +583,45 @@ public class EventService {
                 .averageAttendanceRate(attendanceRate)
                 .averageRating(event.getRating() != null ? event.getRating() : 0.0)
                 .build();
+    }
+
+
+    // ─── [M3 S2-READ-DB] Feign client health/error handling helpers ───────────────
+
+    public void validateBookingServiceReachableForEvent(Long eventId) {
+        try {
+            bookingServiceClient.getEventActiveBookingCount(eventId);
+            log.info("booking-service reachable for eventId={}", eventId);
+        } catch (FeignException.NotFound e) {
+            log.warn("booking-service returned 404 while checking eventId={}", eventId);
+        } catch (FeignException e) {
+            log.warn("booking-service unavailable for eventId={}: {}", eventId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Booking service temporarily unavailable");
+        }
+    }
+
+    public void validateUserServiceReachable(Long userId) {
+        try {
+            userServiceClient.getUser(userId);
+            log.info("user-service reachable for userId={}", userId);
+        } catch (FeignException.NotFound e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        } catch (FeignException e) {
+            log.warn("user-service unavailable for userId={}: {}", userId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "User service temporarily unavailable");
+        }
+    }
+
+    public void validateTicketServiceReachableForEvent(Long eventId) {
+        try {
+            ticketServiceClient.getEventTicketSummary(eventId);
+            log.info("ticket-service reachable for eventId={}", eventId);
+        } catch (FeignException.NotFound e) {
+            log.warn("ticket-service returned 404 while checking eventId={}", eventId);
+        } catch (FeignException e) {
+            log.warn("ticket-service unavailable for eventId={}: {}", eventId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Ticket service temporarily unavailable");
+        }
     }
 
 }

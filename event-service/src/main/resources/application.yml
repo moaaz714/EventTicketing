@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://postgres:5432/eventticketingdb
+    url: jdbc:postgresql://event-postgres:5432/etdb-events
     username: postgres
     password: postgres
   jpa:
@@ -16,6 +16,14 @@ spring:
     uri: mongodb://root:rootpass@mongo:27017/eventticketingmongo?authSource=admin
   elasticsearch:
     uris: http://elasticsearch:9200
+
+feign:
+  user-service:
+    url: http://user-service:8080
+  booking-service:
+    url: http://booking-service:8080
+  ticket-service:
+    url: http://ticket-service:8080
 
 jwt:
   secret: ${JWT_SECRET:24966c8a763b3a3f7f264cefb93d95159184e8c5e2af5c94e05387371d47a3fd=}

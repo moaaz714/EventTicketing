@@ -1,0 +1,122 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": {
+    "list": []
+  },
+  "description": "Event Service Dashboard — LogQL Panels",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Event Service — Error Rate (per minute)",
+      "description": "Count of ERROR-level log lines from event-service per minute. A spike means event-service is failing requests or internal operations.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\", level=\"ERROR\"} | json [1m]))",
+          "legendFormat": "errors/min",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Event Service — Feign Call Outcomes",
+      "description": "Successful Feign responses vs FeignException catches. Detects when booking-service, user-service, or ticket-service is unavailable or returning errors.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\"} | json | message =~ \".*reachable.*\" [5m]))",
+          "legendFormat": "Feign success",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\"} | json | message =~ \".*unavailable.*|.*Feign.*failed.*|.*temporarily unavailable.*\" [5m]))",
+          "legendFormat": "Feign failures",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Event Service — Read Endpoint Activity",
+      "description": "Tracks logs related to the two S2-READ-DB endpoints: avg-capacity and venue-coords.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\"} | json | message =~ \".*avg.*capacity.*|.*Average.*capacity.*\" [5m]))",
+          "legendFormat": "avg-capacity reads",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\"} | json | message =~ \".*venue.*coords.*|.*Venue.*coordinates.*\" [5m]))",
+          "legendFormat": "venue-coords reads",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        }
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["eventticketing", "event-service", "logql"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Event Service Dashboard",
+  "uid": "event-service-dashboard",
+  "version": 1
+}
