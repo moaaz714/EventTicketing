@@ -51,19 +51,6 @@ public class SalesService {
     @Transactional
     public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method,
                                             String cardLastFour, boolean simulateFailure) {
-        String bookingStatus = ticketSaleRepository.findBookingStatus(bookingId);
-
-        if (bookingStatus == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found: " + bookingId);
-        }
-
-        if (!"COMPLETED".equals(bookingStatus)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Booking is not COMPLETED");
-        }
-
-        if (ticketSaleRepository.existsByBookingIdAndStatusCompleted(bookingId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
-        }
 
         TicketSale ticketSale = ticketSaleRepository.findByBookingIdAndStatusPending(bookingId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -99,7 +86,8 @@ public class SalesService {
         return saved;
     }
 
-    public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method, String cardLastFour) {
+    public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method,
+                                            String cardLastFour) {
         return processBookingPayment(bookingId, method, cardLastFour, false);
     }
 
@@ -202,7 +190,6 @@ public class SalesService {
             discount = sale.getAmount() * promotion.getDiscountValue() / 100.0;
             discount = Math.min(discount, sale.getAmount());
         } else {
-            // FIXED must be capped immediately here
             discount = Math.min(promotion.getDiscountValue(), sale.getAmount());
         }
 

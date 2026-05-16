@@ -34,12 +34,14 @@ spring:
 
 
 
+feign:
+  user-service:
+    url: http://user-service:8080
+  booking-service:
+    url: http://booking-service:8080
+  ticket-service:
+    url: http://ticket-service:8080
+
 jwt:
   secret: ${JWT_SECRET:24966c8a763b3a3f7f264cefb93d95159184e8c5e2af5c94e05387371d47a3fd=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
-
-feign:
-  booking-service.url: ${BOOKING_SERVICE_URL:http://localhost:8083}
-  user-service.url: ${USER_SERVICE_URL:http://localhost:8081}
-  ticket-service.url: ${TICKET_SERVICE_URL:http://localhost:8084}
-  event-service.url: ${EVENT_SERVICE_URL:http://localhost:8082}

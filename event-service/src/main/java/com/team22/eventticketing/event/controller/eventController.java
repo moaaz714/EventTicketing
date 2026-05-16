@@ -23,6 +23,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import dto.AvgCapacityDTO;
+import dto.VenueCoordsDTO;
+
 @RestController
 @RequestMapping("/api/events")
 public class eventController {
@@ -215,6 +218,18 @@ public class eventController {
     public ResponseEntity<Void> deleteEvent(@PathVariable Long id) {
         eventService.deleteEvent(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // [M3 S2-READ-DB] Average session capacity for Feign consumers
+    @GetMapping("/{id}/sessions/avg-capacity")
+    public ResponseEntity<AvgCapacityDTO> getAverageSessionCapacity(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.getAverageSessionCapacity(id));
+    }
+
+    // [M3 S2-READ-DB] Venue coordinates for Feign consumers
+    @GetMapping("/{id}/venue-coords")
+    public ResponseEntity<VenueCoordsDTO> getVenueCoordinates(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.getVenueCoordinates(id));
     }
 
     // CRUD ENDPOINTS: EVENT SESSION

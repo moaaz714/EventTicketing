@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -12,31 +14,19 @@ import java.util.Optional;
 @Repository
 public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
 
-    // =========================
-    // S5-F8 (Sale Details with Promotions)
-    // =========================
+    // S5-F8
     @Query("SELECT ts FROM TicketSale ts LEFT JOIN FETCH ts.salePromotions sp LEFT JOIN FETCH sp.promotion WHERE ts.id = :id")
     Optional<TicketSale> findByIdWithPromotions(@Param("id") Long id);
 
-    // =========================
-    // S5-F4 (Booking Payment Flow)
-    // =========================
+    // S5-F4
     Optional<TicketSale> findByBookingId(Long bookingId);
-
     List<TicketSale> findAllByBookingId(Long bookingId);
 
-    @Query(value = "SELECT status FROM bookings WHERE id = :bookingId", nativeQuery = true)
-    String findBookingStatus(@Param("bookingId") Long bookingId);
-
-    @Query(value = "SELECT COUNT(*) > 0 FROM ticket_sales WHERE booking_id = :bookingId AND status::text = 'COMPLETED'", nativeQuery = true)
-    boolean existsByBookingIdAndStatusCompleted(@Param("bookingId") Long bookingId);
-
-    @Query(value = "SELECT * FROM ticket_sales WHERE booking_id = :bookingId AND status::text = 'PENDING' LIMIT 1", nativeQuery = true)
+    @Query(value = "SELECT * FROM ticket_sales WHERE booking_id = :bookingId AND status::text = 'PENDING' LIMIT 1",
+            nativeQuery = true)
     Optional<TicketSale> findByBookingIdAndStatusPending(@Param("bookingId") Long bookingId);
 
-    // =========================
-    // S5-F1 (Filter by status and date range)
-    // =========================
+    // S5-F1
     @Query(value = """
             SELECT * FROM ticket_sales
             WHERE (:status IS NULL OR status::text = :status)
@@ -49,9 +39,7 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             @Param("endDate") LocalDateTime endDate
     );
 
-    // =========================
-    // S5-F6 (Filter by status and date range for revenue)
-    // =========================
+    // S5-F6
     @Query(value = """
             SELECT * FROM ticket_sales
             WHERE status::text = :status
@@ -63,12 +51,7 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             @Param("endDate") LocalDateTime endDate
     );
 
-    // =========================
-    // S5-F3 (User Summary)
-    // =========================
-    @Query(value = "SELECT COUNT(*) FROM users WHERE id = :userId", nativeQuery = true)
-    Long countUserById(@Param("userId") Long userId);
-
+    // S5-F3 (M3: countUserById removed — replaced by Feign)
     @Query(value = """
             SELECT method::text, COUNT(*) as count, SUM(amount) as total
             FROM ticket_sales
@@ -77,9 +60,7 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             """, nativeQuery = true)
     List<Object[]> findSalesSummaryByUserId(@Param("userId") Long userId);
 
-    // =========================
-    // S5-F6 (Revenue report)
-    // =========================
+    // S5-F6 revenue report
     @Query(value = """
             SELECT
               COALESCE(SUM(CASE WHEN status::text = 'COMPLETED' THEN amount ELSE 0 END), 0) as totalRevenue,
@@ -94,35 +75,27 @@ public interface TicketSaleRepository extends JpaRepository<TicketSale, Long> {
             @Param("endDate") LocalDateTime endDate
     );
 
-    // =========================
-    // S5-F12 (Refund Window Policy — fetch eventDate)
-    // =========================
+    // S5-F10 (M3: cross-service JOIN removed — now fetches locally, Feign gets items)
     @Query(value = """
-            SELECT e.event_date
-            FROM ticket_sales ts
-            JOIN bookings b ON b.id = ts.booking_id
-            JOIN events e ON e.id = b.event_id
-            WHERE ts.id = :saleId
+            SELECT * FROM ticket_sales
+            WHERE created_at BETWEEN :startDate AND :endDate
+              AND status::text = 'COMPLETED'
             """, nativeQuery = true)
-    LocalDateTime findEventDateBySaleId(@Param("saleId") Long saleId);
+    List<TicketSale> findCompletedSalesInRange(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 
-    // =========================
-    // S5-F10 (Tier Revenue Analytics)
-    // =========================
+    // NEW: GET /api/sales/user/{userId}/total
     @Query(value = """
-            SELECT
-              COALESCE(bi.metadata->>'ticketTier', 'UNSPECIFIED') AS tier,
-              SUM(bi.unit_price * bi.quantity)                    AS totalRevenue,
-              COUNT(DISTINCT ts.id)                              AS saleCount,
-              SUM(bi.quantity)                                   AS ticketsSold
-            FROM ticket_sales ts
-            JOIN bookings b      ON b.id  = ts.booking_id
-            JOIN booking_items bi ON bi.booking_id = b.id
-            WHERE ts.created_at BETWEEN :startDate AND :endDate
-              AND ts.status::text = 'COMPLETED'
-            GROUP BY COALESCE(bi.metadata->>'ticketTier', 'UNSPECIFIED')
+            SELECT COALESCE(SUM(amount), 0)
+            FROM ticket_sales
+            WHERE user_id = :userId
+              AND status::text = 'COMPLETED'
+              AND created_at BETWEEN :startDate AND :endDate
             """, nativeQuery = true)
-    List<Object[]> findTierRevenue(
+    BigDecimal sumCompletedAmountByUserIdAndDateRange(
+            @Param("userId") Long userId,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
     );

@@ -1,13 +1,10 @@
 package com.team22.eventticketing.event.service;
 
-import dto.*;
-import feign.*;
-import events.*;
-
 import com.team22.eventticketing.event.dto.EventRevenueDTO;
 import com.team22.eventticketing.event.dto.EventSessionAlertDTO;
 import com.team22.eventticketing.event.dto.TopEventDTO;
 import com.team22.eventticketing.event.dto.UpdateEventStatusRequest;
+import com.team22.eventticketing.event.dto.EventDashboardDTO;
 import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.model.EventCategory;
 import com.team22.eventticketing.event.model.EventSearchDocument;
@@ -17,7 +14,23 @@ import com.team22.eventticketing.event.observer.EntityObserver;
 import com.team22.eventticketing.event.repository.EventRepository;
 import com.team22.eventticketing.event.repository.EventSearchRepository;
 import com.team22.eventticketing.event.repository.EventSessionRepository;
+
+import dto.AvgCapacityDTO;
+import dto.VenueCoordsDTO;
+import dto.EventBookingRevenueDTO;
+import dto.EventTicketSummaryDTO;
+import dto.BookingDTO;
+import dto.UserDTO;
+import events.EventStatusChangedEvent;
+import events.EventRatedEvent;
+
+import feign.BookingServiceClient;
+import feign.TicketServiceClient;
+import feign.UserServiceClient;
 import feign.FeignException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -25,7 +38,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
-import com.team22.eventticketing.event.dto.EventDashboardDTO;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -35,6 +47,8 @@ import java.util.Map;
 
 @Service
 public class EventService {
+
+    private static final Logger log = LoggerFactory.getLogger(EventService.class);
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final EventRepository eventRepository;
@@ -204,10 +218,9 @@ public class EventService {
             externalStats = new EventBookingRevenueDTO(5L, new java.math.BigDecimal("3500.00"), new java.math.BigDecimal("700.00"));
         }
 
-
-        long totalBookings = externalStats.totalBookings(); // Primitive long
-        double totalRevenue = externalStats.totalRevenue() != null ? externalStats.totalRevenue().doubleValue() : 0.0; // BigDecimal to Double
-        double avg = externalStats.averageBookingAmount() != null ? externalStats.averageBookingAmount().doubleValue() : 0.0; // BigDecimal to Double
+        long totalBookings = externalStats.totalBookings();
+        double totalRevenue = externalStats.totalRevenue() != null ? externalStats.totalRevenue().doubleValue() : 0.0;
+        double avg = externalStats.averageBookingAmount() != null ? externalStats.averageBookingAmount().doubleValue() : 0.0;
 
         return EventRevenueDTO.builder()
                 .eventId(eventId)
@@ -344,6 +357,57 @@ public class EventService {
         notifyObservers("EVENT_DELETED", Map.of("eventId", id));
     }
 
+    // ─── [M3 S2-READ-DB] New read endpoints ───────────────────────────────────────
+
+    public AvgCapacityDTO getAverageSessionCapacity(Long eventId) {
+        if (!eventRepository.existsById(eventId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found");
+        }
+
+        Double avgCapacity = eventSessionRepository.findAverageCapacityByEventId(eventId);
+
+        log.info("Average capacity requested for eventId={}", eventId);
+
+        return new AvgCapacityDTO(avgCapacity == null ? 0.0 : avgCapacity);
+    }
+
+    public VenueCoordsDTO getVenueCoordinates(Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+
+        Map<String, Object> details = event.getDetails();
+
+        if (details == null) {
+            log.info("Venue coordinates requested for eventId={}", eventId);
+            return new VenueCoordsDTO(null, null);
+        }
+
+        Double venueLat = extractDouble(details.get("venueLat"));
+        Double venueLon = extractDouble(details.get("venueLon"));
+
+        log.info("Venue coordinates requested for eventId={}", eventId);
+
+        return new VenueCoordsDTO(venueLat, venueLon);
+    }
+
+    private Double extractDouble(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    // ─── CRUD: EventSession ───────────────────────────────────────────────────────
+
     public EventSession createEventSession(Long eventId, EventSession session) {
         Event event = getEventById(eventId);
         session.setEvent(event);
@@ -454,42 +518,42 @@ public class EventService {
                 .build();
     }
 
-    // --- S3-F3: Calculate Average Session Capacity ---
-    public Map<String, Double> getAverageSessionCapacity(Long eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
+    // ─── [M3 S2-READ-DB] Feign client health/error handling helpers ───────────────
 
-        List<EventSession> sessions = event.getEventSessions();
-        if (sessions == null || sessions.isEmpty()) {
-            return Map.of("averageCapacity", 0.0);
+    public void validateBookingServiceReachableForEvent(Long eventId) {
+        try {
+            bookingServiceClient.getEventActiveBookingCount(eventId);
+            log.info("booking-service reachable for eventId={}", eventId);
+        } catch (FeignException.NotFound e) {
+            log.warn("booking-service returned 404 while checking eventId={}", eventId);
+        } catch (FeignException e) {
+            log.warn("booking-service unavailable for eventId={}: {}", eventId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Booking service temporarily unavailable");
         }
-
-        double average = sessions.stream()
-                .mapToInt(EventSession::getCapacity)
-                .average()
-                .orElse(0.0);
-
-        return Map.of("averageCapacity", average);
     }
 
-    // --- S4-F3: Extract Venue Coordinates from JSONB ---
-    public Map<String, Double> getVenueCoords(Long eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
-
-        Map<String, Object> details = event.getDetails();
-        double lat = 0.0;
-        double lon = 0.0;
-
-        if (details != null) {
-            try {
-                lat = Double.parseDouble(details.getOrDefault("latitude", "0.0").toString());
-                lon = Double.parseDouble(details.getOrDefault("longitude", "0.0").toString());
-            } catch (NumberFormatException e) {
-                // Log error or keep as 0.0 if data is malformed
-            }
+    public void validateUserServiceReachable(Long userId) {
+        try {
+            userServiceClient.getUser(userId);
+            log.info("user-service reachable for userId={}", userId);
+        } catch (FeignException.NotFound e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        } catch (FeignException e) {
+            log.warn("user-service unavailable for userId={}: {}", userId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "User service temporarily unavailable");
         }
-
-        return Map.of("latitude", lat, "longitude", lon);
     }
+
+    public void validateTicketServiceReachableForEvent(Long eventId) {
+        try {
+            ticketServiceClient.getEventTicketSummary(eventId);
+            log.info("ticket-service reachable for eventId={}", eventId);
+        } catch (FeignException.NotFound e) {
+            log.warn("ticket-service returned 404 while checking eventId={}", eventId);
+        } catch (FeignException e) {
+            log.warn("ticket-service unavailable for eventId={}: {}", eventId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Ticket service temporarily unavailable");
+        }
+    }
+
 }
