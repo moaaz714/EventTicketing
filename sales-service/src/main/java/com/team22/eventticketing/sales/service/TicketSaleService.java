@@ -280,7 +280,7 @@ public class TicketSaleService {
                 "startDate", startDate.toString(),
                 "endDate", endDate.toString()));
     }
-
+    // S5-F10: M3 — Feign replaces SQL JOIN for tier analytics (55-5679)
     @Cacheable(cacheNames = "sales-service::S5-F10",
             key = "#startDate.toString() + ':' + #endDate.toString()")
     public List<TierRevenueDTO> getTierRevenue(LocalDate startDate, LocalDate endDate) {
