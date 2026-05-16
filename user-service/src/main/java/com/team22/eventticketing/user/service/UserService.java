@@ -7,10 +7,16 @@ import com.team22.eventticketing.user.dto.TopAttendeeDTO;
 import com.team22.eventticketing.user.dto.UserProfileDTO;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
+import com.team22.eventticketing.user.messaging.UserEventPublisher;
 import com.team22.eventticketing.user.mongo.AuthEvent;
 import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.AuthEventRepository;
 import com.team22.eventticketing.user.repository.UserRepository;
+import dto.BookingSummaryDTO;
+import feign.BookingServiceClient;
+
+import java.math.BigDecimal;
+import java.util.Comparator;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,15 +38,21 @@ public class UserService {
     private final UserRepository userRepository;
     private final AuthEventRepository authEventRepository;
     private final CacheEvictionService cacheEviction;
+    private final BookingServiceClient bookingServiceClient;
+    private final UserEventPublisher userEventPublisher;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final List<EntityObserver> observers = new ArrayList<>();
 
     public UserService(UserRepository userRepository,
                        AuthEventRepository authEventRepository,
-                       CacheEvictionService cacheEviction) {
+                       CacheEvictionService cacheEviction,
+                       BookingServiceClient bookingServiceClient,
+                       UserEventPublisher userEventPublisher) {
         this.userRepository = userRepository;
         this.authEventRepository = authEventRepository;
         this.cacheEviction = cacheEviction;
+        this.bookingServiceClient = bookingServiceClient;
+        this.userEventPublisher = userEventPublisher;
     }
 
     public void register(EntityObserver observer) { observers.add(observer); }
@@ -192,23 +204,15 @@ public class UserService {
     @Cacheable(cacheNames = "user-service::S1-F3", key = "#id")
     public UserBookingSummaryDTO getBookingSummary(Long id) {
         User user = findById(id);
-
-        Object[] row = userRepository.getBookingSummaryByUserId(id).get(0);
-
-        long totalBookings          = ((Number) row[0]).longValue();
-        long completedBookings      = ((Number) row[1]).longValue();
-        long cancelledBookings      = ((Number) row[2]).longValue();
-        double totalSpent           = ((Number) row[3]).doubleValue();
-        double averageBookingAmount = ((Number) row[4]).doubleValue();
-
+        BookingSummaryDTO summary = bookingServiceClient.getUserBookingSummary(id);
         return UserBookingSummaryDTO.builder()
                 .userId(user.getId())
                 .name(user.getName())
-                .totalBookings(totalBookings)
-                .completedBookings(completedBookings)
-                .cancelledBookings(cancelledBookings)
-                .totalSpent(totalSpent)
-                .averageBookingAmount(averageBookingAmount)
+                .totalBookings(summary.totalBookings())
+                .completedBookings(summary.completedBookings())
+                .cancelledBookings(summary.cancelledBookings())
+                .totalSpent(summary.totalSpent().doubleValue())
+                .averageBookingAmount(summary.averageBookingAmount().doubleValue())
                 .build();
     }
 
@@ -222,14 +226,21 @@ public class UserService {
         if (start.isAfter(end)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate must not be after endDate");
         }
-        return userRepository.findTopAttendees(start.atStartOfDay(), end.atTime(23, 59, 59), limit)
-                .stream()
-                .map(row -> TopAttendeeDTO.builder()
-                        .userId(((Number) row[0]).longValue())
-                        .name((String)  row[1])
-                        .totalSpent(((Number) row[2]).doubleValue())
-                        .bookingCount(((Number) row[3]).longValue())
-                        .build()).collect(Collectors.toList());
+        return userRepository.findAllUsers().stream()
+                .map(u -> {
+                    BigDecimal total = bookingServiceClient.getUserBookingTotal(u.getId(), startDate, endDate);
+                    long bookingCount = bookingServiceClient.getTotalBookingCount(u.getId(), "COMPLETED");
+                    return TopAttendeeDTO.builder()
+                            .userId(u.getId())
+                            .name(u.getName())
+                            .totalSpent(total.doubleValue())
+                            .bookingCount(bookingCount)
+                            .build();
+                })
+                .filter(dto -> dto.getTotalSpent() > 0)
+                .sorted(Comparator.comparingDouble(TopAttendeeDTO::getTotalSpent).reversed())
+                .limit(limit)
+                .collect(Collectors.toList());
     }
 
     // ─── [CRUD] Delete ────────────────────────────────────────────────────────────
@@ -250,7 +261,7 @@ public class UserService {
     public User deactivateUser(Long id) {
         User user = findById(id);
 
-        long activeBookings = userRepository.countActiveBookingsByUserId(id);
+        int activeBookings = bookingServiceClient.getActiveBookingCount(id);
         if (activeBookings > 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User has active bookings");
         }
@@ -259,6 +270,7 @@ public class UserService {
         User saved = userRepository.save(user);
         cacheEviction.evictEntityAndFeatures("user", id, "S1-F1", "S1-F3", "S1-F5", "S1-F6", "S1-F8", "S1-F9");
         notifyObservers("USER_DEACTIVATED", Map.of("userId", saved.getId()));
+        userEventPublisher.publishUserDeactivated(saved.getId());
         return saved;
     }
 
@@ -282,19 +294,12 @@ public class UserService {
                     "Category must not be blank");
         }
 
-        Map<Long, Long> completedCounts = userRepository.countCompletedBookingsPerUser()
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> ((Number) row[0]).longValue(),
-                        row -> ((Number) row[1]).longValue()
-                ));
-
         return userRepository.findAllUsers().stream()
                 .filter(u -> {
                     Object v = u.getPreferences().get("favoriteCategory");
                     return v != null && v.toString().equals(category);
                 })
-                .filter(u -> completedCounts.getOrDefault(u.getId(), 0L) >= minBookings)
+                .filter(u -> bookingServiceClient.getTotalBookingCount(u.getId(), "COMPLETED") >= minBookings)
                 .collect(Collectors.toList());
     }
 }
