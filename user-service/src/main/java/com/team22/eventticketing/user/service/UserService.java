@@ -301,19 +301,12 @@ public class UserService {
                     "Category must not be blank");
         }
 
-        Map<Long, Long> completedCounts = userRepository.countCompletedBookingsPerUser()
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> ((Number) row[0]).longValue(),
-                        row -> ((Number) row[1]).longValue()
-                ));
-
         return userRepository.findAllUsers().stream()
                 .filter(u -> {
                     Object v = u.getPreferences().get("favoriteCategory");
                     return v != null && v.toString().equals(category);
                 })
-                .filter(u -> completedCounts.getOrDefault(u.getId(), 0L) >= minBookings)
+                .filter(u -> bookingServiceClient.getTotalBookingCount(u.getId(), "COMPLETED") >= minBookings)
                 .collect(Collectors.toList());
     }
 }
