@@ -17,8 +17,8 @@ public class RabbitMQConfig {
 
     public static final String EVENT_LISTENER_QUEUE   = "ticket.event-listener";
     public static final String EVENT_LISTENER_DLQ     = "ticket.event-listener.dlq";
-    public static final String BOOKING_LISTENER_QUEUE = "ticket.booking-listener";
-    public static final String BOOKING_LISTENER_DLQ   = "ticket.booking-listener.dlq";
+    public static final String BOOKING_LISTENER_QUEUE = "ticket.booking.saga-listener";
+    public static final String BOOKING_LISTENER_DLQ   = "ticket.booking.saga-listener.dlq";
 
     @Bean
     public TopicExchange ticketEventsExchange() {

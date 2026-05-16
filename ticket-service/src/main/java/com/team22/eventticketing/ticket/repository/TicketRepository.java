@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
@@ -25,6 +26,14 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     boolean existsBookingById(@Param("bookingId") Long bookingId);
 
     boolean existsByTicketCode(String ticketCode);
+
+    /**
+     * Bulk uniqueness check for batch issuance (S4-F4): returns the subset of the supplied codes
+     * that already exist. Replaces the prior N+1 per-code existence query.
+     */
+    @Query(value = "SELECT t.ticket_code FROM tickets t WHERE t.ticket_code IN (:codes)",
+            nativeQuery = true)
+    List<String> findExistingTicketCodes(@Param("codes") Collection<String> codes);
 
     @Query(value = """
                 SELECT
@@ -77,9 +86,6 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
      * Find a ticket by its unique generated code.
      */
     Optional<Ticket> findByTicketCode(String ticketCode);
-
-    @Query(value = "SELECT COUNT(*) > 0 FROM bookings WHERE id = :bookingId", nativeQuery = true)
-    boolean bookingExistsById(@Param("bookingId") Long bookingId);
 
     /**
      * [S4-F7] Purge Expired Tickets.

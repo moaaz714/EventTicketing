@@ -18,6 +18,16 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * Saga listener for booking.* signals, bound to {@code ticket.booking.saga-listener}.
+ *
+ * Routing semantics:
+ *   booking.placed     -> capture eventId for the booking (no ticket mutation; tickets don't exist yet).
+ *   booking.completed  -> log + emit a ticket.status-changed audit signal per existing ticket. The
+ *                         ticket status is NOT mutated; the audit signal advertises the current status
+ *                         downstream so analytics / reporting can correlate the booking lifecycle.
+ *   booking.cancelled  -> state-guarded cascade: VALID tickets transition to CANCELLED.
+ */
 @Component
 public class BookingEventConsumer {
 
@@ -25,13 +35,16 @@ public class BookingEventConsumer {
 
     private final TicketRepository ticketRepository;
     private final TicketEventPublisher ticketEventPublisher;
+    private final BookingEventContext bookingEventContext;
     private final ObjectMapper objectMapper;
 
     public BookingEventConsumer(TicketRepository ticketRepository,
                                 TicketEventPublisher ticketEventPublisher,
+                                BookingEventContext bookingEventContext,
                                 ObjectMapper objectMapper) {
         this.ticketRepository = ticketRepository;
         this.ticketEventPublisher = ticketEventPublisher;
+        this.bookingEventContext = bookingEventContext;
         this.objectMapper = objectMapper;
     }
 
@@ -58,21 +71,37 @@ public class BookingEventConsumer {
     }
 
     private void handlePlaced(BookingPlacedEvent event) {
-        // Audit-only — no ticket mutation expected at booking placement.
-        log.debug("booking.placed received: bookingId={} userId={} eventId={}",
+        // Stash bookingId -> eventId so subsequent S4-F2 / S4-F4 issuance can backfill the
+        // Ticket.eventId column without re-querying the booking service.
+        bookingEventContext.rememberEventId(event.bookingId(), event.eventId());
+        log.debug("booking.placed captured: bookingId={} userId={} eventId={}",
                 event.bookingId(), event.userId(), event.eventId());
     }
 
     private void handleCompleted(BookingCompletedEvent event) {
-        // Audit-only — actual ticket issuance happens via the synchronous S4-F2 flow,
-        // not via this consumer. Tracked here for observability.
         log.debug("booking.completed received: bookingId={} userId={} amount={}",
                 event.bookingId(), event.userId(), event.totalAmount());
+
+        // Audit-only fan-out: emit ticket.status-changed for each existing ticket with its CURRENT
+        // status. We do NOT mutate ticket status — ticket lifecycle is owned by S4-F2 issuance and
+        // the booking.cancelled / event.status-changed cascades.
+        List<Ticket> tickets = ticketRepository.findByBookingId(event.bookingId());
+        if (tickets.isEmpty()) {
+            log.debug("booking.completed for bookingId {} - no tickets to audit", event.bookingId());
+            return;
+        }
+        for (Ticket t : tickets) {
+            TicketStatus status = t.getStatus();
+            if (status == null) continue;
+            ticketEventPublisher.publishTicketStatusChanged(t.getId(), t.getBookingId(), status.name());
+        }
+        log.info("Emitted {} ticket.status-changed audit signal(s) for booking.completed bookingId {}",
+                tickets.size(), event.bookingId());
     }
 
     private void handleCancelled(BookingCancelledEvent event) {
-        // State-guarded cascade: only currently-VALID tickets are cancelled.
-        // Idempotent — already-CANCELLED tickets are skipped because they don't match VALID.
+        // State-guarded cascade: only currently-VALID tickets are cancelled. Idempotent — already-
+        // CANCELLED tickets are skipped because they don't match VALID.
         List<Ticket> validTickets = ticketRepository.findByBookingIdAndStatus(
                 event.bookingId(), TicketStatus.VALID);
 
