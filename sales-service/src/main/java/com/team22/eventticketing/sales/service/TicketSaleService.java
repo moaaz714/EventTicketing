@@ -139,6 +139,7 @@ public class TicketSaleService {
     }
 
     // ─── [S5-F3] User Ticket Sale Summary — M3: Feign replaces SQL user check ────
+// S5-F3: M3 — Feign replaces SQL user check (55-5679)
 
     @Cacheable(cacheNames = "sales-service::S5-F3", key = "#userId")
     public UserSaleSummaryDTO getUserSummary(Long userId) {
@@ -279,7 +280,7 @@ public class TicketSaleService {
                 "startDate", startDate.toString(),
                 "endDate", endDate.toString()));
     }
-
+    // S5-F10: M3 — Feign replaces SQL JOIN for tier analytics (55-5679)
     @Cacheable(cacheNames = "sales-service::S5-F10",
             key = "#startDate.toString() + ':' + #endDate.toString()")
     public List<TierRevenueDTO> getTierRevenue(LocalDate startDate, LocalDate endDate) {
@@ -340,6 +341,62 @@ public class TicketSaleService {
     // [S5-F4] Process Booking Payment lives in SalesService.processBookingPayment
     // (the live POST /api/sales/booking/{bookingId} path). The previous duplicate
     // here was unreachable dead code and was removed during the S5-F4 refactor.
+    // ─── [S5-F4] Process Booking Payment — M3: Feign replaces SQL booking check ──
+// S5-F4: M3 — Feign replaces SQL booking check (55-5679)
+    @Transactional
+    public TicketSale processBookingPayment(Long bookingId, TicketSale.PaymentMethod method,
+                                            String cardLastFour) {
+        MDC.put("bookingId", bookingId.toString());
+        try {
+            log.info("Calling BookingServiceClient.getBooking with args={}", bookingId);
+            BookingDTO booking;
+            try {
+                booking = bookingServiceClient.getBooking(bookingId);
+                log.info("BookingServiceClient.getBooking returned successfully");
+            } catch (feign.FeignException.NotFound e) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Booking not found: " + bookingId);
+            } catch (feign.FeignException e) {
+                log.warn("Feign call to booking-service failed: {}", e.getMessage());
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "Booking service temporarily unavailable");
+            }
+
+            if (!"PAYMENT_PENDING".equals(booking.status())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Booking is not awaiting payment. Status: " + booking.status());
+            }
+
+            TicketSale sale = ticketSaleRepository.findByBookingId(bookingId)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND, "TicketSale not found for booking: " + bookingId));
+
+            if (sale.getStatus() == TicketSale.SaleStatus.COMPLETED) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "already paid");
+            }
+
+            sale.setMethod(method);
+            sale.setStatus(TicketSale.SaleStatus.COMPLETED);
+
+            if (sale.getTransactionDetails() == null) sale.setTransactionDetails(new HashMap<>());
+            sale.getTransactionDetails().put("paymentMethod", method.toString());
+            sale.getTransactionDetails().put("cardLastFour", cardLastFour);
+            sale.getTransactionDetails().put("paidAt", LocalDateTime.now().toString());
+
+            TicketSale saved = ticketSaleRepository.save(sale);
+            log.info("TicketSale {} saved with status={}", saved.getId(), saved.getStatus());
+
+            cacheEviction.evictEntityAndFeatures("ticket-sale", saved.getId(),
+                    "S5-F1", "S5-F3", "S5-F6", "S5-F10", "S5-F11");
+            notifyObservers("PAYMENT_PROCESSED", Map.of(
+                    "saleId", saved.getId(), "bookingId", bookingId,
+                    "method", method.name(),
+                    "amount", saved.getAmount() != null ? saved.getAmount() : 0.0));
+            return saved;
+        } finally {
+            MDC.remove("bookingId");
+        }
+    }
 
     // ─── [NEW] GET /api/sales/user/{userId}/total ─────────────────────────────────
 
