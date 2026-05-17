@@ -18,6 +18,22 @@ services:
       timeout: 5s
       retries: 10
 
+  # NEW: RabbitMQ Service (Missing from your original file)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: eventticketing-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP Port
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # User Service (Port 8081)
   user-service:
     build: ./user-service
@@ -29,10 +45,13 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_DATA_MONGODB_URI: mongodb://root:rootpass@mongo:27017/eventticketingmongo?authSource=admin
+      SPRING_RABBITMQ_HOST: rabbitmq
     depends_on:
       postgres:
         condition: service_healthy
       mongo:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     restart: on-failure
 
@@ -47,12 +66,20 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_DATA_MONGODB_URI: mongodb://root:rootpass@mongo:27017/eventticketingmongo?authSource=admin
+      SPRING_RABBITMQ_HOST: rabbitmq
+      # Feign URLs for internal Docker networking
+      BOOKING_SERVICE_URL: http://booking-service:8080
+      USER_SERVICE_URL: http://user-service:8080
+      TICKET_SERVICE_URL: http://ticket-service:8080
+      EVENT_SERVICE_URL: http://event-service:8080
     depends_on:
       postgres:
         condition: service_healthy
       mongo:
         condition: service_healthy
       elasticsearch:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   # Booking Service (Port 8083)
@@ -65,6 +92,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_RABBITMQ_HOST: rabbitmq
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +101,8 @@ services:
       mongo:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   # Ticket Service (Port 8084)
@@ -85,8 +115,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_RABBITMQ_HOST: rabbitmq
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       cassandra:
         condition: service_healthy

@@ -15,6 +15,10 @@ import com.team22.eventticketing.user.repository.UserRepository;
 import com.team22.eventticketing.contracts.dto.BookingSummaryDTO;
 import com.team22.eventticketing.contracts.feign.BookingServiceClient;
 
+import feign.FeignException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.math.BigDecimal;
 import java.util.Comparator;
 import org.springframework.cache.annotation.Cacheable;
@@ -25,7 +29,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,12 +38,14 @@ import java.util.stream.Collectors;
 @Service
 public class UserService {
 
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+
     private final UserRepository userRepository;
     private final AuthEventRepository authEventRepository;
     private final CacheEvictionService cacheEviction;
     private final BookingServiceClient bookingServiceClient;
     private final UserEventPublisher userEventPublisher;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+
     private final List<EntityObserver> observers = new ArrayList<>();
 
     public UserService(UserRepository userRepository,
@@ -204,7 +209,16 @@ public class UserService {
     @Cacheable(cacheNames = "user-service::S1-F3", key = "#id")
     public UserBookingSummaryDTO getBookingSummary(Long id) {
         User user = findById(id);
-        BookingSummaryDTO summary = bookingServiceClient.getUserBookingSummary(id);
+        BookingSummaryDTO summary;
+        try {
+            summary = bookingServiceClient.getUserBookingSummary(id);
+        } catch (FeignException.NotFound e) {
+            summary = BookingSummaryDTO.empty();
+        } catch (FeignException e) {
+            log.warn("booking-service unavailable for user {}: {}", id, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Booking service temporarily unavailable");
+        }
+
         return UserBookingSummaryDTO.builder()
                 .userId(user.getId())
                 .name(user.getName())
@@ -228,8 +242,18 @@ public class UserService {
         }
         return userRepository.findAllUsers().stream()
                 .map(u -> {
-                    BigDecimal total = bookingServiceClient.getUserBookingTotal(u.getId(), startDate, endDate);
-                    long bookingCount = bookingServiceClient.getTotalBookingCount(u.getId(), "COMPLETED");
+                    BigDecimal total;
+                    long bookingCount;
+                    try {
+                        total = bookingServiceClient.getUserBookingTotal(u.getId(), startDate, endDate);
+                        bookingCount = bookingServiceClient.getTotalBookingCount(u.getId(), "COMPLETED");
+                    } catch (FeignException.NotFound e) {
+                        total = BigDecimal.ZERO;
+                        bookingCount = 0L;
+                    } catch (FeignException e) {
+                        log.warn("booking-service unavailable for user {}: {}", u.getId(), e.getMessage());
+                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Booking service temporarily unavailable");
+                    }
                     return TopAttendeeDTO.builder()
                             .userId(u.getId())
                             .name(u.getName())
@@ -261,7 +285,15 @@ public class UserService {
     public User deactivateUser(Long id) {
         User user = findById(id);
 
-        int activeBookings = bookingServiceClient.getActiveBookingCount(id);
+        int activeBookings;
+        try {
+            activeBookings = bookingServiceClient.getActiveBookingCount(id);
+        } catch (FeignException.NotFound e) {
+            activeBookings = 0;
+        } catch (FeignException e) {
+            log.warn("booking-service unavailable for user {}: {}", id, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Booking service temporarily unavailable");
+        }
         if (activeBookings > 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User has active bookings");
         }
@@ -299,7 +331,16 @@ public class UserService {
                     Object v = u.getPreferences().get("favoriteCategory");
                     return v != null && v.toString().equals(category);
                 })
-                .filter(u -> bookingServiceClient.getTotalBookingCount(u.getId(), "COMPLETED") >= minBookings)
+                .filter(u -> {
+                    try {
+                        return bookingServiceClient.getTotalBookingCount(u.getId(), "COMPLETED") >= minBookings;
+                    } catch (FeignException.NotFound e) {
+                        return false;
+                    } catch (FeignException e) {
+                        log.warn("booking-service unavailable for user {}: {}", u.getId(), e.getMessage());
+                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Booking service temporarily unavailable");
+                    }
+                })
                 .collect(Collectors.toList());
     }
 }

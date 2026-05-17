@@ -23,6 +23,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import dto.AvgCapacityDTO;
+import dto.VenueCoordsDTO;
+
 @RestController
 @RequestMapping("/api/events")
 public class eventController {
@@ -40,21 +43,6 @@ public class eventController {
     public String statusCheck() {
         return "OK";
     }
-
-//    // ─── TEMP ONLY: Reindex PostgreSQL Events into Elasticsearch ─────────────────
-//    // Use this only for local testing before S2-F11 exists.
-//    // Do NOT commit/push this temporary endpoint.
-//
-//    @RequestMapping(value = "/temp/reindex", method = {RequestMethod.GET, RequestMethod.POST})
-//    public ResponseEntity<Map<String, Object>> tempReindexEvents() {
-//        int count = eventService.tempReindexEventsToElasticsearch();
-//
-//        Map<String, Object> response = new HashMap<>();
-//        response.put("message", "Temporary Elasticsearch reindex completed");
-//        response.put("indexedEvents", count);
-//
-//        return ResponseEntity.ok(response);
-//    }
 
     // [S2-F4] Update Event Status
     @PutMapping("/{id}/status")
@@ -215,6 +203,18 @@ public class eventController {
     public ResponseEntity<Void> deleteEvent(@PathVariable Long id) {
         eventService.deleteEvent(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // [M3 S2-READ-DB] Average session capacity for Feign consumers
+    @GetMapping("/{id}/sessions/avg-capacity")
+    public ResponseEntity<AvgCapacityDTO> getAverageSessionCapacity(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.getAverageSessionCapacity(id));
+    }
+
+    // [M3 S2-READ-DB] Venue coordinates for Feign consumers
+    @GetMapping("/{id}/venue-coords")
+    public ResponseEntity<VenueCoordsDTO> getVenueCoordinates(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.getVenueCoordinates(id));
     }
 
     // CRUD ENDPOINTS: EVENT SESSION
