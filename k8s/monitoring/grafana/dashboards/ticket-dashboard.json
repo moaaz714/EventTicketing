@@ -1,32 +1,102 @@
 {
-  "title": "Ticket Service Logs",
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
   "panels": [
     {
-      "title": "Ticket Service Errors",
-      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "Ticket-Service ERROR Rate",
+      "type": "timeseries",
       "targets": [
         {
-          "expr": "{app=\"ticket-service\"} |= \"ERROR\""
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"ticket-service\", level=\"ERROR\"}[1m]))",
+          "refId": "A"
         }
       ]
     },
     {
-      "title": "Feign Client Failures",
-      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "title": "Feign Call Failures",
+      "type": "timeseries",
       "targets": [
         {
-          "expr": "{app=\"ticket-service\"} |= \"Booking service failed\""
+          "expr": "count_over_time({app=\"eventticketing\", service=\"ticket-service\"} |= \"Feign call to\" |= \"failed\" [5m])",
+          "refId": "A"
         }
       ]
     },
     {
-      "title": "Ticket Issuance Logs",
-      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "title": "Successful Feign Calls",
+      "type": "timeseries",
       "targets": [
         {
-          "expr": "{app=\"ticket-service\"} |= \"TICKET_ISSUED\""
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"ticket-service\", level=\"ERROR\"}[1m]))",
+          "refId": "A"
         }
       ]
     }
-  ]
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "ticket-service",
+    "loki"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Ticket-Service Monitoring Dashboard",
+  "version": 1
 }

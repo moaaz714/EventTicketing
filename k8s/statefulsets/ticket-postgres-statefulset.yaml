@@ -3,6 +3,7 @@ kind: StatefulSet
 
 metadata:
   name: ticket-postgres
+  namespace: eventticketing
 
 spec:
   serviceName: ticket-postgres
@@ -21,7 +22,7 @@ spec:
       containers:
         - name: postgres
 
-          image: postgres:16
+          image: postgres:17
 
           ports:
             - containerPort: 5432
@@ -51,11 +52,11 @@ spec:
 
   volumeClaimTemplates:
     - metadata:
-        name: postgres-storage
+        name: data
 
       spec:
-        accessModes:
-          - ReadWriteOnce
+        accessModes: ["ReadWriteOnce"]
+
 
         resources:
           requests:
