@@ -3,12 +3,31 @@
         <http>
             <url>http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push</url>
         </http>
+
         <format>
             <label>
-                <pattern>app=eventticketing,service=event-service,level=%level,env=k8s</pattern>
+                <pattern>app=eventticketing,service=${spring.application.name},level=%level,env=k8s</pattern>
             </label>
+
             <message>
-                <pattern>{"timestamp":"%d{ISO8601}","level":"%level","service":"event-service","thread":"%thread","logger":"%logger{36}","correlationId":"%X{correlationId:-}","eventId":"%X{eventId:-}","bookingId":"%X{bookingId:-}","userId":"%X{userId:-}","sessionId":"%X{sessionId:-}","message":"%msg"}</pattern>
+                <pattern>
+                    {
+                    "timestamp": "%d{ISO8601}",
+                    "level": "%level",
+                    "service": "${spring.application.name}",
+                    "thread": "%thread",
+                    "logger": "%logger{36}",
+                    "correlationId": "%X{correlationId:-}",
+                    "userId": "%X{userId:-}",
+                    "eventId": "%X{eventId:-}",
+                    "bookingId": "%X{bookingId:-}",
+                    "ticketId": "%X{ticketId:-}",
+                    "saleId": "%X{saleId:-}",
+                    "sessionId": "%X{sessionId:-}",
+                    "routingKey": "%X{routingKey:-}",
+                    "message": "%msg"
+                    }
+                </pattern>
             </message>
         </format>
     </appender>
