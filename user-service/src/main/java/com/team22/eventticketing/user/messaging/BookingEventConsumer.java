@@ -1,6 +1,6 @@
 package com.team22.eventticketing.user.messaging;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.team22.eventticketing.user.config.RabbitMQConfig;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.repository.UserRepository;
