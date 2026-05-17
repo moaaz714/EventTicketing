@@ -22,7 +22,15 @@ spring:
     authentication:
       username: neo4j
       password: neo4jpass
-
+## exposing the endpoints of the actuator and the prometheus
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    prometheus:
+      enabled: true
 jwt:
   secret: ${JWT_SECRET:24966c8a763b3a3f7f264cefb93d95159184e8c5e2af5c94e05387371d47a3fd=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
