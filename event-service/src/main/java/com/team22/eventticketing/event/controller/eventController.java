@@ -22,9 +22,8 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import dto.AvgCapacityDTO;
-import dto.VenueCoordsDTO;
+import com.team22.eventticketing.contracts.dto.AvgCapacityDTO;
+import com.team22.eventticketing.contracts.dto.VenueCoordsDTO;
 
 @RestController
 @RequestMapping("/api/events")

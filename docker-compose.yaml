@@ -234,6 +234,20 @@ services:
       interval: 30s
       timeout: 10s
       retries: 10
+  # API Gateway (Port 8080)
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - user-service
+      - event-service
+      - booking-service
+      - ticket-service
+      - sales-service
+    networks:
+      - default
 
 volumes:
   pgdata:
