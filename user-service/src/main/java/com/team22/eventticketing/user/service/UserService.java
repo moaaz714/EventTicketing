@@ -12,8 +12,9 @@ import com.team22.eventticketing.user.mongo.AuthEvent;
 import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.AuthEventRepository;
 import com.team22.eventticketing.user.repository.UserRepository;
-import dto.BookingSummaryDTO;
-import feign.BookingServiceClient;
+import com.team22.eventticketing.contracts.dto.BookingSummaryDTO;
+import com.team22.eventticketing.contracts.feign.BookingServiceClient;
+
 import feign.FeignException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +29,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +45,7 @@ public class UserService {
     private final CacheEvictionService cacheEviction;
     private final BookingServiceClient bookingServiceClient;
     private final UserEventPublisher userEventPublisher;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+
     private final List<EntityObserver> observers = new ArrayList<>();
 
     public UserService(UserRepository userRepository,

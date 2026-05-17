@@ -36,6 +36,11 @@ spring:
     authentication:
       username: neo4j
       password: neo4jpass
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: 5672
+    username: user
+    password: password
 ## exposing the endpoints of the actuator and the prometheus
 management:
   endpoints:
@@ -45,6 +50,9 @@ management:
   endpoint:
     prometheus:
       enabled: true
+  metrics:
+    tags:
+      application: booking-service
 jwt:
   secret: ${JWT_SECRET:24966c8a763b3a3f7f264cefb93d95159184e8c5e2af5c94e05387371d47a3fd=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
