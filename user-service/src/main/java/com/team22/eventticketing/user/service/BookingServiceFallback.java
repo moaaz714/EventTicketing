@@ -1,6 +1,6 @@
 package com.team22.eventticketing.user.service;
 
-import dto.BookingSummaryDTO;
+import com.team22.eventticketing.contracts.dto.BookingSummaryDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
