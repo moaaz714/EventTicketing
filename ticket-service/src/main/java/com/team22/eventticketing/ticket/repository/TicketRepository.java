@@ -260,5 +260,10 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             Long eventId,
             TicketStatus status
     );
+
+    List<Ticket> findByBookingIdAndStatus(
+            Long bookingId,
+            TicketStatus status
+    );
 }
 

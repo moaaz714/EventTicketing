@@ -18,6 +18,7 @@ import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 
 import dto.EventDTO;
+import dto.EventTicketSummaryDTO;
 import feign.BookingServiceClient;
 import feign.EventServiceClient;
 import dto.VenueCoordsDTO;
@@ -628,5 +629,42 @@ public class TicketService {
                 .attendanceRate(attendanceRate)
                 .ticketsByStatus(ticketsByStatus)
                 .build();
+    }
+    // new first endpoint
+    public int getUsedTicketCountForBooking(Long bookingId) {
+
+        List<Ticket> tickets =
+                ticketRepository.findByBookingIdAndStatus(
+                        bookingId,
+                        TicketStatus.USED
+                );
+
+        return tickets.size();
+    }
+
+    // new second endpoint
+    @Cacheable(cacheNames = "ticket-service::event-ticket-summary", key = "#eventId")
+    public EventTicketSummaryDTO getEventTicketSummary(Long eventId) {
+
+        List<Ticket> tickets =
+                ticketRepository.findByEventId(eventId);
+
+        if (tickets.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "No tickets found for event: " + eventId
+            );
+        }
+
+        long totalTicketsSold = tickets.size();
+
+        long usedCount = tickets.stream()
+                .filter(t -> t.getStatus() == TicketStatus.USED)
+                .count();
+
+        return new EventTicketSummaryDTO(
+                totalTicketsSold,
+                usedCount
+        );
     }
 }
