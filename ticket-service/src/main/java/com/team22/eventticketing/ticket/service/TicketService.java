@@ -14,11 +14,14 @@ import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketAnalyticsDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
+import com.team22.eventticketing.ticket.messaging.TicketEventPublisher;
 import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 
 import dto.EventDTO;
 import dto.EventTicketSummaryDTO;
+import events.TicketIssuedEvent;
+import events.TicketStatusChangedEvent;
 import feign.BookingServiceClient;
 import feign.EventServiceClient;
 import dto.VenueCoordsDTO;
@@ -51,12 +54,14 @@ public class TicketService {
     private final List<EntityObserver> observers = new ArrayList<>();
     private final BookingServiceClient bookingServiceClient;
     private final EventServiceClient eventServiceClient;
+    private final TicketEventPublisher ticketEventPublisher;
 
-    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction, BookingServiceClient bookingServiceClient, EventServiceClient eventServiceClient) {
+    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction, BookingServiceClient bookingServiceClient, EventServiceClient eventServiceClient, TicketEventPublisher ticketEventPublisher) {
         this.ticketRepository = ticketRepository;
         this.cacheEviction = cacheEviction;
         this.bookingServiceClient = bookingServiceClient;
         this.eventServiceClient = eventServiceClient;
+        this.ticketEventPublisher = ticketEventPublisher;
     }
 
     public void register(EntityObserver observer) {
@@ -95,6 +100,7 @@ public class TicketService {
     @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
     public Ticket updateTicket(Long id, Ticket updated) {
         Ticket existing = getTicketById(id);
+        TicketStatus previousStatus = existing.getStatus();
 
         if (updated.getBookingId() != null)
             existing.setBookingId(updated.getBookingId());
@@ -111,6 +117,13 @@ public class TicketService {
 
         Ticket saved = ticketRepository.save(existing);
         cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9", "S4-F10");
+
+        if (saved.getStatus() != null && saved.getStatus() != previousStatus) {
+            ticketEventPublisher.publishTicketStatusChanged(
+                    new TicketStatusChangedEvent(saved.getId(), saved.getBookingId(), saved.getStatus().name())
+            );
+        }
+
         notifyObservers("TICKET_UPDATED", Map.of("ticketId", saved.getId()));
         return saved;
     }
@@ -200,7 +213,7 @@ public class TicketService {
 
         }).toList();
 
-        ticketRepository.saveAll(tickets);
+        List<Ticket> savedTickets = ticketRepository.saveAll(tickets);
 
         cacheEviction.evictPattern("S4-F1");
         cacheEviction.evictPattern("S4-F5");
@@ -208,15 +221,21 @@ public class TicketService {
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
 
+        for (Ticket t : savedTickets) {
+            ticketEventPublisher.publishTicketIssued(
+                    new TicketIssuedEvent(t.getId(), bookingId, t.getAttendeeName(), t.getTicketCode())
+            );
+        }
+
         notifyObservers(
                 "TICKETS_BATCH_ISSUED",
                 Map.of(
                         "bookingId", bookingId,
-                        "count", tickets.size()
+                        "count", savedTickets.size()
                 )
         );
 
-        return tickets.size();
+        return savedTickets.size();
     }
 
 
@@ -295,6 +314,10 @@ public class TicketService {
         cacheEviction.evictPattern("S4-F1");
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
+
+        ticketEventPublisher.publishTicketIssued(
+                new TicketIssuedEvent(saved.getId(), bookingId, saved.getAttendeeName(), saved.getTicketCode())
+        );
 
         notifyObservers(
                 "TICKET_ISSUED",
