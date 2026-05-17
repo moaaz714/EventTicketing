@@ -258,6 +258,20 @@ data:
               "refId": "B", "legendFormat": "heap committed"
             }
           ]
+        },
+        {
+          "id": 7,
+          "title": "Saga Queue Processing Rate",
+          "description": "PromQL — Rate of messages consumed from the saga-feedback queue.",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "rate(spring_rabbitmq_listener_seconds_count{queue=\"booking.saga-feedback\"}[5m])",
+              "refId": "A", "legendFormat": "messages/sec"
+            }
+          ]
         }
       ]
     }

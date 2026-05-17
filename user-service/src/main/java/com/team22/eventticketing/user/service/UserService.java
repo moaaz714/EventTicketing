@@ -12,8 +12,8 @@ import com.team22.eventticketing.user.mongo.AuthEvent;
 import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.AuthEventRepository;
 import com.team22.eventticketing.user.repository.UserRepository;
-import dto.BookingSummaryDTO;
-import feign.BookingServiceClient;
+import com.team22.eventticketing.contracts.dto.BookingSummaryDTO;
+import com.team22.eventticketing.contracts.feign.BookingServiceClient;
 
 import java.math.BigDecimal;
 import java.util.Comparator;
