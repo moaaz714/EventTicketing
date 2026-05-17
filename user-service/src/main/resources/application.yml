@@ -38,3 +38,15 @@ jwt:
 feign:
   booking-service:
     url: ${BOOKING_SERVICE_URL:http://booking-service:8080}
+
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      bookingService:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 5
+        failure-rate-threshold: 50          # open after 50% failures in window
+        wait-duration-in-open-state: 10s    # stay open for 10s, then go HALF_OPEN
+        permitted-number-of-calls-in-half-open-state: 2
+        register-health-indicator: true
