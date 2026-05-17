@@ -346,7 +346,7 @@ data:
         "type": "timeseries",
         "targets": [
           {
-            "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\"} | json | message =~ \".*reachable.*|.*Feign.*success.*|.*Feign.*successful.*\" [5m]))",
+            "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\", level=\"ERROR\"} | json [1m]))",
             "legendFormat": "feign successes/5m",
             "refId": "A"
           }

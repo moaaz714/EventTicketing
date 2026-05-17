@@ -28,7 +28,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\", level=\"ERROR\"}[1m]))",
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\", level=\"ERROR\"} | json [1m]))",
           "legendFormat": "errors/min",
           "refId": "A"
         }
