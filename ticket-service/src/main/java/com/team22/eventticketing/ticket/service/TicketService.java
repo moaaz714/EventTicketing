@@ -26,6 +26,9 @@ import dto.BookingDTO;
 
 
 import java.util.HashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -51,6 +54,8 @@ public class TicketService {
     private final List<EntityObserver> observers = new ArrayList<>();
     private final BookingServiceClient bookingServiceClient;
     private final EventServiceClient eventServiceClient;
+    private static final Logger logger =
+            LoggerFactory.getLogger(TicketService.class);
 
     public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction, BookingServiceClient bookingServiceClient, EventServiceClient eventServiceClient) {
         this.ticketRepository = ticketRepository;
@@ -139,6 +144,11 @@ public class TicketService {
 
         } catch (Exception e) {
 
+            logger.error(
+                    "BATCH_BOOKING_LOOKUP_FAILED bookingId={}",
+                    bookingId
+            );
+
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "Booking not found with id: " + bookingId
@@ -155,6 +165,12 @@ public class TicketService {
 
             if (!codesInBatch.add(item.getTicketCode())) {
 
+                logger.warn(
+                        "DUPLICATE_BATCH_TICKET_CODE bookingId={} ticketCode={}",
+                        bookingId,
+                        item.getTicketCode()
+                );
+
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "Duplicate ticket code in batch: "
@@ -167,6 +183,12 @@ public class TicketService {
         for (String code : codesInBatch) {
 
             if (ticketRepository.existsByTicketCode(code)) {
+
+                logger.warn(
+                        "EXISTING_TICKET_CODE_FOUND bookingId={} ticketCode={}",
+                        bookingId,
+                        code
+                );
 
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
@@ -201,6 +223,13 @@ public class TicketService {
         }).toList();
 
         ticketRepository.saveAll(tickets);
+
+        logger.info(
+                "BATCH_TICKETS_ISSUED bookingId={} eventId={} count={}",
+                bookingId,
+                eventId,
+                tickets.size()
+        );
 
         cacheEviction.evictPattern("S4-F1");
         cacheEviction.evictPattern("S4-F5");
@@ -257,7 +286,9 @@ public class TicketService {
             booking = bookingServiceClient.getBooking(bookingId);
 
         } catch (Exception e) {
-
+            logger.error(
+                    "BOOKING_LOOKUP_FAILED bookingId={}",
+                    bookingId);
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "Booking not found"
@@ -267,6 +298,10 @@ public class TicketService {
         // duplicate ticket code check
         if (ticketRepository.existsByTicketCode(ticketCode)) {
 
+            logger.warn(
+                    "DUPLICATE_TICKET_CODE ticketCode={}",
+                    ticketCode
+            );
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Ticket code already exists"

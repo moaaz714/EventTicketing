@@ -1,0 +1,32 @@
+{
+  "title": "Ticket Service Logs",
+  "panels": [
+    {
+      "title": "Ticket Service Errors",
+      "type": "logs",
+      "targets": [
+        {
+          "expr": "{app=\"ticket-service\"} |= \"ERROR\""
+        }
+      ]
+    },
+    {
+      "title": "Feign Client Failures",
+      "type": "logs",
+      "targets": [
+        {
+          "expr": "{app=\"ticket-service\"} |= \"Booking service failed\""
+        }
+      ]
+    },
+    {
+      "title": "Ticket Issuance Logs",
+      "type": "logs",
+      "targets": [
+        {
+          "expr": "{app=\"ticket-service\"} |= \"TICKET_ISSUED\""
+        }
+      ]
+    }
+  ]
+}
