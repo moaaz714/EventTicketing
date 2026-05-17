@@ -55,7 +55,7 @@ services:
         condition: service_healthy
     restart: on-failure
 
-  # Event Service (Port 8082) - REFACTORED
+  # Event Service (Port 8082)
   event-service:
     build: ./event-service
     container_name: event-service
@@ -121,6 +121,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      cassandra:
+        condition: service_healthy
 
   # Sales Service (Port 8085)
   sales-service:
@@ -158,6 +160,7 @@ services:
     container_name: eventticketing-redis
     ports:
       - "6379:6379"
+    # Notice the memory limits applied directly in the command here:
     command: redis-server --requirepass redispass --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: [ "CMD", "redis-cli", "-a", "redispass", "ping" ]
@@ -173,6 +176,7 @@ services:
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
+      # Memory limit applied here:
       ES_JAVA_OPTS: "-Xms200m -Xmx200m"
     volumes:
       - es-data:/usr/share/elasticsearch/data
@@ -191,6 +195,7 @@ services:
       - "7687:7687"
     environment:
       NEO4J_AUTH: neo4j/neo4jpass
+      # Memory limits applied here:
       NEO4J_server_memory_heap_max__size: 512m
       NEO4J_server_memory_heap_initial__size: 256m
     volumes:
@@ -208,19 +213,21 @@ services:
     ports:
       - "9042:9042"
     environment:
-      CASSANDRA_CLUSTER_NAME: eventticketingcluster
-      CASSANDRA_DC: datacenter1
-      CASSANDRA_KEYSPACE: eventticketingks
-      MAX_HEAP_SIZE: 200M
-      HEAP_NEWSIZE: 128M
-    volumes:
-      - cassandra-data:/var/lib/cassandra
+      - CASSANDRA_CLUSTER_NAME=eventticketingcluster
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_KEYSPACE=eventticketingks
+      # Use JVM_OPTS to force the heap smaller if MAX_HEAP_SIZE is being ignored
+      - JVM_OPTS=-Xms256M -Xmx256M
+      - MAX_HEAP_SIZE=256M
+    deploy:
+      resources:
+        limits:
+          memory: 1024M # Give the container 1GB total, but the Java app only 256MB
     healthcheck:
-      test: [ "CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES'" ]
-      interval: 15s
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES'"]
+      interval: 30s
       timeout: 10s
       retries: 10
-      start_period: 60s
 
 volumes:
   pgdata:

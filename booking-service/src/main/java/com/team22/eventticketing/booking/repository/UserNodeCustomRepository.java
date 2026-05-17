@@ -2,6 +2,7 @@ package com.team22.eventticketing.booking.repository;
 
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Session;
+import org.neo4j.driver.Values;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -18,14 +19,16 @@ public class UserNodeCustomRepository {
 
     public long countRecorded(Long userId, Long eventId, Long bookingId) {
         try (Session session = driver.session()) {
-            return session.run("""
-                    MATCH (u:UserNode {userId: $userId})-[r:ATTENDED]->(e:EventNode {eventId: $eventId})
+            return session.executeRead(tx ->
+                    tx.run("""
+                    OPTIONAL MATCH (u:UserNode {userId: $userId})-[r:ATTENDED]->(e:EventNode {eventId: $eventId})
                     WHERE r.recorded_booking_ids IS NOT NULL
                       AND $bookingId IN r.recorded_booking_ids
                     RETURN COUNT(r) AS cnt
                     """,
-                    Map.of("userId", userId, "eventId", eventId, "bookingId", bookingId)
-            ).single().get("cnt").asLong();
+                            Map.of("userId", userId, "eventId", eventId, "bookingId", bookingId)
+                    ).single().get("cnt").asLong()
+            );
         }
     }
 
@@ -33,7 +36,8 @@ public class UserNodeCustomRepository {
                                  Long eventId, String eventName, String eventCategory,
                                  Long bookingId) {
         try (Session session = driver.session()) {
-            session.run("""
+            session.executeWrite(tx -> {
+                tx.run("""
                     MERGE (u:UserNode {userId: $userId})
                       ON CREATE SET u.name = $userName
                     MERGE (e:EventNode {eventId: $eventId})
@@ -46,16 +50,18 @@ public class UserNodeCustomRepository {
                                     r.lastAttendedDate = $now,
                                     r.recorded_booking_ids = coalesce(r.recorded_booking_ids, []) + $bookingId
                     """,
-                    Map.of(
-                            "userId", userId,
-                            "userName", userName,
-                            "eventId", eventId,
-                            "eventName", eventName,
-                            "eventCategory", eventCategory,
-                            "bookingId", bookingId,
-                            "now", LocalDateTime.now().toString()
-                    )
-            );
+                        Map.of(
+                                "userId", userId,
+                                "userName", userName,
+                                "eventId", eventId,
+                                "eventName", eventName,
+                                "eventCategory", eventCategory,
+                                "bookingId", bookingId,
+                                "now", Values.value(LocalDateTime.now())
+                        )
+                );
+                return null;
+            });
         }
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long> {
@@ -38,7 +39,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     List<Booking> findByUserId(Long userId);
 
-    long countByUserIdAndStatus(Long userId, BookingStatus status);
+   // long countByUserIdAndStatus(Long userId, BookingStatus status);
 
     // S3-F4: load booking with items for calculation
     @Query("SELECT b FROM Booking b LEFT JOIN FETCH b.bookingItems WHERE b.id = :id")
@@ -148,5 +149,34 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query(value = "SELECT COUNT(*) > 0 FROM users WHERE id = :userId", nativeQuery = true)
     boolean existsUserById(@Param("userId") Long userId);
 
+   // milestone 3
+   // count all bookings for a user
+   Long countByUserId(Long userId);
 
+    // count bookings for a user filtered by status
+    Long countByUserIdAndStatus(Long userId, BookingStatus status);
+
+    // sum of completed booking amounts for a user
+    @Query("SELECT SUM(b.totalAmount) FROM Booking b WHERE b.userId = :userId AND b.status = :status")
+    BigDecimal sumTotalAmountByUserIdAndStatus(@Param("userId") Long userId, @Param("status") BookingStatus status);
+
+    // count active bookings for a user (active = not finished)
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.userId = :userId AND b.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'COMPLETING', 'PAYMENT_PENDING')")
+    Integer countActiveBookingsByUserId(@Param("userId") Long userId);
+
+    // sum of completed booking amounts for a user in date range
+    @Query("SELECT SUM(b.totalAmount) FROM Booking b WHERE b.userId = :userId AND b.status = 'COMPLETED' AND b.bookingDate BETWEEN :start AND :end")
+    BigDecimal sumCompletedAmountByUserIdInRange(@Param("userId") Long userId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    // count active bookings for an event
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.eventId = :eventId AND b.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'COMPLETING', 'PAYMENT_PENDING')")
+    Integer countActiveBookingsByEventId(@Param("eventId") Long eventId);
+
+    // count completed bookings for an event in date range
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.eventId = :eventId AND b.status = 'COMPLETED' AND b.bookingDate BETWEEN :start AND :end")
+    Long countCompletedByEventIdInRange(@Param("eventId") Long eventId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    // sum of completed booking amounts for an event in date range
+    @Query("SELECT SUM(b.totalAmount) FROM Booking b WHERE b.eventId = :eventId AND b.status = 'COMPLETED' AND b.bookingDate BETWEEN :start AND :end")
+    BigDecimal sumCompletedAmountByEventIdInRange(@Param("eventId") Long eventId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }
