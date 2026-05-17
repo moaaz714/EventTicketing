@@ -5,8 +5,13 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
-@SpringBootApplication
-@EnableFeignClients
+@SpringBootApplication(scanBasePackages = {
+        "com.team22.eventticketing.ticket",
+        "com.team22.eventticketing.contracts.dto"
+})
+@EnableFeignClients(basePackages = {
+        "com.team22.eventticketing.contracts.feign"
+})
 @EnableCaching
 public class TicketServiceApplication {
 

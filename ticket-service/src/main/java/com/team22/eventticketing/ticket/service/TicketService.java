@@ -4,6 +4,7 @@ import com.datastax.oss.driver.api.core.cql.Row;
 import com.team22.eventticketing.ticket.adapter.CassandraRowAdapter;
 import com.team22.eventticketing.ticket.adapter.ObjectArrayDtoAdapter;
 import com.team22.eventticketing.ticket.adapter.PostgresRowAdapter;
+
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketScanEvent;
 import com.team22.eventticketing.ticket.model.TicketStatus;
@@ -13,9 +14,20 @@ import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketAnalyticsDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
+import com.team22.eventticketing.ticket.messaging.TicketEventPublisher;
 import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 
+import com.team22.eventticketing.contracts.dto.EventDTO;
+import com.team22.eventticketing.contracts.dto.EventTicketSummaryDTO;
+import com.team22.eventticketing.contracts.events.TicketIssuedEvent;
+import com.team22.eventticketing.contracts.events.TicketStatusChangedEvent;
+import com.team22.eventticketing.contracts.feign.BookingServiceClient;
+import com.team22.eventticketing.contracts.feign.EventServiceClient;
+import com.team22.eventticketing.contracts.dto.VenueCoordsDTO;
+import com.team22.eventticketing.contracts.dto.BookingDTO;
+
+import java.util.HashMap;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
@@ -39,10 +51,18 @@ public class TicketService {
     private final TicketRepository ticketRepository;
     private final CacheEvictionService cacheEviction;
     private final List<EntityObserver> observers = new ArrayList<>();
+    private final BookingServiceClient bookingServiceClient;
+    private final EventServiceClient eventServiceClient;
+    private final TicketEventPublisher ticketEventPublisher;
 
-    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction) {
+    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction,
+            BookingServiceClient bookingServiceClient, EventServiceClient eventServiceClient,
+            TicketEventPublisher ticketEventPublisher) {
         this.ticketRepository = ticketRepository;
         this.cacheEviction = cacheEviction;
+        this.bookingServiceClient = bookingServiceClient;
+        this.eventServiceClient = eventServiceClient;
+        this.ticketEventPublisher = ticketEventPublisher;
     }
 
     public void register(EntityObserver observer) {
@@ -81,6 +101,7 @@ public class TicketService {
     @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
     public Ticket updateTicket(Long id, Ticket updated) {
         Ticket existing = getTicketById(id);
+        TicketStatus previousStatus = existing.getStatus();
 
         if (updated.getBookingId() != null)
             existing.setBookingId(updated.getBookingId());
@@ -97,6 +118,12 @@ public class TicketService {
 
         Ticket saved = ticketRepository.save(existing);
         cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9", "S4-F10");
+
+        if (saved.getStatus() != null && saved.getStatus() != previousStatus) {
+            ticketEventPublisher.publishTicketStatusChanged(
+                    new TicketStatusChangedEvent(saved.getId(), saved.getBookingId(), saved.getStatus().name()));
+        }
+
         notifyObservers("TICKET_UPDATED", Map.of("ticketId", saved.getId()));
         return saved;
     }
@@ -109,104 +136,274 @@ public class TicketService {
     }
 
     // ─── [S4-F4] Batch Ticket Issuance (write — invalidates) ─────────────────────
-
     @Transactional
     public int batchIssueTickets(BatchTicketRequestDTO request) {
+
         Long bookingId = request.getBookingId();
+
         List<TicketItemDTO> items = request.getTickets();
 
-        if (!ticketRepository.bookingExistsById(bookingId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found with id: " + bookingId);
+        // validate booking + retrieve booking data
+        BookingDTO booking;
+
+        try {
+
+            booking = bookingServiceClient.getBooking(bookingId);
+
+        } catch (Exception e) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Booking not found with id: " + bookingId);
         }
 
+        // NEW M3 FIELD
+        Long eventId = booking.eventId();
+
+        // duplicate ticket codes inside batch
         Set<String> codesInBatch = new HashSet<>();
+
         for (TicketItemDTO item : items) {
+
             if (!codesInBatch.add(item.getTicketCode())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Duplicate ticket code in batch: " + item.getTicketCode());
+
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Duplicate ticket code in batch: "
+                                + item.getTicketCode());
             }
         }
 
+        // duplicate ticket codes in DB
         for (String code : codesInBatch) {
+
             if (ticketRepository.existsByTicketCode(code)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket code already exists: " + code);
+
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Ticket code already exists: " + code);
             }
         }
 
         LocalDateTime now = LocalDateTime.now();
-        List<Ticket> tickets = items.stream().map(item -> new Ticket(
-                bookingId,
-                item.getAttendeeName(),
-                item.getTicketCode(),
-                TicketStatus.VALID,
-                now,
-                item.getMetadata())).toList();
 
-        ticketRepository.saveAll(tickets);
+        List<Ticket> tickets = items.stream().map(item -> {
+
+            Ticket ticket = new Ticket();
+
+            ticket.setBookingId(bookingId);
+
+            // NEW M3 FIELD
+            ticket.setEventId(eventId);
+
+            ticket.setAttendeeName(item.getAttendeeName());
+
+            ticket.setTicketCode(item.getTicketCode());
+
+            ticket.setStatus(TicketStatus.VALID);
+
+            ticket.setIssuedAt(now);
+
+            ticket.setMetadata(item.getMetadata());
+
+            return ticket;
+
+        }).toList();
+
+        List<Ticket> savedTickets = ticketRepository.saveAll(tickets);
+
         cacheEviction.evictPattern("S4-F1");
         cacheEviction.evictPattern("S4-F5");
         cacheEviction.evictPattern("S4-F6");
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
-        notifyObservers("TICKETS_BATCH_ISSUED", Map.of("bookingId", bookingId, "count", tickets.size()));
-        return tickets.size();
+
+        for (Ticket t : savedTickets) {
+            ticketEventPublisher.publishTicketIssued(
+                    new TicketIssuedEvent(t.getId(), bookingId, t.getAttendeeName(), t.getTicketCode()));
+        }
+
+        notifyObservers(
+                "TICKETS_BATCH_ISSUED",
+                Map.of(
+                        "bookingId", bookingId,
+                        "count", savedTickets.size()));
+
+        return savedTickets.size();
     }
 
     // ─── [S4-F1] Get Latest Ticket by Booking ────────────────────────────────────
 
     @Cacheable(cacheNames = "ticket-service::S4-F1", key = "#bookingId")
     public Ticket getLatestTicketByBooking(Long bookingId) {
-        boolean bookingExists = ticketRepository.existsBookingById(bookingId);
-        if (!bookingExists) {
+
+        try {
+            bookingServiceClient.getBooking(bookingId);
+        } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
         }
+
         return ticketRepository
                 .findTopByBookingIdOrderByIssuedAtDesc(bookingId)
                 .orElseThrow(
-                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No tickets found for this booking"));
+                        () -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "No tickets found for this booking"));
     }
 
     // ─── [S4-F2] Issue Ticket (write) ────────────────────────────────────────────
 
-    public Ticket issueTicket(Long bookingId, String attendeeName, String ticketCode,
+    public Ticket issueTicket(
+            Long bookingId,
+            String attendeeName,
+            String ticketCode,
             Map<String, Object> metadata) {
-        boolean exists = ticketRepository.existsBookingById(bookingId);
-        if (!exists) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found");
-        }
-        if (ticketRepository.existsByTicketCode(ticketCode)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket code already exists");
+
+        // validate booking + retrieve booking data
+        BookingDTO booking;
+
+        try {
+
+            booking = bookingServiceClient.getBooking(bookingId);
+
+        } catch (Exception e) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Booking not found");
         }
 
+        // duplicate ticket code check
+        if (ticketRepository.existsByTicketCode(ticketCode)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ticket code already exists");
+        }
+
+        // create ticket
         Ticket ticket = new Ticket();
+
         ticket.setBookingId(bookingId);
+
+        // NEW M3 FIELD
+        ticket.setEventId(booking.eventId());
+
         ticket.setAttendeeName(attendeeName);
         ticket.setTicketCode(ticketCode);
+
         ticket.setMetadata(metadata);
+
         ticket.setIssuedAt(LocalDateTime.now());
+
         ticket.setStatus(TicketStatus.VALID);
 
         Ticket saved = ticketRepository.save(ticket);
+
         cacheEviction.evictPattern("S4-F1");
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
-        notifyObservers("TICKET_ISSUED", Map.of("ticketId", saved.getId(), "bookingId", bookingId));
+
+        ticketEventPublisher.publishTicketIssued(
+                new TicketIssuedEvent(saved.getId(), bookingId, saved.getAttendeeName(), saved.getTicketCode()));
+
+        notifyObservers(
+                "TICKET_ISSUED",
+                Map.of(
+                        "ticketId", saved.getId(),
+                        "bookingId", bookingId));
+
         return saved;
     }
 
     // ─── [S4-F3] Find Nearby Tickets (location DTO)
     // ───────────────────────────────
 
+    // @Cacheable(cacheNames = "ticket-service::S4-F3", key = "#lat + ':' + #lon +
+    // ':' + #radiusKm")
+    // public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double
+    // radiusKm) {
+    //
+    // List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon,
+    // radiusKm);
+    //
+    // ObjectArrayDtoAdapter adapter = new ObjectArrayDtoAdapter();
+    //
+    // return results.stream()
+    // .map(adapter::adapt)
+    // .collect(Collectors.toList());
+    // }
     @Cacheable(cacheNames = "ticket-service::S4-F3", key = "#lat + ':' + #lon + ':' + #radiusKm")
-    public List<NearbyTicketDTO> findNearbyTickets(double lat, double lon, double radiusKm) {
+    public List<NearbyTicketDTO> findNearbyTickets(
+            double lat,
+            double lon,
+            double radiusKm) {
 
-        List<Object[]> results = ticketRepository.findNearbyTickets(lat, lon, radiusKm);
+        // local postgres only
+        List<Ticket> tickets = ticketRepository.findByStatus(TicketStatus.VALID);
 
-        ObjectArrayDtoAdapter adapter = new ObjectArrayDtoAdapter();
+        List<NearbyTicketDTO> results = new ArrayList<>();
 
-        return results.stream()
-                .map(adapter::adapt)
-                .collect(Collectors.toList());
+        // request-scoped cache
+        Map<Long, VenueCoordsDTO> venueCache = new HashMap<>();
+
+        for (Ticket ticket : tickets) {
+
+            try {
+
+                // booking-service
+                BookingDTO booking = bookingServiceClient.getBooking(ticket.getBookingId());
+
+                Long eventId = booking.eventId();
+                EventDTO event = eventServiceClient.getEvent(eventId);
+
+                VenueCoordsDTO venue;
+
+                // avoid repeated feign calls
+                if (venueCache.containsKey(eventId)) {
+
+                    venue = venueCache.get(eventId);
+
+                } else {
+
+                    // event-service
+                    venue = eventServiceClient.getEventVenueCoords(eventId);
+
+                    venueCache.put(eventId, venue);
+                }
+
+                double eventLat = venue.venueLat();
+                double eventLon = venue.venueLon();
+
+                // Euclidean distance × 111
+                double distanceKm = Math.sqrt(
+                        Math.pow(eventLat - lat, 2) +
+                                Math.pow(eventLon - lon, 2))
+                        * 111;
+
+                if (distanceKm <= radiusKm) {
+
+                    NearbyTicketDTO dto = NearbyTicketDTO.builder()
+                            .ticketId(ticket.getId())
+                            .attendeeName(ticket.getAttendeeName())
+                            .bookingId(ticket.getBookingId())
+                            .eventName(event.name())
+                            .eventLat(eventLat)
+                            .eventLon(eventLon)
+                            .distanceKm(distanceKm)
+                            .build();
+
+                    results.add(dto);
+                }
+
+            } catch (Exception ignored) {
+
+            }
+        }
+
+        results.sort((a, b) -> Double.compare(a.getDistanceKm(), b.getDistanceKm()));
+
+        return results;
     }
 
     // ─── [S4-F7] Purge Expired Tickets (write — invalidates) ─────────────────────
@@ -224,41 +421,134 @@ public class TicketService {
 
     // ─── [S4-F8] Event Attendance Summary (relationship DTO) ─────────────────────
 
-    @Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
-    public EventAttendanceSummaryDTO getSummary(Long eventId) {
-        Map<String, Object> data = ticketRepository.getAttendanceSummaryData(eventId);
+    // @Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
+    // public EventAttendanceSummaryDTO getSummary(Long eventId) {
 
-        // 1. Business Validation: Keep the 404 check in the service layer
-        if (data == null || ((Number) data.getOrDefault("total", 0)).longValue() == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No tickets found for event: " + eventId);
+    // List<Ticket> tickets = ticketRepository.findByEventId(eventId);
+
+    // if (tickets.isEmpty()) {
+    // throw new ResponseStatusException(
+    // HttpStatus.NOT_FOUND,
+    // "No tickets found for event: " + eventId);
+    // }
+
+    // long totalTickets = tickets.size();
+
+    // long usedTickets = tickets.stream()
+    // .filter(t -> t.getStatus() == TicketStatus.USED)
+    // .count();
+
+    // long validTickets = tickets.stream()
+    // .filter(t -> t.getStatus() == TicketStatus.VALID)
+    // .count();
+
+    // double attendanceRate = totalTickets == 0
+    // ? 0.0
+    // : ((double) usedTickets / totalTickets) * 100;
+
+    // LocalDateTime lastCheckIn = tickets.stream()
+    // .filter(t -> t.getStatus() == TicketStatus.USED)
+    // .map(Ticket::getIssuedAt)
+    // .max(LocalDateTime::compareTo)
+    // .orElse(null);
+
+    // return EventAttendanceSummaryDTO.builder()
+    // .eventId(eventId)
+    // .totalTickets(totalTickets)
+    // .usedTickets(usedTickets)
+    // .validTickets(validTickets)
+    // .lastCheckIn(lastCheckIn)
+    // .build();
+    // }
+
+    // new second endpoint
+    @Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
+    public EventTicketSummaryDTO getEventTicketSummary(Long eventId) {
+
+        List<Ticket> tickets = ticketRepository.findByEventId(eventId);
+
+        if (tickets.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "No tickets found for event: " + eventId);
         }
 
-        // 2. Data Safety: The adapter expects "eventId" to be inside the map.
-        // If your repository query doesn't explicitly return it, this prevents a
-        // NullPointerException.
-        data.putIfAbsent("eventId", eventId);
+        long totalTicketsSold = tickets.size();
 
-        // 3. Structural Pattern: Delegate DTO creation to the Adapter
-        CassandraRowAdapter adapter = new CassandraRowAdapter();
-        return adapter.adapt(data);
+        long usedCount = tickets.stream()
+                .filter(t -> t.getStatus() == TicketStatus.USED)
+                .count();
+
+        return new EventTicketSummaryDTO(
+                totalTicketsSold,
+                usedCount);
     }
-
     // ─── [S4-F9] Unused Upcoming Tickets (combined)
     // ───────────────────────────────
 
+    // @Cacheable(cacheNames = "ticket-service::S4-F9", key = "'all'")
+    // public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
+    //
+    // // Fetch the raw data from PostgreSQL
+    // List<Map<String, Object>> results =
+    // ticketRepository.findUnusedUpcomingTicketsNative();
+    //
+    // // Instantiate the correct structural adapter
+    // PostgresRowAdapter adapter = new PostgresRowAdapter();
+    //
+    // // Stream and adapt the results
+    // return results.stream()
+    // .map(adapter::adapt)
+    // .toList();
+    // }
     @Cacheable(cacheNames = "ticket-service::S4-F9", key = "'all'")
     public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
 
-        // Fetch the raw data from PostgreSQL
-        List<Map<String, Object>> results = ticketRepository.findUnusedUpcomingTicketsNative();
+        List<Ticket> tickets = ticketRepository.findByStatus(TicketStatus.VALID);
 
-        // Instantiate the correct structural adapter
-        PostgresRowAdapter adapter = new PostgresRowAdapter();
+        List<UnusedTicketDTO> results = new ArrayList<>();
 
-        // Stream and adapt the results
-        return results.stream()
-                .map(adapter::adapt)
-                .toList();
+        Map<Long, EventDTO> eventCache = new HashMap<>();
+
+        for (Ticket ticket : tickets) {
+
+            try {
+
+                Long eventId = ticket.getEventId();
+
+                EventDTO event;
+
+                if (eventCache.containsKey(eventId)) {
+
+                    event = eventCache.get(eventId);
+
+                } else {
+
+                    event = eventServiceClient.getEvent(eventId);
+
+                    eventCache.put(eventId, event);
+                }
+
+                if ("UPCOMING".equalsIgnoreCase(event.status())) {
+
+                    UnusedTicketDTO dto = UnusedTicketDTO.builder()
+                            .ticketId(ticket.getId())
+                            .attendeeName(ticket.getAttendeeName())
+                            .ticketCode(ticket.getTicketCode())
+                            .bookingId(ticket.getBookingId())
+                            .eventName(event.name())
+                            .eventDate(event.eventDate())
+                            .build();
+
+                    results.add(dto);
+                }
+
+            } catch (Exception ignored) {
+
+            }
+        }
+
+        return results;
     }
 
     // ─── [S4-F6] Ticket History (date range report)
@@ -356,4 +646,15 @@ public class TicketService {
                 .ticketsByStatus(ticketsByStatus)
                 .build();
     }
+
+    // new first endpoint
+    public int getUsedTicketCountForBooking(Long bookingId) {
+
+        List<Ticket> tickets = ticketRepository.findByBookingIdAndStatus(
+                bookingId,
+                TicketStatus.USED);
+
+        return tickets.size();
+    }
+
 }

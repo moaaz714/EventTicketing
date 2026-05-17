@@ -1,6 +1,7 @@
 package com.team22.eventticketing.ticket.controller;
 
 import com.team22.eventticketing.ticket.model.dto.*;
+import com.team22.eventticketing.contracts.dto.EventTicketSummaryDTO;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -122,9 +123,17 @@ public class ticketController {
 
     // ==================== S4-F8: Event Attendance Summary ====================
 
+    // @GetMapping("/event/{eventId}/summary")
+    // public EventAttendanceSummaryDTO getEventAttendanceSummary(@PathVariable Long
+    // eventId) {
+    // return ticketService.getSummary(eventId);
+    // }
+
+    // new second endpoint
     @GetMapping("/event/{eventId}/summary")
-    public EventAttendanceSummaryDTO getEventAttendanceSummary(@PathVariable Long eventId) {
-        return ticketService.getSummary(eventId);
+    public EventTicketSummaryDTO getEventTicketSummary(
+            @PathVariable Long eventId) {
+        return ticketService.getEventTicketSummary(eventId);
     }
 
     // ==================== S4-F9: Unused Upcoming Tickets ====================
@@ -197,11 +206,19 @@ public class ticketController {
     // S4-F12
     @GetMapping("/{id}/scans")
     public ResponseEntity<List<TicketScanDTO>> getScanHistory(
-        @PathVariable Long id,
-        @RequestParam(required = false) String startTime,
-        @RequestParam(required = false) String endTime) {
-            Instant start = startTime != null ? Instant.parse(startTime) : null;
-            Instant end   = endTime   != null ? Instant.parse(endTime)   : null;
-            return ResponseEntity.ok(ticketScanService.getScanHistory(id, start, end));
-        }
+            @PathVariable Long id,
+            @RequestParam(required = false) String startTime,
+            @RequestParam(required = false) String endTime) {
+        Instant start = startTime != null ? Instant.parse(startTime) : null;
+        Instant end = endTime != null ? Instant.parse(endTime) : null;
+        return ResponseEntity.ok(ticketScanService.getScanHistory(id, start, end));
+    }
+
+    // new first endpoint
+    @GetMapping("/booking/{bookingId}/used-count")
+    public int getUsedTicketCountForBooking(
+            @PathVariable Long bookingId) {
+        return ticketService.getUsedTicketCountForBooking(bookingId);
+    }
+
 }
