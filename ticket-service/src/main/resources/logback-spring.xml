@@ -1,12 +1,25 @@
 <configuration>
+
+    ```
     <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+
         <http>
-            <url>http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push</url>
+            <url>
+                http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+            </url>
         </http>
+
         <format>
+
             <label>
-                <pattern>app=eventticketing,service=${spring.application.name},level=%level,env=k8s</pattern>
+                <pattern>
+                    app=eventticketing,
+                    service=${spring.application.name},
+                    level=%level,
+                    env=k8s
+                </pattern>
             </label>
+
             <message>
                 <pattern>
                     {
@@ -15,20 +28,27 @@
                     "service": "${spring.application.name}",
                     "thread": "%thread",
                     "logger": "%logger{36}",
+
                     "correlationId": "%X{correlationId:-}",
-                    "userId": "%X{userId:-}",
-                    "eventId": "%X{eventId:-}",
-                    "bookingId": "%X{bookingId:-}",
+
                     "ticketId": "%X{ticketId:-}",
-                    "saleId": "%X{saleId:-}",
+                    "bookingId": "%X{bookingId:-}",
+                    "eventId": "%X{eventId:-}",
+
                     "routingKey": "%X{routingKey:-}",
+
                     "message": "%msg"
                     }
                 </pattern>
             </message>
+
         </format>
+
     </appender>
+
     <root level="INFO">
         <appender-ref ref="LOKI"/>
     </root>
+    ```
+
 </configuration>
