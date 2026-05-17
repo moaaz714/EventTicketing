@@ -15,19 +15,23 @@ import com.team22.eventticketing.event.repository.EventRepository;
 import com.team22.eventticketing.event.repository.EventSearchRepository;
 import com.team22.eventticketing.event.repository.EventSessionRepository;
 
-import dto.AvgCapacityDTO;
-import dto.VenueCoordsDTO;
-import dto.EventBookingRevenueDTO;
-import dto.EventTicketSummaryDTO;
-import dto.BookingDTO;
-import dto.UserDTO;
-import events.EventStatusChangedEvent;
-import events.EventRatedEvent;
+import com.team22.eventticketing.contracts.dto.AvgCapacityDTO;
+import com.team22.eventticketing.contracts.dto.VenueCoordsDTO;
+import com.team22.eventticketing.contracts.dto.EventBookingRevenueDTO;
+import com.team22.eventticketing.contracts.dto.EventTicketSummaryDTO;
+import com.team22.eventticketing.contracts.dto.BookingDTO;
+import com.team22.eventticketing.contracts.dto.UserDTO;
 
-import feign.BookingServiceClient;
-import feign.TicketServiceClient;
-import feign.UserServiceClient;
+import com.team22.eventticketing.contracts.events.EventStatusChangedEvent;
+import com.team22.eventticketing.contracts.events.EventRatedEvent;
+
+import com.team22.eventticketing.contracts.feign.BookingServiceClient;
+import com.team22.eventticketing.contracts.feign.TicketServiceClient;
+import com.team22.eventticketing.contracts.feign.UserServiceClient;
+
+
 import feign.FeignException;
+
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

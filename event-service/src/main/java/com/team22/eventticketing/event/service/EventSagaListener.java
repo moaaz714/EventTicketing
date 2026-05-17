@@ -1,8 +1,8 @@
 package com.team22.eventticketing.event.service;
 
-import events.BookingPlacedEvent;
-import events.BookingCompletedEvent;
-import events.BookingCancelledEvent;
+import com.team22.eventticketing.contracts.events.BookingPlacedEvent;
+import com.team22.eventticketing.contracts.events.BookingCompletedEvent;
+import com.team22.eventticketing.contracts.events.BookingCancelledEvent;
 import com.team22.eventticketing.event.model.ProcessedEvent;
 import com.team22.eventticketing.event.repository.EventRepository;
 import com.team22.eventticketing.event.repository.ProcessedEventRepository;
