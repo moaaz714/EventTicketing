@@ -1,6 +1,6 @@
 package com.team22.eventticketing.sales.messaging.consumers;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.team22.eventticketing.sales.config.PaymentEventConfig;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.messaging.publishers.PaymentEventPublisher;

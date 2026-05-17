@@ -1,6 +1,6 @@
 package com.team22.eventticketing.sales.saga;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.messaging.consumers.BookingEventConsumer;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
@@ -157,7 +157,7 @@ class SagaIntegrationTest {
         verify(rabbitTemplate).convertAndSend(
                 eq("payment.events"),
                 eq("payment.initiated"),
-                any());
+                any(Object.class));
 
         // ── Step 2: S5-F4 — booking-service confirms PAYMENT_PENDING ─────────
         BookingDTO bookingDto = new BookingDTO(100L, 1L, 5L, "PAYMENT_PENDING",
@@ -177,7 +177,7 @@ class SagaIntegrationTest {
         verify(rabbitTemplate).convertAndSend(
                 eq("payment.events"),
                 eq("payment.completed"),
-                any());
+                any(Object.class));
 
         // Assert persisted state
         TicketSale persisted = ticketSaleRepository.findById(processed.getId()).orElseThrow();
@@ -209,7 +209,7 @@ class SagaIntegrationTest {
         verify(rabbitTemplate).convertAndSend(
                 eq("payment.events"),
                 eq("payment.initiated"),
-                any());
+                any(Object.class));
 
         // ── Step 2: S5-F4 — payment gateway declines (simulateFailure=true) ──
         BookingDTO bookingDto = new BookingDTO(200L, 2L, 6L, "PAYMENT_PENDING",
@@ -227,11 +227,11 @@ class SagaIntegrationTest {
         verify(rabbitTemplate).convertAndSend(
                 eq("payment.events"),
                 eq("payment.failed"),
-                any());
+                any(Object.class));
         verify(rabbitTemplate, never()).convertAndSend(
                 eq("payment.events"),
                 eq("payment.completed"),
-                any());
+                any(Object.class));
 
         // Assert persisted state
         TicketSale persisted = ticketSaleRepository.findById(failed.getId()).orElseThrow();
@@ -264,7 +264,7 @@ class SagaIntegrationTest {
         verify(rabbitTemplate).convertAndSend(
                 eq("payment.events"),
                 eq("payment.initiated"),
-                any());
+                any(Object.class));
 
         // ── Step 2: consume booking.cancelled (saga compensation) ─────────────
         BookingCancelledEvent cancelledEvent =
@@ -283,7 +283,7 @@ class SagaIntegrationTest {
         verify(rabbitTemplate).convertAndSend(
                 eq("payment.events"),
                 eq("payment.refunded"),
-                any());
+                any(Object.class));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
