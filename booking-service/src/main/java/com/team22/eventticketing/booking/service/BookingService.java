@@ -830,4 +830,16 @@ public class BookingService {
 
         return new EventBookingRevenueDTO(total, revenue, avg);
     }
+
+    public List<BookingItemDTO> getBookingItemDTOs(Long bookingId) {
+        Booking booking = bookingRepository.findByIdWithItems(bookingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Booking not found"));
+        if (booking.getBookingItems() == null) return List.of();
+        return booking.getBookingItems().stream()
+                .map(item -> new BookingItemDTO(
+                        item.getId(), item.getEventOrder(), item.getSessionTitle(),
+                        item.getQuantity(), item.getUnitPrice(), item.getStatus().name(), item.getMetadata()
+                ))
+                .collect(Collectors.toList());
+    }
 }

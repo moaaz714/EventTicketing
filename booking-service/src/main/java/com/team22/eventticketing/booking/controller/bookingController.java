@@ -371,4 +371,12 @@ public class bookingController { // FIXED: Capitalized class name to match Java 
         log.info("Returning {} for {} {}", 200, "GET", "/api/bookings/event/" + eventId + "/revenue");
         return ResponseEntity.ok(bookingService.getEventRevenue(eventId, startDate, endDate));
     }
+
+    @GetMapping("/{bookingId}/items")
+    public ResponseEntity<List<BookingItemDTO>> getBookingItems(@PathVariable Long bookingId) {
+        log.info("Received {} {}", "GET", "/api/bookings/" + bookingId + "/items");
+        assertOwnerOrAdmin(bookingService.findById(bookingId).getUserId());
+        log.info("Returning {} for {} {}", 200, "GET", "/api/bookings/" + bookingId + "/items");
+        return ResponseEntity.ok(bookingService.getBookingItemDTOs(bookingId));
+    }
 }
