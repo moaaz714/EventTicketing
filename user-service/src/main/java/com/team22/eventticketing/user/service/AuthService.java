@@ -78,7 +78,14 @@ public class AuthService {
                 Role.ATTENDEE
         );
         user.setStatus(UserStatus.ACTIVE);
-        userRepository.save(user);
+
+        try {
+            user = userRepository.save(user);
+        } catch (Exception e) {
+            // Sequence out of sync — reset it and retry
+            userRepository.resetSequence();
+            user = userRepository.save(user);
+        }
 
         // e) MongoDB logging
         notifyObservers("REGISTERED", Map.of("userId", user.getId()));

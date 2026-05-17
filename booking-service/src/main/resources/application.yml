@@ -3,13 +3,27 @@ spring:
     error:
       include-message: always
   datasource:
-    url: jdbc:postgresql://postgres:5432/eventticketingdb
+    ##jdbc:postgresql://postgres:5432/eventticketingdb
+    url: jdbc:postgresql://booking-postgres:5432/etdb-bookings
     username: postgres
     password: postgres
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
+  feign:
+    event-service:
+      url: http://event-service:8080
+    user-service:
+      url: http://user-service:8080
+    ticket-service:
+      url: http://ticket-service:8080
+    booking-service:
+      url: http://booking-service:8080
+    sales-service:
+      url: http://sales-service:8080
+
+
   data:
     redis:
       host: redis
@@ -22,7 +36,15 @@ spring:
     authentication:
       username: neo4j
       password: neo4jpass
-
+## exposing the endpoints of the actuator and the prometheus
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    prometheus:
+      enabled: true
 jwt:
   secret: ${JWT_SECRET:24966c8a763b3a3f7f264cefb93d95159184e8c5e2af5c94e05387371d47a3fd=}
   expiration: ${JWT_EXPIRATION_MS:86400000}

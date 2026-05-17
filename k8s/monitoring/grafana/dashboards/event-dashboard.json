@@ -7,7 +7,7 @@
   "links": [],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["event-service", "eventticketing"],
+  "tags": ["event-service", "eventticketing", "logql", "promql"],
   "templating": { "list": [] },
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
@@ -19,106 +19,81 @@
     {
       "id": 1,
       "title": "Error Rate (errors per minute)",
-      "description": "Count of ERROR-level log lines from event-service per minute. Spike detection — sudden increases indicate event creation, status update, or Elasticsearch sync failures.",
+      "description": "Count of ERROR-level log lines from event-service per minute.",
       "type": "timeseries",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "red" },
-          "custom": { "lineWidth": 1, "fillOpacity": 10 },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "single", "sort": "none" }
-      },
       "targets": [
         {
-          "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\", level=\"ERROR\"}[1m]))",
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\", level=\"ERROR\"} | json [1m]))",
           "legendFormat": "errors/min",
-          "queryType": "range",
           "refId": "A"
         }
       ]
     },
     {
       "id": 2,
-      "title": "Observer Event Audit (INDEXED / EVENT_STATUS_UPDATED / SESSION_VERIFIED)",
-      "description": "Log lines emitted by the MongoEventLogger observer for event-service. Shows INDEXED (Elasticsearch sync), EVENT_STATUS_UPDATED, SESSION_VERIFIED, and DASHBOARD_VIEWED actions.",
-      "type": "logs",
+      "title": "Read Endpoint Activity (Slice 4)",
+      "description": "Tracks logs related to the two S2-READ-DB endpoints: avg-capacity and venue-coords.",
+      "type": "timeseries",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
-      },
       "targets": [
         {
-          "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "{app=\"eventticketing\", service=\"event-service\"} |~ \"INDEXED|EVENT_STATUS_UPDATED|SESSION_VERIFIED|DASHBOARD_VIEWED\"",
-          "queryType": "range",
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\"} | json | message =~ \".*avg.*capacity.*|.*Average.*capacity.*\" [5m]))",
+          "legendFormat": "avg-capacity reads",
           "refId": "A"
+        },
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\"} | json | message =~ \".*venue.*coords.*|.*Venue.*coordinates.*\" [5m]))",
+          "legendFormat": "venue-coords reads",
+          "refId": "B"
         }
       ]
     },
     {
       "id": 3,
-      "title": "Feign Call Outcomes",
-      "description": "Log lines for successful Feign responses and FeignException catches from event-service. Detects when booking-service or ticket-service is degraded (used by S2-F12 dashboard enrichment).",
-      "type": "logs",
+      "title": "Feign Call Outcomes (Slice 5)",
+      "description": "Successful Feign responses vs FeignException catches.",
+      "type": "timeseries",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
-      },
       "targets": [
         {
-          "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "{app=\"eventticketing\", service=\"event-service\"} |~ \"Feign|FeignException\"",
-          "queryType": "range",
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\"} | json | message =~ \".*reachable.*\" [5m]))",
+          "legendFormat": "Feign success",
           "refId": "A"
+        },
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\"} | json | message =~ \".*unavailable.*|.*Feign.*failed.*|.*temporarily unavailable.*\" [5m]))",
+          "legendFormat": "Feign failures",
+          "refId": "B"
         }
       ]
     },
     {
       "id": 4,
-      "title": "HTTP Request Rate (req/s per endpoint)",
-      "description": "Requests per second to event-service endpoints, grouped by method and URI. Shows which endpoints (search, dashboard, revenue, status update) are under the most load.",
-      "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Observer Event Audit",
+      "description": "INDEXED, EVENT_STATUS_UPDATED, SESSION_VERIFIED, DASHBOARD_VIEWED actions.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 1, "fillOpacity": 10 },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "{app=\"eventticketing\", service=\"event-service\"} |~ \"INDEXED|EVENT_STATUS_UPDATED|SESSION_VERIFIED|DASHBOARD_VIEWED\"",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "HTTP Request Rate (req/s)",
+      "description": "Requests per second to event-service endpoints, grouped by method and URI.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
           "expr": "sum by(method, uri) (rate(http_server_requests_seconds_count{job=\"event-service\"}[5m]))",
           "legendFormat": "{{method}} {{uri}}",
           "refId": "A"
@@ -126,39 +101,24 @@
       ]
     },
     {
-      "id": 5,
-      "title": "HTTP Latency Percentiles (P50 / P95 / P99)",
-      "description": "Request latency percentiles for event-service endpoints. Identifies slow endpoints — particularly GET /api/events/{id}/dashboard (S2-F12) which aggregates data via cross-service queries.",
+      "id": 6,
+      "title": "HTTP Latency (P50/P95/P99)",
+      "description": "Request latency percentiles for event-service endpoints.",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 1, "fillOpacity": 10 },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "histogram_quantile(0.50, sum by(le, uri) (rate(http_server_requests_seconds_bucket{job=\"event-service\"}[5m])))",
           "legendFormat": "P50 {{uri}}",
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "histogram_quantile(0.95, sum by(le, uri) (rate(http_server_requests_seconds_bucket{job=\"event-service\"}[5m])))",
           "legendFormat": "P95 {{uri}}",
           "refId": "B"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "histogram_quantile(0.99, sum by(le, uri) (rate(http_server_requests_seconds_bucket{job=\"event-service\"}[5m])))",
           "legendFormat": "P99 {{uri}}",
           "refId": "C"
@@ -166,33 +126,19 @@
       ]
     },
     {
-      "id": 6,
+      "id": 7,
       "title": "JVM Heap Usage",
-      "description": "JVM heap memory used by event-service over time. Alerts on memory pressure before OOM — watch for sustained growth approaching max heap.",
+      "description": "JVM heap memory used by event-service over time.",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 1, "fillOpacity": 10 },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "jvm_memory_used_bytes{job=\"event-service\", area=\"heap\"}",
           "legendFormat": "heap used",
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "jvm_memory_max_bytes{job=\"event-service\", area=\"heap\"}",
           "legendFormat": "heap max",
           "refId": "B"
