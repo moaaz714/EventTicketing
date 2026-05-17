@@ -11,20 +11,9 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
-  feign:
-    event-service:
-      url: http://event-service:8080
-    user-service:
-      url: http://user-service:8080
-    ticket-service:
-      url: http://ticket-service:8080
-    booking-service:
-      url: http://booking-service:8080
-    sales-service:
-      url: http://sales-service:8080
-
-
   data:
+    rest:
+      base-path: /data
     redis:
       host: redis
       port: 6379
@@ -56,3 +45,15 @@ management:
 jwt:
   secret: ${JWT_SECRET:24966c8a763b3a3f7f264cefb93d95159184e8c5e2af5c94e05387371d47a3fd=}
   expiration: ${JWT_EXPIRATION_MS:86400000}
+
+feign:
+  event-service:
+    url: http://event-service:8080
+  user-service:
+    url: http://user-service:8080
+  ticket-service:
+    url: http://ticket-service:8080
+  booking-service:
+    url: http://booking-service:8080
+  sales-service:
+    url: http://sales-service:8080
