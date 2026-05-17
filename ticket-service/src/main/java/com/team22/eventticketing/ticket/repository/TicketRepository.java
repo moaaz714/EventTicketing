@@ -80,8 +80,6 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
     List<Ticket> findByBookingIdAndStatus(Long bookingId, TicketStatus status);
 
-    List<Ticket> findByEventIdAndStatus(Long eventId, TicketStatus status);
-
     /**
      * Find a ticket by its unique generated code.
      */

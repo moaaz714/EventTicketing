@@ -12,11 +12,8 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMQConfig {
 
     public static final String TICKET_EVENTS_EXCHANGE  = "ticket.events";
-    public static final String EVENT_EVENTS_EXCHANGE   = "event.events";
     public static final String BOOKING_EVENTS_EXCHANGE = "booking.events";
 
-    public static final String EVENT_LISTENER_QUEUE   = "ticket.event-listener";
-    public static final String EVENT_LISTENER_DLQ     = "ticket.event-listener.dlq";
     public static final String BOOKING_LISTENER_QUEUE = "ticket.booking.saga-listener";
     public static final String BOOKING_LISTENER_DLQ   = "ticket.booking.saga-listener.dlq";
 
@@ -26,34 +23,8 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public TopicExchange eventEventsExchange() {
-        return new TopicExchange(EVENT_EVENTS_EXCHANGE);
-    }
-
-    @Bean
     public TopicExchange bookingEventsExchange() {
         return new TopicExchange(BOOKING_EVENTS_EXCHANGE);
-    }
-
-    @Bean
-    public Queue eventListenerQueue() {
-        return QueueBuilder.durable(EVENT_LISTENER_QUEUE)
-                .withArgument("x-dead-letter-exchange", EVENT_LISTENER_DLQ)
-                .withArgument("x-dead-letter-routing-key", EVENT_LISTENER_DLQ)
-                .build();
-    }
-
-    @Bean
-    public Queue eventListenerDLQ() {
-        return QueueBuilder.durable(EVENT_LISTENER_DLQ).build();
-    }
-
-    @Bean
-    public Binding eventListenerBinding(Queue eventListenerQueue,
-                                        TopicExchange eventEventsExchange) {
-        return BindingBuilder.bind(eventListenerQueue)
-                .to(eventEventsExchange)
-                .with("event.#");
     }
 
     @Bean
