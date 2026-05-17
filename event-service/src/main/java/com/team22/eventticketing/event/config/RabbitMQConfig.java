@@ -1,7 +1,7 @@
 package com.team22.eventticketing.event.config;
 
 import org.springframework.amqp.core.*;
-import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
+import org.springframework.amqp.support.converter.JacksonJsonMessageConverter; // Using your preferred import
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,45 +9,30 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMQConfig {
 
-    // ==========================================
-    // JSON CONVERTER (Required for Java Records)
-    // ==========================================
     @Bean
     public MessageConverter jsonMessageConverter() {
-        return new JacksonJsonMessageConverter();
+        return new JacksonJsonMessageConverter(); // Keeping your preferred converter
     }
 
-    // ==========================================
-    // 1. EXCHANGES
-    // ==========================================
-
-    // Producer Exchange (S2-EVENTS requirement)
+    // --- EXCHANGES ---
     @Bean
     public TopicExchange eventExchange() {
+        // Slice 5: Used for publishing event.status-changed
         return new TopicExchange("event.events");
     }
 
-    // Consumer Exchange Reference (Where your listener gets messages from)
     @Bean
     public TopicExchange bookingExchange() {
+        // Slice 5: Used for listening to booking.placed, completed, etc.
         return new TopicExchange("booking.events");
     }
 
-    // Dead Letter Exchange
     @Bean
     public TopicExchange deadLetterExchange() {
         return new TopicExchange("event.dlx");
     }
 
-    // ==========================================
-    // 2. QUEUES (With DLQ wiring per rubric)
-    // ==========================================
-
-    @Bean
-    public Queue sagaListenerDlq() {
-        return QueueBuilder.durable("event.booking.saga-listener.dlq").build();
-    }
-
+    // --- QUEUES ---
     @Bean
     public Queue sagaListenerQueue() {
         return QueueBuilder.durable("event.booking.saga-listener")
@@ -56,11 +41,12 @@ public class RabbitMQConfig {
                 .build();
     }
 
-    // ==========================================
-    // 3. BINDINGS
-    // ==========================================
+    @Bean
+    public Queue sagaListenerDlq() {
+        return QueueBuilder.durable("event.booking.saga-listener.dlq").build();
+    }
 
-    // Bind DLQ to DLX
+    // --- BINDINGS (For your SagaListener to work) ---
     @Bean
     public Binding bindDlq() {
         return BindingBuilder.bind(sagaListenerDlq())
@@ -68,7 +54,6 @@ public class RabbitMQConfig {
                 .with("event.booking.saga-listener.dlq");
     }
 
-    // Bind Listener Queue to Booking events
     @Bean
     public Binding bindPlaced() {
         return BindingBuilder.bind(sagaListenerQueue())

@@ -44,21 +44,6 @@ public class eventController {
         return "OK";
     }
 
-//    // ─── TEMP ONLY: Reindex PostgreSQL Events into Elasticsearch ─────────────────
-//    // Use this only for local testing before S2-F11 exists.
-//    // Do NOT commit/push this temporary endpoint.
-//
-//    @RequestMapping(value = "/temp/reindex", method = {RequestMethod.GET, RequestMethod.POST})
-//    public ResponseEntity<Map<String, Object>> tempReindexEvents() {
-//        int count = eventService.tempReindexEventsToElasticsearch();
-//
-//        Map<String, Object> response = new HashMap<>();
-//        response.put("message", "Temporary Elasticsearch reindex completed");
-//        response.put("indexedEvents", count);
-//
-//        return ResponseEntity.ok(response);
-//    }
-
     // [S2-F4] Update Event Status
     @PutMapping("/{id}/status")
     public ResponseEntity<Void> updateEventStatus(
@@ -291,17 +276,5 @@ public class eventController {
     @GetMapping("/{id}/dashboard")
     public ResponseEntity<EventDashboardDTO> getDashboard(@PathVariable Long id) {
         return ResponseEntity.ok(eventService.getEventDashboard(id));
-    }
-
-    // S3-F3 Contract: GET /api/events/{id}/sessions/avg-capacity
-    @GetMapping("/{id}/sessions/avg-capacity")
-    public ResponseEntity<Map<String, Double>> getAverageSessionCapacity(@PathVariable Long id) {
-        return ResponseEntity.ok(eventService.getAverageSessionCapacity(id));
-    }
-
-    // S4-F3 Contract: GET /api/events/{id}/venue-coords
-    @GetMapping("/{id}/venue-coords")
-    public ResponseEntity<Map<String, Double>> getVenueCoords(@PathVariable Long id) {
-        return ResponseEntity.ok(eventService.getVenueCoords(id));
     }
 }

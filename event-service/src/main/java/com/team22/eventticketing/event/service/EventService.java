@@ -153,38 +153,40 @@ public class EventService {
     // ─── [S2-F4] Update Event Status ──────────────────────────────
     @Transactional
     public void updateEventStatus(Long eventId, UpdateEventStatusRequest request) {
-        if (request == null || request.getStatus() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required");
-        }
-
+        // 1. Fetch Event
         Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found with id: " + eventId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
-        EventStatus oldStatus = event.getStatus();
-        EventStatus newStatus = request.getStatus();
+        // 2. Capture the old status BEFORE making any changes (Required for Payload)
+        String oldStatus = event.getStatus() != null ? event.getStatus().name() : "UNKNOWN";
+        String newStatus = request.getStatus().name();
 
-        if (newStatus == EventStatus.CANCELLED) {
-            int activeCount = 0;
-            try {
-                activeCount = bookingServiceClient.getEventActiveBookingCount(eventId);
-            } catch (Exception e) {
-                System.out.println("⚠️ MOCKING BOOKING SERVICE: Forcing activeCount to 1 for Postman testing.");
-                activeCount = 1;
-            }
+        // 3. Synchronous Feign Check (S2-F4)
+        if (request.getStatus() == EventStatus.CANCELLED) {
+            int activeCount = bookingServiceClient.getEventActiveBookingCount(eventId);
+//              int activeCount =0;
+
+
             if (activeCount > 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot cancel event because active bookings exist for this event");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot cancel event with active bookings");
             }
         }
 
-        event.setStatus(newStatus);
+        // 4. Local DB Update
+        event.setStatus(request.getStatus());
         eventRepository.save(event);
 
-        syncToElasticsearch(event, "auto_crud_update");
-        cacheEviction.evictEntityAndFeatures("event", eventId, "S2-F1", "S2-F5", "S2-F6", "S2-F9", "S2-F10");
-        notifyObservers("EVENT_STATUS_UPDATED", Map.of("eventId", eventId, "status", newStatus.name()));
+        // 5. Asynchronous Notification (Slice 5)
+        // Use the exact DTO from your contracts module to ensure the payload matches the rubric!
+        EventStatusChangedEvent statusEvent = new EventStatusChangedEvent(
+                event.getId(),
+                oldStatus,
+                newStatus
+        );
 
-        EventStatusChangedEvent eventMessage = new EventStatusChangedEvent(eventId, oldStatus.name(), newStatus.name());
-        rabbitTemplate.convertAndSend("event.events", "event.status-changed", eventMessage);
+        // Publish to the TopicExchange: event.events
+        // Routing Key: event.status-changed
+        rabbitTemplate.convertAndSend("event.events", "event.status-changed", statusEvent);
     }
 
     @Cacheable(cacheNames = "event-service::S2-F6", key = "#limit")
