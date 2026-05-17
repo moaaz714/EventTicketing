@@ -18,14 +18,14 @@ import com.team22.eventticketing.ticket.messaging.TicketEventPublisher;
 import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 
-import dto.EventDTO;
-import dto.EventTicketSummaryDTO;
-import events.TicketIssuedEvent;
-import events.TicketStatusChangedEvent;
-import feign.BookingServiceClient;
-import feign.EventServiceClient;
-import dto.VenueCoordsDTO;
-import dto.BookingDTO;
+import com.team22.eventticketing.contracts.dto.EventDTO;
+import com.team22.eventticketing.contracts.dto.EventTicketSummaryDTO;
+import com.team22.eventticketing.contracts.events.TicketIssuedEvent;
+import com.team22.eventticketing.contracts.events.TicketStatusChangedEvent;
+import com.team22.eventticketing.contracts.feign.BookingServiceClient;
+import com.team22.eventticketing.contracts.feign.EventServiceClient;
+import com.team22.eventticketing.contracts.dto.VenueCoordsDTO;
+import com.team22.eventticketing.contracts.dto.BookingDTO;
 
 
 import java.util.HashMap;

@@ -1,9 +1,9 @@
 package com.team22.eventticketing.ticket.messaging;
 
 import com.team22.eventticketing.ticket.config.RabbitConfig;
-import events.TicketCancelledEvent;
-import events.TicketIssuedEvent;
-import events.TicketStatusChangedEvent;
+import com.team22.eventticketing.contracts.events.TicketCancelledEvent;
+import com.team22.eventticketing.contracts.events.TicketIssuedEvent;
+import com.team22.eventticketing.contracts.events.TicketStatusChangedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
