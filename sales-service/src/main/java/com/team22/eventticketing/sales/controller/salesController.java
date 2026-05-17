@@ -198,4 +198,15 @@ public class salesController {
                 id, body.get("reason"));
         return ResponseEntity.ok(result);
     }
+
+    // ─── NEW S5-READ-DB: GET /api/sales/user/{userId}/total ───────────────────────
+    @GetMapping("/user/{userId}/total")
+    public ResponseEntity<java.math.BigDecimal> getUserTotal(
+            @PathVariable Long userId,
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        LocalDateTime start = LocalDate.parse(startDate).atStartOfDay();
+        LocalDateTime end = LocalDate.parse(endDate).atTime(23, 59, 59);
+        return ResponseEntity.ok(ticketSaleService.getUserTotal(userId, start, end));
+    }
 }
