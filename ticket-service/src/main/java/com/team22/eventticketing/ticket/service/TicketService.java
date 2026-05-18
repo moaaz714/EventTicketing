@@ -16,6 +16,7 @@ import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.messaging.TicketEventPublisher;
 import com.team22.eventticketing.ticket.observer.EntityObserver;
+import com.team22.eventticketing.ticket.repository.BookingEventMappingRepository;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 
 import com.team22.eventticketing.contracts.dto.EventDTO;
@@ -54,15 +55,28 @@ public class TicketService {
     private final BookingServiceClient bookingServiceClient;
     private final EventServiceClient eventServiceClient;
     private final TicketEventPublisher ticketEventPublisher;
+    private final BookingEventMappingRepository bookingEventMappingRepository;
 
     public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction,
             BookingServiceClient bookingServiceClient, EventServiceClient eventServiceClient,
-            TicketEventPublisher ticketEventPublisher) {
+            TicketEventPublisher ticketEventPublisher,
+            BookingEventMappingRepository bookingEventMappingRepository) {
         this.ticketRepository = ticketRepository;
         this.cacheEviction = cacheEviction;
         this.bookingServiceClient = bookingServiceClient;
         this.eventServiceClient = eventServiceClient;
         this.ticketEventPublisher = ticketEventPublisher;
+        this.bookingEventMappingRepository = bookingEventMappingRepository;
+    }
+
+    private Long resolveEventId(Long bookingId, BookingDTO bookingFromFeign) {
+        return bookingEventMappingRepository.findById(bookingId)
+                .map(m -> m.getEventId())
+                .orElseGet(() -> {
+                    Long feignEventId = bookingFromFeign.eventId();
+                    if (feignEventId == null) return null;
+                    return feignEventId;
+                });
     }
 
     public void register(EntityObserver observer) {
@@ -157,8 +171,9 @@ public class TicketService {
                     "Booking not found with id: " + bookingId);
         }
 
-        // NEW M3 FIELD
-        Long eventId = booking.eventId();
+        // M3: resolve eventId from booking.placed mapping (Strategy A) — fall back to
+        // the Feign response if the mapping hasn't been consumed yet
+        Long eventId = resolveEventId(bookingId, booking);
 
         // duplicate ticket codes inside batch
         Set<String> codesInBatch = new HashSet<>();
@@ -286,8 +301,9 @@ public class TicketService {
 
         ticket.setBookingId(bookingId);
 
-        // NEW M3 FIELD
-        ticket.setEventId(booking.eventId());
+        // M3: resolve eventId from booking.placed mapping (Strategy A) — fall back to
+        // the Feign response if the mapping hasn't been consumed yet
+        ticket.setEventId(resolveEventId(bookingId, booking));
 
         ticket.setAttendeeName(attendeeName);
         ticket.setTicketCode(ticketCode);
