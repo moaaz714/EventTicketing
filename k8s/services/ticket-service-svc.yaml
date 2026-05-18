@@ -4,6 +4,7 @@ metadata:
   name: ticket-service
   namespace: eventticketing
 spec:
+  type: ClusterIP
   selector:
     app: ticket-service
   ports:

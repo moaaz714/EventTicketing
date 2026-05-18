@@ -1,10 +1,10 @@
 package com.team22.eventticketing.sales.messaging.publishers;
 
 import com.team22.eventticketing.sales.config.PaymentEventConfig;
-import events.PaymentCompletedEvent;
-import events.PaymentFailedEvent;
-import events.PaymentInitiatedEvent;
-import events.PaymentRefundedEvent;
+import com.team22.eventticketing.contracts.events.PaymentCompletedEvent;
+import com.team22.eventticketing.contracts.events.PaymentFailedEvent;
+import com.team22.eventticketing.contracts.events.PaymentInitiatedEvent;
+import com.team22.eventticketing.contracts.events.PaymentRefundedEvent;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 

@@ -1,5 +1,8 @@
 package com.team22.eventticketing.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class UserBookingSummaryDTO {
 
     private Long userId;
@@ -9,6 +12,8 @@ public class UserBookingSummaryDTO {
     private Long cancelledBookings;
     private Double totalSpent;
     private Double averageBookingAmount;
+
+    public UserBookingSummaryDTO() {}
 
     public UserBookingSummaryDTO(Builder builder) {
         this.userId = builder.userId;
@@ -53,4 +58,12 @@ public class UserBookingSummaryDTO {
     public Long getCancelledBookings() { return cancelledBookings; }
     public Double getTotalSpent() { return totalSpent; }
     public Double getAverageBookingAmount() { return averageBookingAmount; }
+
+    public void setUserId(Long userId) { this.userId = userId; }
+    public void setName(String name) { this.name = name; }
+    public void setTotalBookings(Long totalBookings) { this.totalBookings = totalBookings; }
+    public void setCompletedBookings(Long completedBookings) { this.completedBookings = completedBookings; }
+    public void setCancelledBookings(Long cancelledBookings) { this.cancelledBookings = cancelledBookings; }
+    public void setTotalSpent(Double totalSpent) { this.totalSpent = totalSpent; }
+    public void setAverageBookingAmount(Double averageBookingAmount) { this.averageBookingAmount = averageBookingAmount; }
 }

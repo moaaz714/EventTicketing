@@ -75,7 +75,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         authentication.setDetails(ctx.getUserId());
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        filterChain.doFilter(request, response);
+        String rawAuth = request.getHeader("Authorization");
+        AuthTokenHolder.set(rawAuth);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            AuthTokenHolder.clear();
+        }
     }
 
     private String resolveRequiredRole(HttpServletRequest request) {
