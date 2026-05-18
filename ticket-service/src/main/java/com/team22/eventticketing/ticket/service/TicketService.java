@@ -16,6 +16,7 @@ import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
 import com.team22.eventticketing.ticket.messaging.TicketEventPublisher;
 import com.team22.eventticketing.ticket.observer.EntityObserver;
+import com.team22.eventticketing.ticket.repository.BookingEventMappingRepository;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 
 import com.team22.eventticketing.contracts.dto.EventDTO;
@@ -52,1159 +53,1110 @@ import java.util.stream.Collectors;
 @Service
 public class TicketService {
 
-    private final TicketRepository ticketRepository;
-    private final CacheEvictionService cacheEviction;
-    private final List<EntityObserver> observers = new ArrayList<>();
-    private final BookingServiceClient bookingServiceClient;
-    private final EventServiceClient eventServiceClient;
-    private static final Logger log =
-            LoggerFactory.getLogger(TicketService.class);
-    private final TicketEventPublisher ticketEventPublisher;
+        private final TicketRepository ticketRepository;
+        private final CacheEvictionService cacheEviction;
+        private final List<EntityObserver> observers = new ArrayList<>();
+        private final BookingServiceClient bookingServiceClient;
+        private final EventServiceClient eventServiceClient;
+        private static final Logger log = LoggerFactory.getLogger(TicketService.class);
+        private final TicketEventPublisher ticketEventPublisher;
+        private final BookingEventMappingRepository bookingEventMappingRepository;
 
-    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction,
-            BookingServiceClient bookingServiceClient, EventServiceClient eventServiceClient,
-            TicketEventPublisher ticketEventPublisher) {
-        this.ticketRepository = ticketRepository;
-        this.cacheEviction = cacheEviction;
-        this.bookingServiceClient = bookingServiceClient;
-        this.eventServiceClient = eventServiceClient;
-        this.ticketEventPublisher = ticketEventPublisher;
-    }
-
-    public void register(EntityObserver observer) {
-        observers.add(observer);
-    }
-
-    public void unregister(EntityObserver observer) {
-        observers.remove(observer);
-    }
-
-    private void notifyObservers(String action, Object payload) {
-        for (EntityObserver o : observers)
-            o.onEvent(action, payload);
-    }
-
-    // ─── CRUD
-    // ─────────────────────────────────────────────────────────────────────
-    @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
-    public Ticket createTicket(Ticket ticket) {
-        long start = System.currentTimeMillis();
-
-        Ticket saved = ticketRepository.save(ticket);
-
-        MDC.put("ticketId", saved.getId().toString());
-
-        log.info(
-                "{} {} saved with status={}",
-                "Ticket",
-                saved.getId(),
-                saved.getStatus()
-        );
-
-        notifyObservers("TICKET_CREATED", Map.of("ticketId", saved.getId()));
-
-        long elapsed = System.currentTimeMillis() - start;
-
-        if (elapsed > 1000) {
-            log.warn(
-                    "Slow {} took {}ms",
-                    "createTicket",
-                    elapsed
-            );
+        public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction,
+                        BookingServiceClient bookingServiceClient, EventServiceClient eventServiceClient,
+                        TicketEventPublisher ticketEventPublisher,
+                        BookingEventMappingRepository bookingEventMappingRepository) {
+                this.ticketRepository = ticketRepository;
+                this.cacheEviction = cacheEviction;
+                this.bookingServiceClient = bookingServiceClient;
+                this.eventServiceClient = eventServiceClient;
+                this.ticketEventPublisher = ticketEventPublisher;
+                this.bookingEventMappingRepository = bookingEventMappingRepository;
         }
 
-        MDC.remove("ticketId");
-
-        return saved;
-    }
-
-    @Cacheable(cacheNames = "ticket-service::ticket", key = "#id")
-    public Ticket getTicketById(Long id) {
-        MDC.put("ticketId", id.toString());
-
-        Ticket ticket = ticketRepository.findById(id)
-                .orElseThrow(
-                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket not found with id: " + id));
-
-        log.info(
-                "TICKET_FOUND ticketId={} status={}",
-                ticket.getId(),
-                ticket.getStatus()
-        );
-
-        MDC.remove("ticketId");
-
-        return ticket;
-    }
-
-    public List<Ticket> getAllTickets() {
-        List<Ticket> tickets = ticketRepository.findAll(); // list — NOT cached
-
-        log.info(
-                "TICKETS_LISTED count={}",
-                tickets.size()
-        );
-
-        return tickets;
-    }
-
-    @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
-    public Ticket updateTicket(Long id, Ticket updated) {
-        long start = System.currentTimeMillis();
-
-        MDC.put("ticketId", id.toString());
-
-        Ticket existing = getTicketById(id);
-        TicketStatus previousStatus = existing.getStatus();
-
-        if (updated.getBookingId() != null)
-            existing.setBookingId(updated.getBookingId());
-        if (updated.getAttendeeName() != null)
-            existing.setAttendeeName(updated.getAttendeeName());
-        if (updated.getTicketCode() != null)
-            existing.setTicketCode(updated.getTicketCode());
-        if (updated.getStatus() != null)
-            existing.setStatus(updated.getStatus());
-        if (updated.getIssuedAt() != null)
-            existing.setIssuedAt(updated.getIssuedAt());
-        if (updated.getMetadata() != null)
-            existing.setMetadata(updated.getMetadata());
-
-        Ticket saved = ticketRepository.save(existing);
-
-        log.info(
-                "TICKET_UPDATED ticketId={} status={}",
-                saved.getId(),
-                saved.getStatus()
-        );
-
-        cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9", "S4-F10");
-
-        if (saved.getStatus() != null && saved.getStatus() != previousStatus) {
-            ticketEventPublisher.publishTicketStatusChanged(
-                    new TicketStatusChangedEvent(saved.getId(), saved.getBookingId(), saved.getStatus().name()));
+        private Long resolveEventId(Long bookingId, BookingDTO bookingFromFeign) {
+                return bookingEventMappingRepository.findById(bookingId)
+                                .map(m -> m.getEventId())
+                                .orElseGet(() -> {
+                                        Long feignEventId = bookingFromFeign.eventId();
+                                        if (feignEventId == null)
+                                                return null;
+                                        return feignEventId;
+                                });
         }
 
-        notifyObservers("TICKET_UPDATED", Map.of("ticketId", saved.getId()));
-
-        long elapsed = System.currentTimeMillis() - start;
-
-        if (elapsed > 1000) {
-            log.warn(
-                    "Slow {} took {}ms",
-                    "updateTicket",
-                    elapsed
-            );
+        public void register(EntityObserver observer) {
+                observers.add(observer);
         }
 
-        MDC.remove("ticketId");
-
-        return saved;
-    }
-
-    public void deleteTicket(Long id) {
-        long start = System.currentTimeMillis();
-
-        MDC.put("ticketId", id.toString());
-
-        Ticket existing = getTicketById(id);
-        ticketRepository.delete(existing);
-
-        log.info(
-                "TICKET_DELETED ticketId={}",
-                id
-        );
-
-        cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9", "S4-F10");
-        notifyObservers("TICKET_DELETED", Map.of("ticketId", id));
-
-        long elapsed = System.currentTimeMillis() - start;
-
-        if (elapsed > 1000) {
-            log.warn(
-                    "Slow {} took {}ms",
-                    "deleteTicket",
-                    elapsed
-            );
+        public void unregister(EntityObserver observer) {
+                observers.remove(observer);
         }
 
-        MDC.remove("ticketId");
-    }
-
-    @Transactional
-    public int batchIssueTickets(BatchTicketRequestDTO request) {
-
-        long start = System.currentTimeMillis();
-
-        Long bookingId = request.getBookingId();
-
-        MDC.put("bookingId", bookingId.toString());
-
-        List<TicketItemDTO> items = request.getTickets();
-
-        log.info(
-                "Calling {}.{} with args={}",
-                "BookingServiceClient",
-                "getBooking",
-                bookingId
-        );
-
-        BookingDTO booking;
-
-        try {
-
-            booking = bookingServiceClient.getBooking(bookingId);
-
-            log.info(
-                    "{}.{} returned successfully",
-                    "BookingServiceClient",
-                    "getBooking"
-            );
-
-        } catch (Exception e) {
-
-            log.warn(
-                    "Feign call to {} failed: {}",
-                    "booking-service",
-                    e.getMessage()
-            );
-
-            MDC.remove("bookingId");
-
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Booking not found with id: " + bookingId);
+        private void notifyObservers(String action, Object payload) {
+                for (EntityObserver o : observers)
+                        o.onEvent(action, payload);
         }
 
-        Long eventId = booking.eventId();
+        // ─── CRUD
+        // ─────────────────────────────────────────────────────────────────────
+        @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
+        public Ticket createTicket(Ticket ticket) {
+                long start = System.currentTimeMillis();
 
-        MDC.put("eventId", eventId.toString());
+                Ticket saved = ticketRepository.save(ticket);
 
-        Set<String> codesInBatch = new HashSet<>();
+                MDC.put("ticketId", saved.getId().toString());
 
-        for (TicketItemDTO item : items) {
+                log.info(
+                                "{} {} saved with status={}",
+                                "Ticket",
+                                saved.getId(),
+                                saved.getStatus());
 
-            if (!codesInBatch.add(item.getTicketCode())) {
+                notifyObservers("TICKET_CREATED", Map.of("ticketId", saved.getId()));
 
-                log.warn(
-                        "DUPLICATE_BATCH_TICKET_CODE bookingId={} ticketCode={}",
-                        bookingId,
-                        item.getTicketCode()
-                );
+                long elapsed = System.currentTimeMillis() - start;
+
+                if (elapsed > 1000) {
+                        log.warn(
+                                        "Slow {} took {}ms",
+                                        "createTicket",
+                                        elapsed);
+                }
+
+                MDC.remove("ticketId");
+
+                return saved;
+        }
+
+        @Cacheable(cacheNames = "ticket-service::ticket", key = "#id")
+        public Ticket getTicketById(Long id) {
+                MDC.put("ticketId", id.toString());
+
+                Ticket ticket = ticketRepository.findById(id)
+                                .orElseThrow(
+                                                () -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                                "Ticket not found with id: " + id));
+
+                log.info(
+                                "TICKET_FOUND ticketId={} status={}",
+                                ticket.getId(),
+                                ticket.getStatus());
+
+                MDC.remove("ticketId");
+
+                return ticket;
+        }
+
+        public List<Ticket> getAllTickets() {
+                List<Ticket> tickets = ticketRepository.findAll(); // list — NOT cached
+
+                log.info(
+                                "TICKETS_LISTED count={}",
+                                tickets.size());
+
+                return tickets;
+        }
+
+        @CacheEvict(value = "ticket-service::S4-F10", allEntries = true)
+        public Ticket updateTicket(Long id, Ticket updated) {
+                long start = System.currentTimeMillis();
+
+                MDC.put("ticketId", id.toString());
+
+                Ticket existing = getTicketById(id);
+                TicketStatus previousStatus = existing.getStatus();
+
+                if (updated.getBookingId() != null)
+                        existing.setBookingId(updated.getBookingId());
+                if (updated.getAttendeeName() != null)
+                        existing.setAttendeeName(updated.getAttendeeName());
+                if (updated.getTicketCode() != null)
+                        existing.setTicketCode(updated.getTicketCode());
+                if (updated.getStatus() != null)
+                        existing.setStatus(updated.getStatus());
+                if (updated.getIssuedAt() != null)
+                        existing.setIssuedAt(updated.getIssuedAt());
+                if (updated.getMetadata() != null)
+                        existing.setMetadata(updated.getMetadata());
+
+                Ticket saved = ticketRepository.save(existing);
+
+                log.info(
+                                "TICKET_UPDATED ticketId={} status={}",
+                                saved.getId(),
+                                saved.getStatus());
+
+                cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9",
+                                "S4-F10");
+
+                if (saved.getStatus() != null && saved.getStatus() != previousStatus) {
+                        ticketEventPublisher.publishTicketStatusChanged(
+                                        new TicketStatusChangedEvent(saved.getId(), saved.getBookingId(),
+                                                        saved.getStatus().name()));
+                }
+
+                notifyObservers("TICKET_UPDATED", Map.of("ticketId", saved.getId()));
+
+                long elapsed = System.currentTimeMillis() - start;
+
+                if (elapsed > 1000) {
+                        log.warn(
+                                        "Slow {} took {}ms",
+                                        "updateTicket",
+                                        elapsed);
+                }
+
+                MDC.remove("ticketId");
+
+                return saved;
+        }
+
+        public void deleteTicket(Long id) {
+                long start = System.currentTimeMillis();
+
+                MDC.put("ticketId", id.toString());
+
+                Ticket existing = getTicketById(id);
+                ticketRepository.delete(existing);
+
+                log.info(
+                                "TICKET_DELETED ticketId={}",
+                                id);
+
+                cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9",
+                                "S4-F10");
+                notifyObservers("TICKET_DELETED", Map.of("ticketId", id));
+
+                long elapsed = System.currentTimeMillis() - start;
+
+                if (elapsed > 1000) {
+                        log.warn(
+                                        "Slow {} took {}ms",
+                                        "deleteTicket",
+                                        elapsed);
+                }
+
+                MDC.remove("ticketId");
+        }
+
+        @Transactional
+        public int batchIssueTickets(BatchTicketRequestDTO request) {
+
+                long start = System.currentTimeMillis();
+
+                Long bookingId = request.getBookingId();
+
+                MDC.put("bookingId", bookingId.toString());
+
+                List<TicketItemDTO> items = request.getTickets();
+
+                log.info(
+                                "Calling {}.{} with args={}",
+                                "BookingServiceClient",
+                                "getBooking",
+                                bookingId);
+
+                BookingDTO booking;
+
+                try {
+
+                        booking = bookingServiceClient.getBooking(bookingId);
+
+                        log.info(
+                                        "{}.{} returned successfully",
+                                        "BookingServiceClient",
+                                        "getBooking");
+
+                } catch (Exception e) {
+
+                        log.warn(
+                                        "Feign call to {} failed: {}",
+                                        "booking-service",
+                                        e.getMessage());
+
+                        MDC.remove("bookingId");
+
+                        throw new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "Booking not found with id: " + bookingId);
+                }
+
+                // M3: resolve eventId from booking.placed mapping (Strategy A) — fall back to
+                // the Feign response if the mapping hasn't been consumed yet
+                Long eventId = resolveEventId(bookingId, booking);
+
+                MDC.put("eventId", eventId.toString());
+
+                Set<String> codesInBatch = new HashSet<>();
+
+                for (TicketItemDTO item : items) {
+
+                        if (!codesInBatch.add(item.getTicketCode())) {
+
+                                log.warn(
+                                                "DUPLICATE_BATCH_TICKET_CODE bookingId={} ticketCode={}",
+                                                bookingId,
+                                                item.getTicketCode());
+
+                                MDC.remove("bookingId");
+                                MDC.remove("eventId");
+
+                                throw new ResponseStatusException(
+                                                HttpStatus.BAD_REQUEST,
+                                                "Duplicate ticket code in batch: "
+                                                                + item.getTicketCode());
+                        }
+                }
+
+                for (String code : codesInBatch) {
+
+                        if (ticketRepository.existsByTicketCode(code)) {
+
+                                log.warn(
+                                                "EXISTING_TICKET_CODE_FOUND bookingId={} ticketCode={}",
+                                                bookingId,
+                                                code);
+
+                                MDC.remove("bookingId");
+                                MDC.remove("eventId");
+
+                                throw new ResponseStatusException(
+                                                HttpStatus.BAD_REQUEST,
+                                                "Ticket code already exists: " + code);
+                        }
+                }
+
+                LocalDateTime now = LocalDateTime.now();
+
+                List<Ticket> tickets = items.stream().map(item -> {
+
+                        Ticket ticket = new Ticket();
+
+                        ticket.setBookingId(bookingId);
+
+                        ticket.setEventId(eventId);
+
+                        ticket.setAttendeeName(item.getAttendeeName());
+
+                        ticket.setTicketCode(item.getTicketCode());
+
+                        ticket.setStatus(TicketStatus.VALID);
+
+                        ticket.setIssuedAt(now);
+
+                        ticket.setMetadata(item.getMetadata());
+
+                        return ticket;
+
+                }).toList();
+
+                List<Ticket> savedTickets = ticketRepository.saveAll(tickets);
+
+                log.info(
+                                "{} {} saved with status={}",
+                                "BatchTickets",
+                                bookingId,
+                                "VALID");
+
+                long elapsed = System.currentTimeMillis() - start;
+
+                if (elapsed > 1000) {
+
+                        log.warn(
+                                        "Slow {} took {}ms",
+                                        "batchIssueTickets",
+                                        elapsed);
+                }
+
+                cacheEviction.evictPattern("S4-F1");
+                cacheEviction.evictPattern("S4-F5");
+                cacheEviction.evictPattern("S4-F6");
+                cacheEviction.evictPattern("S4-F9");
+                cacheEviction.evictPattern("S4-F10");
+
+                for (Ticket t : savedTickets) {
+                        ticketEventPublisher.publishTicketIssued(
+                                        new TicketIssuedEvent(t.getId(), bookingId, t.getAttendeeName(),
+                                                        t.getTicketCode()));
+                }
+
+                notifyObservers(
+                                "TICKETS_BATCH_ISSUED",
+                                Map.of(
+                                                "bookingId", bookingId,
+                                                "count", savedTickets.size()));
 
                 MDC.remove("bookingId");
                 MDC.remove("eventId");
 
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Duplicate ticket code in batch: "
-                                + item.getTicketCode());
-            }
+                return tickets.size();
         }
 
-        for (String code : codesInBatch) {
+        @Cacheable(cacheNames = "ticket-service::S4-F1", key = "#bookingId")
+        public Ticket getLatestTicketByBooking(Long bookingId) {
 
-            if (ticketRepository.existsByTicketCode(code)) {
+                MDC.put("bookingId", bookingId.toString());
 
-                log.warn(
-                        "EXISTING_TICKET_CODE_FOUND bookingId={} ticketCode={}",
-                        bookingId,
-                        code
-                );
+                log.info(
+                                "Calling {}.{} with args={}",
+                                "BookingServiceClient",
+                                "getBooking",
+                                bookingId);
 
+                try {
+
+                        bookingServiceClient.getBooking(bookingId);
+
+                        log.info(
+                                        "{}.{} returned successfully",
+                                        "BookingServiceClient",
+                                        "getBooking");
+
+                } catch (Exception e) {
+
+                        log.warn(
+                                        "Feign call to {} failed: {}",
+                                        "booking-service",
+                                        e.getMessage());
+
+                        MDC.remove("bookingId");
+
+                        throw new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "Booking not found");
+                }
+
+                Ticket ticket = ticketRepository
+                                .findTopByBookingIdOrderByIssuedAtDesc(bookingId)
+                                .orElseThrow(
+                                                () -> new ResponseStatusException(
+                                                                HttpStatus.NOT_FOUND,
+                                                                "No tickets found for this booking"));
+
+                MDC.put("ticketId", ticket.getId().toString());
+
+                log.info(
+                                "LATEST_TICKET_FOUND bookingId={} ticketId={}",
+                                bookingId,
+                                ticket.getId());
+
+                MDC.remove("ticketId");
                 MDC.remove("bookingId");
-                MDC.remove("eventId");
 
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Ticket code already exists: " + code);
-            }
+                return ticket;
         }
 
-        LocalDateTime now = LocalDateTime.now();
-
-        List<Ticket> tickets = items.stream().map(item -> {
-
-            Ticket ticket = new Ticket();
-
-            ticket.setBookingId(bookingId);
-
-            ticket.setEventId(eventId);
-
-            ticket.setAttendeeName(item.getAttendeeName());
-
-            ticket.setTicketCode(item.getTicketCode());
-
-            ticket.setStatus(TicketStatus.VALID);
-
-            ticket.setIssuedAt(now);
-
-            ticket.setMetadata(item.getMetadata());
-
-            return ticket;
-
-        }).toList();
-
-        List<Ticket> savedTickets = ticketRepository.saveAll(tickets);
-
-        log.info(
-                "{} {} saved with status={}",
-                "BatchTickets",
-                bookingId,
-                "VALID"
-        );
-
-        long elapsed = System.currentTimeMillis() - start;
-
-        if (elapsed > 1000) {
-
-            log.warn(
-                    "Slow {} took {}ms",
-                    "batchIssueTickets",
-                    elapsed
-            );
-        }
-
-        cacheEviction.evictPattern("S4-F1");
-        cacheEviction.evictPattern("S4-F5");
-        cacheEviction.evictPattern("S4-F6");
-        cacheEviction.evictPattern("S4-F9");
-        cacheEviction.evictPattern("S4-F10");
-
-        for (Ticket t : savedTickets) {
-            ticketEventPublisher.publishTicketIssued(
-                    new TicketIssuedEvent(t.getId(), bookingId, t.getAttendeeName(), t.getTicketCode()));
-        }
-
-        notifyObservers(
-                "TICKETS_BATCH_ISSUED",
-                Map.of(
-                        "bookingId", bookingId,
-                        "count", savedTickets.size()));
-
-        MDC.remove("bookingId");
-        MDC.remove("eventId");
-
-        return tickets.size();
-    }
-
-
-    @Cacheable(cacheNames = "ticket-service::S4-F1", key = "#bookingId")
-    public Ticket getLatestTicketByBooking(Long bookingId) {
-
-        MDC.put("bookingId", bookingId.toString());
-
-        log.info(
-                "Calling {}.{} with args={}",
-                "BookingServiceClient",
-                "getBooking",
-                bookingId
-        );
-
-        try {
-
-            bookingServiceClient.getBooking(bookingId);
-
-            log.info(
-                    "{}.{} returned successfully",
-                    "BookingServiceClient",
-                    "getBooking"
-            );
-
-        } catch (Exception e) {
-
-            log.warn(
-                    "Feign call to {} failed: {}",
-                    "booking-service",
-                    e.getMessage()
-            );
-
-            MDC.remove("bookingId");
-
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Booking not found"
-            );
-        }
-
-        Ticket ticket = ticketRepository
-                .findTopByBookingIdOrderByIssuedAtDesc(bookingId)
-                .orElseThrow(
-                        () -> new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
-                                "No tickets found for this booking"
-                        )
-                );
-
-        MDC.put("ticketId", ticket.getId().toString());
-
-        log.info(
-                "LATEST_TICKET_FOUND bookingId={} ticketId={}",
-                bookingId,
-                ticket.getId()
-        );
-
-        MDC.remove("ticketId");
-        MDC.remove("bookingId");
-
-        return ticket;
-    }
-
-    // ─── [S4-F2] Issue Ticket (write) ────────────────────────────────────────────
-    public Ticket issueTicket(
-            Long bookingId,
-            String attendeeName,
-            String ticketCode,
-            Map<String, Object> metadata) {
-
-        MDC.put("bookingId", bookingId.toString());
-
-        log.info(
-                "Calling {}.{} with args={}",
-                "BookingServiceClient",
-                "getBooking",
-                bookingId
-        );
-
-        BookingDTO booking;
-
-        try {
-
-            booking = bookingServiceClient.getBooking(bookingId);
-
-            log.info(
-                    "{}.{} returned successfully",
-                    "BookingServiceClient",
-                    "getBooking"
-            );
-
-        } catch (Exception e) {
-
-            log.warn(
-                    "Feign call to {} failed: {}",
-                    "booking-service",
-                    e.getMessage()
-            );
-
-            MDC.remove("bookingId");
-
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Booking not found");
-        }
-
-        Long eventId = booking.eventId();
-
-        MDC.put("eventId", eventId.toString());
-
-        if (ticketRepository.existsByTicketCode(ticketCode)) {
-
-            log.warn(
-                    "DUPLICATE_TICKET_CODE ticketCode={}",
-                    ticketCode
-            );
-
-            MDC.remove("bookingId");
-            MDC.remove("eventId");
-
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Ticket code already exists");
-        }
-
-        Ticket ticket = new Ticket();
-
-        ticket.setBookingId(bookingId);
-
-        ticket.setEventId(eventId);
-
-        ticket.setAttendeeName(attendeeName);
-
-        ticket.setTicketCode(ticketCode);
-
-        ticket.setMetadata(metadata);
-
-        ticket.setIssuedAt(LocalDateTime.now());
-
-        ticket.setStatus(TicketStatus.VALID);
-
-        Ticket saved = ticketRepository.save(ticket);
-
-        MDC.put("ticketId", saved.getId().toString());
-
-        log.info(
-                "{} {} saved with status={}",
-                "Ticket",
-                saved.getId(),
-                saved.getStatus()
-        );
-
-        cacheEviction.evictPattern("S4-F1");
-        cacheEviction.evictPattern("S4-F9");
-        cacheEviction.evictPattern("S4-F10");
-
-        ticketEventPublisher.publishTicketIssued(
-                new TicketIssuedEvent(saved.getId(), bookingId, saved.getAttendeeName(), saved.getTicketCode()));
-
-        notifyObservers(
-                "TICKET_ISSUED",
-                Map.of(
-                        "ticketId", saved.getId(),
-                        "bookingId", bookingId));
-
-        MDC.remove("ticketId");
-        MDC.remove("bookingId");
-        MDC.remove("eventId");
-
-        return saved;
-    }
-
-    @Cacheable(
-            cacheNames = "ticket-service::S4-F3",
-            key = "#lat + ':' + #lon + ':' + #radiusKm"
-    )
-    public List<NearbyTicketDTO> findNearbyTickets(
-            double lat,
-            double lon,
-            double radiusKm) {
-
-        long start = System.currentTimeMillis();
-
-        List<Ticket> tickets =
-                ticketRepository.findByStatus(TicketStatus.VALID);
-
-        List<NearbyTicketDTO> results = new ArrayList<>();
-
-        Map<Long, VenueCoordsDTO> venueCache = new HashMap<>();
-
-        for (Ticket ticket : tickets) {
-
-            MDC.put("ticketId", ticket.getId().toString());
-            MDC.put("bookingId", ticket.getBookingId().toString());
-
-            try {
+        // ─── [S4-F2] Issue Ticket (write) ────────────────────────────────────────────
+        public Ticket issueTicket(
+                        Long bookingId,
+                        String attendeeName,
+                        String ticketCode,
+                        Map<String, Object> metadata) {
+
+                MDC.put("bookingId", bookingId.toString());
 
                 log.info(
-                        "Calling {}.{} with args={}",
-                        "BookingServiceClient",
-                        "getBooking",
-                        ticket.getBookingId()
-                );
+                                "Calling {}.{} with args={}",
+                                "BookingServiceClient",
+                                "getBooking",
+                                bookingId);
 
-                BookingDTO booking =
-                        bookingServiceClient.getBooking(ticket.getBookingId());
+                BookingDTO booking;
 
-                log.info(
-                        "{}.{} returned successfully",
-                        "BookingServiceClient",
-                        "getBooking"
-                );
+                try {
+
+                        booking = bookingServiceClient.getBooking(bookingId);
+
+                        log.info(
+                                        "{}.{} returned successfully",
+                                        "BookingServiceClient",
+                                        "getBooking");
+
+                } catch (Exception e) {
+
+                        log.warn(
+                                        "Feign call to {} failed: {}",
+                                        "booking-service",
+                                        e.getMessage());
+
+                        MDC.remove("bookingId");
+
+                        throw new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "Booking not found");
+                }
 
                 Long eventId = booking.eventId();
 
                 MDC.put("eventId", eventId.toString());
 
-                log.info(
-                        "Calling {}.{} with args={}",
-                        "EventServiceClient",
-                        "getEvent",
-                        eventId
-                );
+                if (ticketRepository.existsByTicketCode(ticketCode)) {
 
-                EventDTO event =
-                        eventServiceClient.getEvent(eventId);
+                        log.warn(
+                                        "DUPLICATE_TICKET_CODE ticketCode={}",
+                                        ticketCode);
 
-                log.info(
-                        "{}.{} returned successfully",
-                        "EventServiceClient",
-                        "getEvent"
-                );
+                        MDC.remove("bookingId");
+                        MDC.remove("eventId");
 
-                VenueCoordsDTO venue;
-
-                if (venueCache.containsKey(eventId)) {
-
-                    venue = venueCache.get(eventId);
-
-                } else {
-
-                    log.info(
-                            "Calling {}.{} with args={}",
-                            "EventServiceClient",
-                            "getEventVenueCoords",
-                            eventId
-                    );
-
-                    venue =
-                            eventServiceClient.getEventVenueCoords(eventId);
-
-                    log.info(
-                            "{}.{} returned successfully",
-                            "EventServiceClient",
-                            "getEventVenueCoords"
-                    );
-
-                    venueCache.put(eventId, venue);
+                        throw new ResponseStatusException(
+                                        HttpStatus.BAD_REQUEST,
+                                        "Ticket code already exists");
                 }
 
-                double eventLat = venue.venueLat();
-                double eventLon = venue.venueLon();
+                Ticket ticket = new Ticket();
 
-                double distanceKm =
-                        Math.sqrt(
-                                Math.pow(eventLat - lat, 2) +
-                                        Math.pow(eventLon - lon, 2)
-                        ) * 111;
+                ticket.setBookingId(bookingId);
 
-                if (distanceKm <= radiusKm) {
+                // M3: resolve eventId from booking.placed mapping (Strategy A) — fall back to
+                // the Feign response if the mapping hasn't been consumed yet
+                ticket.setEventId(resolveEventId(bookingId, booking));
 
-                    NearbyTicketDTO dto = NearbyTicketDTO.builder()
-                            .ticketId(ticket.getId())
-                            .attendeeName(ticket.getAttendeeName())
-                            .bookingId(ticket.getBookingId())
-                            .eventName(event.name())
-                            .eventLat(eventLat)
-                            .eventLon(eventLon)
-                            .distanceKm(distanceKm)
-                            .build();
+                ticket.setAttendeeName(attendeeName);
 
-                    results.add(dto);
+                ticket.setTicketCode(ticketCode);
 
-                    log.info(
-                            "NEARBY_TICKET_FOUND ticketId={} bookingId={} eventId={}",
-                            ticket.getId(),
-                            ticket.getBookingId(),
-                            eventId
-                    );
-                }
+                ticket.setMetadata(metadata);
 
-            } catch (Exception e) {
+                ticket.setIssuedAt(LocalDateTime.now());
 
-                log.warn(
-                        "Feign call to {} failed: {}",
-                        "booking-service",
-                        e.getMessage()
-                );
+                ticket.setStatus(TicketStatus.VALID);
 
-            } finally {
+                Ticket saved = ticketRepository.save(ticket);
+
+                MDC.put("ticketId", saved.getId().toString());
+
+                log.info(
+                                "{} {} saved with status={}",
+                                "Ticket",
+                                saved.getId(),
+                                saved.getStatus());
+
+                cacheEviction.evictPattern("S4-F1");
+                cacheEviction.evictPattern("S4-F9");
+                cacheEviction.evictPattern("S4-F10");
+
+                ticketEventPublisher.publishTicketIssued(
+                                new TicketIssuedEvent(saved.getId(), bookingId, saved.getAttendeeName(),
+                                                saved.getTicketCode()));
+
+                notifyObservers(
+                                "TICKET_ISSUED",
+                                Map.of(
+                                                "ticketId", saved.getId(),
+                                                "bookingId", bookingId));
 
                 MDC.remove("ticketId");
                 MDC.remove("bookingId");
                 MDC.remove("eventId");
-            }
+
+                return saved;
         }
 
-        results.sort((a, b) -> Double.compare(a.getDistanceKm(), b.getDistanceKm()));
+        @Cacheable(cacheNames = "ticket-service::S4-F3", key = "#lat + ':' + #lon + ':' + #radiusKm")
+        public List<NearbyTicketDTO> findNearbyTickets(
+                        double lat,
+                        double lon,
+                        double radiusKm) {
 
-        long elapsed = System.currentTimeMillis() - start;
+                long start = System.currentTimeMillis();
 
-        if (elapsed > 1000) {
+                List<Ticket> tickets = ticketRepository.findByStatus(TicketStatus.VALID);
 
-            log.warn(
-                    "Slow {} took {}ms",
-                    "findNearbyTickets",
-                    elapsed
-            );
+                List<NearbyTicketDTO> results = new ArrayList<>();
+
+                Map<Long, VenueCoordsDTO> venueCache = new HashMap<>();
+
+                for (Ticket ticket : tickets) {
+
+                        MDC.put("ticketId", ticket.getId().toString());
+                        MDC.put("bookingId", ticket.getBookingId().toString());
+
+                        try {
+
+                                log.info(
+                                                "Calling {}.{} with args={}",
+                                                "BookingServiceClient",
+                                                "getBooking",
+                                                ticket.getBookingId());
+
+                                BookingDTO booking = bookingServiceClient.getBooking(ticket.getBookingId());
+
+                                log.info(
+                                                "{}.{} returned successfully",
+                                                "BookingServiceClient",
+                                                "getBooking");
+
+                                Long eventId = booking.eventId();
+
+                                MDC.put("eventId", eventId.toString());
+
+                                log.info(
+                                                "Calling {}.{} with args={}",
+                                                "EventServiceClient",
+                                                "getEvent",
+                                                eventId);
+
+                                EventDTO event = eventServiceClient.getEvent(eventId);
+
+                                log.info(
+                                                "{}.{} returned successfully",
+                                                "EventServiceClient",
+                                                "getEvent");
+
+                                VenueCoordsDTO venue;
+
+                                if (venueCache.containsKey(eventId)) {
+
+                                        venue = venueCache.get(eventId);
+
+                                } else {
+
+                                        log.info(
+                                                        "Calling {}.{} with args={}",
+                                                        "EventServiceClient",
+                                                        "getEventVenueCoords",
+                                                        eventId);
+
+                                        venue = eventServiceClient.getEventVenueCoords(eventId);
+
+                                        log.info(
+                                                        "{}.{} returned successfully",
+                                                        "EventServiceClient",
+                                                        "getEventVenueCoords");
+
+                                        venueCache.put(eventId, venue);
+                                }
+
+                                double eventLat = venue.venueLat();
+                                double eventLon = venue.venueLon();
+
+                                double distanceKm = Math.sqrt(
+                                                Math.pow(eventLat - lat, 2) +
+                                                                Math.pow(eventLon - lon, 2))
+                                                * 111;
+
+                                if (distanceKm <= radiusKm) {
+
+                                        NearbyTicketDTO dto = NearbyTicketDTO.builder()
+                                                        .ticketId(ticket.getId())
+                                                        .attendeeName(ticket.getAttendeeName())
+                                                        .bookingId(ticket.getBookingId())
+                                                        .eventName(event.name())
+                                                        .eventLat(eventLat)
+                                                        .eventLon(eventLon)
+                                                        .distanceKm(distanceKm)
+                                                        .build();
+
+                                        results.add(dto);
+
+                                        log.info(
+                                                        "NEARBY_TICKET_FOUND ticketId={} bookingId={} eventId={}",
+                                                        ticket.getId(),
+                                                        ticket.getBookingId(),
+                                                        eventId);
+                                }
+
+                        } catch (Exception e) {
+
+                                log.warn(
+                                                "Feign call to {} failed: {}",
+                                                "booking-service",
+                                                e.getMessage());
+
+                        } finally {
+
+                                MDC.remove("ticketId");
+                                MDC.remove("bookingId");
+                                MDC.remove("eventId");
+                        }
+                }
+
+                results.sort((a, b) -> Double.compare(a.getDistanceKm(), b.getDistanceKm()));
+
+                long elapsed = System.currentTimeMillis() - start;
+
+                if (elapsed > 1000) {
+
+                        log.warn(
+                                        "Slow {} took {}ms",
+                                        "findNearbyTickets",
+                                        elapsed);
+                }
+
+                return results;
         }
 
-        return results;
-    }
+        // ─── [S4-F7] Purge Expired Tickets (write — invalidates) ─────────────────────
+        @Transactional
+        public int purgeExpiredTickets(int olderThanDays) {
+                long start = System.currentTimeMillis();
 
+                MDC.put("olderThanDays", String.valueOf(olderThanDays));
 
+                LocalDateTime cutoff = LocalDateTime.now().minusDays(olderThanDays);
+                int count = ticketRepository.purgeExpiredAndCancelledTickets(cutoff);
 
-    // ─── [S4-F7] Purge Expired Tickets (write — invalidates) ─────────────────────
-    @Transactional
-    public int purgeExpiredTickets(int olderThanDays) {
-        long start = System.currentTimeMillis();
+                log.info(
+                                "TICKETS_PURGED olderThanDays={} cutoff={} purgedCount={}",
+                                olderThanDays,
+                                cutoff,
+                                count);
 
-        MDC.put("olderThanDays", String.valueOf(olderThanDays));
+                cacheEviction.evictPattern("S4-F1");
+                cacheEviction.evictPattern("S4-F6");
+                cacheEviction.evictPattern("S4-F9");
+                cacheEviction.evictPattern("S4-F10");
+                notifyObservers("TICKETS_PURGED", Map.of("olderThanDays", olderThanDays, "purgedCount", count));
 
-        LocalDateTime cutoff = LocalDateTime.now().minusDays(olderThanDays);
-        int count = ticketRepository.purgeExpiredAndCancelledTickets(cutoff);
+                long elapsed = System.currentTimeMillis() - start;
 
-        log.info(
-                "TICKETS_PURGED olderThanDays={} cutoff={} purgedCount={}",
-                olderThanDays,
-                cutoff,
-                count
-        );
+                if (elapsed > 1000) {
+                        log.warn(
+                                        "Slow {} took {}ms",
+                                        "purgeExpiredTickets",
+                                        elapsed);
+                }
 
-        cacheEviction.evictPattern("S4-F1");
-        cacheEviction.evictPattern("S4-F6");
-        cacheEviction.evictPattern("S4-F9");
-        cacheEviction.evictPattern("S4-F10");
-        notifyObservers("TICKETS_PURGED", Map.of("olderThanDays", olderThanDays, "purgedCount", count));
+                MDC.remove("olderThanDays");
 
-        long elapsed = System.currentTimeMillis() - start;
-
-        if (elapsed > 1000) {
-            log.warn(
-                    "Slow {} took {}ms",
-                    "purgeExpiredTickets",
-                    elapsed
-            );
+                return count;
         }
 
-        MDC.remove("olderThanDays");
+        // ─── [S4-F8] Event Attendance Summary (relationship DTO) ─────────────────────
 
-        return count;
-    }
+        // @Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
+        // public EventAttendanceSummaryDTO getSummary(Long eventId) {
+        //
+        // List<Ticket> tickets =
+        // ticketRepository.findByEventId(eventId);
+        //
+        // if (tickets.isEmpty()) {
+        // throw new ResponseStatusException(
+        // HttpStatus.NOT_FOUND,
+        // "No tickets found for event: " + eventId
+        // );
+        // }
+        //
+        // long totalTickets = tickets.size();
+        //
+        // long usedTickets = tickets.stream()
+        // .filter(t -> t.getStatus() == TicketStatus.USED)
+        // .count();
+        //
+        // long validTickets = tickets.stream()
+        // .filter(t -> t.getStatus() == TicketStatus.VALID)
+        // .count();
+        //
+        // double attendanceRate =
+        // totalTickets == 0
+        // ? 0.0
+        // : ((double) usedTickets / totalTickets) * 100;
+        //
+        // LocalDateTime lastCheckIn = tickets.stream()
+        // .filter(t -> t.getStatus() == TicketStatus.USED)
+        // .map(Ticket::getIssuedAt)
+        // .max(LocalDateTime::compareTo)
+        // .orElse(null);
+        //
+        // return EventAttendanceSummaryDTO.builder()
+        // .eventId(eventId)
+        // .totalTickets(totalTickets)
+        // .usedTickets(usedTickets)
+        // .validTickets(validTickets)
+        // .lastCheckIn(lastCheckIn)
+        // .build();
+        // }
 
-    // ─── [S4-F8] Event Attendance Summary (relationship DTO) ─────────────────────
+        @Cacheable(cacheNames = "ticket-service::S4-F9", key = "'all'")
+        public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
 
-//    @Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
-//    public EventAttendanceSummaryDTO getSummary(Long eventId) {
-//
-//        List<Ticket> tickets =
-//                ticketRepository.findByEventId(eventId);
-//
-//        if (tickets.isEmpty()) {
-//            throw new ResponseStatusException(
-//                    HttpStatus.NOT_FOUND,
-//                    "No tickets found for event: " + eventId
-//            );
-//        }
-//
-//        long totalTickets = tickets.size();
-//
-//        long usedTickets = tickets.stream()
-//                .filter(t -> t.getStatus() == TicketStatus.USED)
-//                .count();
-//
-//        long validTickets = tickets.stream()
-//                .filter(t -> t.getStatus() == TicketStatus.VALID)
-//                .count();
-//
-//        double attendanceRate =
-//                totalTickets == 0
-//                        ? 0.0
-//                        : ((double) usedTickets / totalTickets) * 100;
-//
-//        LocalDateTime lastCheckIn = tickets.stream()
-//                .filter(t -> t.getStatus() == TicketStatus.USED)
-//                .map(Ticket::getIssuedAt)
-//                .max(LocalDateTime::compareTo)
-//                .orElse(null);
-//
-//        return EventAttendanceSummaryDTO.builder()
-//                .eventId(eventId)
-//                .totalTickets(totalTickets)
-//                .usedTickets(usedTickets)
-//                .validTickets(validTickets)
-//                .lastCheckIn(lastCheckIn)
-//                .build();
-//    }
+                long start = System.currentTimeMillis();
 
+                List<Ticket> tickets = ticketRepository.findByStatus(TicketStatus.VALID);
 
-    @Cacheable(cacheNames = "ticket-service::S4-F9", key = "'all'")
-    public List<UnusedTicketDTO> getUnusedUpcomingTickets() {
+                List<UnusedTicketDTO> results = new ArrayList<>();
 
-        long start = System.currentTimeMillis();
+                Map<Long, EventDTO> eventCache = new HashMap<>();
 
-        List<Ticket> tickets =
-                ticketRepository.findByStatus(TicketStatus.VALID);
+                for (Ticket ticket : tickets) {
 
-        List<UnusedTicketDTO> results = new ArrayList<>();
+                        MDC.put("ticketId", ticket.getId().toString());
+                        MDC.put("bookingId", ticket.getBookingId().toString());
 
-        Map<Long, EventDTO> eventCache = new HashMap<>();
+                        try {
 
-        for (Ticket ticket : tickets) {
+                                Long eventId = ticket.getEventId();
 
-            MDC.put("ticketId", ticket.getId().toString());
-            MDC.put("bookingId", ticket.getBookingId().toString());
+                                MDC.put("eventId", eventId.toString());
 
-            try {
+                                EventDTO event;
 
-                Long eventId = ticket.getEventId();
+                                if (eventCache.containsKey(eventId)) {
 
-                MDC.put("eventId", eventId.toString());
+                                        event = eventCache.get(eventId);
 
-                EventDTO event;
+                                } else {
 
-                if (eventCache.containsKey(eventId)) {
+                                        log.info(
+                                                        "Calling {}.{} with args={}",
+                                                        "EventServiceClient",
+                                                        "getEvent",
+                                                        eventId);
 
-                    event = eventCache.get(eventId);
+                                        event = eventServiceClient.getEvent(eventId);
 
+                                        log.info(
+                                                        "{}.{} returned successfully",
+                                                        "EventServiceClient",
+                                                        "getEvent");
+
+                                        eventCache.put(eventId, event);
+                                }
+
+                                if ("UPCOMING".equalsIgnoreCase(event.status())) {
+
+                                        UnusedTicketDTO dto = UnusedTicketDTO.builder()
+                                                        .ticketId(ticket.getId())
+                                                        .attendeeName(ticket.getAttendeeName())
+                                                        .ticketCode(ticket.getTicketCode())
+                                                        .bookingId(ticket.getBookingId())
+                                                        .eventName(event.name())
+                                                        .eventDate(event.eventDate())
+                                                        .build();
+
+                                        results.add(dto);
+                                }
+
+                        } catch (Exception e) {
+
+                                log.warn(
+                                                "Feign call to {} failed: {}",
+                                                "event-service",
+                                                e.getMessage());
+
+                        } finally {
+
+                                MDC.remove("ticketId");
+                                MDC.remove("bookingId");
+                                MDC.remove("eventId");
+                        }
+                }
+
+                long elapsed = System.currentTimeMillis() - start;
+
+                if (elapsed > 1000) {
+
+                        log.warn(
+                                        "Slow {} took {}ms",
+                                        "getUnusedUpcomingTickets",
+                                        elapsed);
+                }
+
+                return results;
+        }
+
+        // ─── [S4-F6] Ticket History (date range report)
+        // ───────────────────────────────
+
+        @Cacheable(cacheNames = "ticket-service::S4-F6", key = "T(String).valueOf(#startDate) + ':' + T(String).valueOf(#endDate) + ':' + T(String).valueOf(#status)")
+        public List<Ticket> getTicketHistory(LocalDate startDate, LocalDate endDate, String status) {
+                long queryStart = System.currentTimeMillis();
+
+                MDC.put("startDate", String.valueOf(startDate));
+                MDC.put("endDate", String.valueOf(endDate));
+
+                if (status != null && !status.isBlank()) {
+                        MDC.put("status", status);
+                }
+
+                if (startDate == null || endDate == null) {
+                        log.warn(
+                                        "INVALID_TICKET_HISTORY_REQUEST startDate={} endDate={}",
+                                        startDate,
+                                        endDate);
+
+                        MDC.remove("startDate");
+                        MDC.remove("endDate");
+                        MDC.remove("status");
+
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate and endDate are required");
+                }
+                if (endDate.isBefore(startDate)) {
+                        log.warn(
+                                        "INVALID_TICKET_HISTORY_RANGE startDate={} endDate={}",
+                                        startDate,
+                                        endDate);
+
+                        MDC.remove("startDate");
+                        MDC.remove("endDate");
+                        MDC.remove("status");
+
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "endDate must be on or after startDate");
+                }
+
+                LocalDateTime start = startDate.atStartOfDay();
+                LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+                List<Ticket> tickets;
+
+                if (status == null || status.isBlank()) {
+                        tickets = ticketRepository.findByIssuedAtBetween(start, end);
                 } else {
+                        String normalized = status.toUpperCase();
+                        try {
+                                TicketStatus.valueOf(normalized);
+                        } catch (IllegalArgumentException e) {
+                                log.warn(
+                                                "INVALID_TICKET_HISTORY_STATUS status={}",
+                                                status);
 
-                    log.info(
-                            "Calling {}.{} with args={}",
-                            "EventServiceClient",
-                            "getEvent",
-                            eventId
-                    );
+                                MDC.remove("startDate");
+                                MDC.remove("endDate");
+                                MDC.remove("status");
 
-                    event = eventServiceClient.getEvent(eventId);
+                                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                                "Invalid status: " + status
+                                                                + ". Allowed: VALID, USED, EXPIRED, CANCELLED");
+                        }
 
-                    log.info(
-                            "{}.{} returned successfully",
-                            "EventServiceClient",
-                            "getEvent"
-                    );
-
-                    eventCache.put(eventId, event);
+                        tickets = ticketRepository.findByIssuedAtBetweenAndStatus(start, end, normalized);
                 }
 
-                if ("UPCOMING".equalsIgnoreCase(event.status())) {
+                log.info(
+                                "TICKET_HISTORY_FOUND startDate={} endDate={} status={} count={}",
+                                startDate,
+                                endDate,
+                                status,
+                                tickets.size());
 
-                    UnusedTicketDTO dto = UnusedTicketDTO.builder()
-                            .ticketId(ticket.getId())
-                            .attendeeName(ticket.getAttendeeName())
-                            .ticketCode(ticket.getTicketCode())
-                            .bookingId(ticket.getBookingId())
-                            .eventName(event.name())
-                            .eventDate(event.eventDate())
-                            .build();
+                long elapsed = System.currentTimeMillis() - queryStart;
 
-                    results.add(dto);
+                if (elapsed > 1000) {
+                        log.warn(
+                                        "Slow {} took {}ms",
+                                        "getTicketHistory",
+                                        elapsed);
                 }
-
-            } catch (Exception e) {
-
-                log.warn(
-                        "Feign call to {} failed: {}",
-                        "event-service",
-                        e.getMessage()
-                );
-
-            } finally {
-
-                MDC.remove("ticketId");
-                MDC.remove("bookingId");
-                MDC.remove("eventId");
-            }
-        }
-
-        long elapsed = System.currentTimeMillis() - start;
-
-        if (elapsed > 1000) {
-
-            log.warn(
-                    "Slow {} took {}ms",
-                    "getUnusedUpcomingTickets",
-                    elapsed
-            );
-        }
-
-        return results;
-    }
-
-    // ─── [S4-F6] Ticket History (date range report)
-    // ───────────────────────────────
-
-    @Cacheable(cacheNames = "ticket-service::S4-F6", key = "T(String).valueOf(#startDate) + ':' + T(String).valueOf(#endDate) + ':' + T(String).valueOf(#status)")
-    public List<Ticket> getTicketHistory(LocalDate startDate, LocalDate endDate, String status) {
-        long queryStart = System.currentTimeMillis();
-
-        MDC.put("startDate", String.valueOf(startDate));
-        MDC.put("endDate", String.valueOf(endDate));
-
-        if (status != null && !status.isBlank()) {
-            MDC.put("status", status);
-        }
-
-        if (startDate == null || endDate == null) {
-            log.warn(
-                    "INVALID_TICKET_HISTORY_REQUEST startDate={} endDate={}",
-                    startDate,
-                    endDate
-            );
-
-            MDC.remove("startDate");
-            MDC.remove("endDate");
-            MDC.remove("status");
-
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate and endDate are required");
-        }
-        if (endDate.isBefore(startDate)) {
-            log.warn(
-                    "INVALID_TICKET_HISTORY_RANGE startDate={} endDate={}",
-                    startDate,
-                    endDate
-            );
-
-            MDC.remove("startDate");
-            MDC.remove("endDate");
-            MDC.remove("status");
-
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "endDate must be on or after startDate");
-        }
-
-        LocalDateTime start = startDate.atStartOfDay();
-        LocalDateTime end = endDate.atTime(LocalTime.MAX);
-
-        List<Ticket> tickets;
-
-        if (status == null || status.isBlank()) {
-            tickets = ticketRepository.findByIssuedAtBetween(start, end);
-        } else {
-            String normalized = status.toUpperCase();
-            try {
-                TicketStatus.valueOf(normalized);
-            } catch (IllegalArgumentException e) {
-                log.warn(
-                        "INVALID_TICKET_HISTORY_STATUS status={}",
-                        status
-                );
 
                 MDC.remove("startDate");
                 MDC.remove("endDate");
                 MDC.remove("status");
 
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Invalid status: " + status + ". Allowed: VALID, USED, EXPIRED, CANCELLED");
-            }
-
-            tickets = ticketRepository.findByIssuedAtBetweenAndStatus(start, end, normalized);
+                return tickets;
         }
 
-        log.info(
-                "TICKET_HISTORY_FOUND startDate={} endDate={} status={} count={}",
-                startDate,
-                endDate,
-                status,
-                tickets.size()
-        );
+        // ─── [S4-F5] Filter Tickets by Metadata (JSONB)
+        // ───────────────────────────────
 
-        long elapsed = System.currentTimeMillis() - queryStart;
+        @Cacheable(cacheNames = "ticket-service::S4-F5", key = "#key + ':' + #operator + ':' + #value")
+        public List<Ticket> filterByMetadata(String key, String operator, String value) {
+                long start = System.currentTimeMillis();
 
-        if (elapsed > 1000) {
-            log.warn(
-                    "Slow {} took {}ms",
-                    "getTicketHistory",
-                    elapsed
-            );
-        }
+                MDC.put("metadataKey", String.valueOf(key));
+                MDC.put("metadataOperator", String.valueOf(operator));
 
-        MDC.remove("startDate");
-        MDC.remove("endDate");
-        MDC.remove("status");
+                if (key == null || key.isBlank() || operator == null || value == null) {
+                        log.warn(
+                                        "INVALID_METADATA_FILTER key={} operator={} valuePresent={}",
+                                        key,
+                                        operator,
+                                        value != null);
 
-        return tickets;
-    }
+                        MDC.remove("metadataKey");
+                        MDC.remove("metadataOperator");
 
-    // ─── [S4-F5] Filter Tickets by Metadata (JSONB)
-    // ───────────────────────────────
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "key, operator, and value are required");
+                }
 
-    @Cacheable(cacheNames = "ticket-service::S4-F5", key = "#key + ':' + #operator + ':' + #value")
-    public List<Ticket> filterByMetadata(String key, String operator, String value) {
-        long start = System.currentTimeMillis();
+                List<Ticket> tickets = switch (operator) {
+                        case "eq" -> ticketRepository.findByMetadataEquals(key, value);
+                        case "gt" -> ticketRepository.findByMetadataGreaterThan(key, value);
+                        case "lt" -> ticketRepository.findByMetadataLessThan(key, value);
+                        default -> {
+                                log.warn(
+                                                "INVALID_METADATA_OPERATOR operator={}",
+                                                operator);
 
-        MDC.put("metadataKey", String.valueOf(key));
-        MDC.put("metadataOperator", String.valueOf(operator));
+                                MDC.remove("metadataKey");
+                                MDC.remove("metadataOperator");
 
-        if (key == null || key.isBlank() || operator == null || value == null) {
-            log.warn(
-                    "INVALID_METADATA_FILTER key={} operator={} valuePresent={}",
-                    key,
-                    operator,
-                    value != null
-            );
+                                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                                "Invalid operator: " + operator + ". Allowed: eq, gt, lt");
+                        }
+                };
 
-            MDC.remove("metadataKey");
-            MDC.remove("metadataOperator");
+                log.info(
+                                "METADATA_FILTER_APPLIED key={} operator={} count={}",
+                                key,
+                                operator,
+                                tickets.size());
 
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "key, operator, and value are required");
-        }
+                long elapsed = System.currentTimeMillis() - start;
 
-        List<Ticket> tickets = switch (operator) {
-            case "eq" -> ticketRepository.findByMetadataEquals(key, value);
-            case "gt" -> ticketRepository.findByMetadataGreaterThan(key, value);
-            case "lt" -> ticketRepository.findByMetadataLessThan(key, value);
-            default -> {
-                log.warn(
-                        "INVALID_METADATA_OPERATOR operator={}",
-                        operator
-                );
+                if (elapsed > 1000) {
+                        log.warn(
+                                        "Slow {} took {}ms",
+                                        "filterByMetadata",
+                                        elapsed);
+                }
 
                 MDC.remove("metadataKey");
                 MDC.remove("metadataOperator");
 
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Invalid operator: " + operator + ". Allowed: eq, gt, lt");
-            }
-        };
-
-        log.info(
-                "METADATA_FILTER_APPLIED key={} operator={} count={}",
-                key,
-                operator,
-                tickets.size()
-        );
-
-        long elapsed = System.currentTimeMillis() - start;
-
-        if (elapsed > 1000) {
-            log.warn(
-                    "Slow {} took {}ms",
-                    "filterByMetadata",
-                    elapsed
-            );
+                return tickets;
         }
 
-        MDC.remove("metadataKey");
-        MDC.remove("metadataOperator");
+        // ─── [S4-F10] Ticket Analytics (aggregated report)
+        // Caches the result in Redis. The key combines startDate and endDate.
+        // Note: TTL configuration (10 mins) is typically handled in your
+        // RedisCacheManager config.
+        @Cacheable(value = "ticket-service::S4-F10", key = "#startDate.toString() + '_' + #endDate.toString()")
+        public TicketAnalyticsDTO getAnalytics(LocalDate startDate, LocalDate endDate) {
+                long start = System.currentTimeMillis();
 
-        return tickets;
-    }
+                MDC.put("startDate", String.valueOf(startDate));
+                MDC.put("endDate", String.valueOf(endDate));
 
-    // ─── [S4-F10] Ticket Analytics (aggregated report)
-    // Caches the result in Redis. The key combines startDate and endDate.
-    // Note: TTL configuration (10 mins) is typically handled in your
-    // RedisCacheManager config.
-    @Cacheable(value = "ticket-service::S4-F10", key = "#startDate.toString() + '_' + #endDate.toString()")
-    public TicketAnalyticsDTO getAnalytics(LocalDate startDate, LocalDate endDate) {
-        long start = System.currentTimeMillis();
+                // 1. Validate date range - throws 400 if startDate is after endDate[cite: 1]
+                if (startDate.isAfter(endDate)) {
+                        log.warn(
+                                        "INVALID_ANALYTICS_RANGE startDate={} endDate={}",
+                                        startDate,
+                                        endDate);
 
-        MDC.put("startDate", String.valueOf(startDate));
-        MDC.put("endDate", String.valueOf(endDate));
+                        MDC.remove("startDate");
+                        MDC.remove("endDate");
 
-        // 1. Validate date range - throws 400 if startDate is after endDate[cite: 1]
-        if (startDate.isAfter(endDate)) {
-            log.warn(
-                    "INVALID_ANALYTICS_RANGE startDate={} endDate={}",
-                    startDate,
-                    endDate
-            );
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate cannot be after endDate");
+                }
 
-            MDC.remove("startDate");
-            MDC.remove("endDate");
+                // 2. Expand window to fully-closed range [startDateT00:00:00,
+                // endDateT23:59:59.999][cite: 1]
+                LocalDateTime startDateTime = startDate.atStartOfDay();
+                LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "startDate cannot be after endDate");
+                // 3. Fetch data
+                List<Ticket> tickets = ticketRepository.findAllByIssuedAtBetween(startDateTime, endDateTime);
+
+                // 4. Aggregate ticket counts by status[cite: 1]
+                Map<String, Long> ticketsByStatus = tickets.stream()
+                                .collect(Collectors.groupingBy(
+                                                ticket -> ticket.getStatus().name(),
+                                                Collectors.counting()));
+
+                // Extract specific counts (default to 0 if not present)[cite: 1]
+                long usedCount = ticketsByStatus.getOrDefault("USED", 0L);
+                long validCount = ticketsByStatus.getOrDefault("VALID", 0L);
+                long expiredCount = ticketsByStatus.getOrDefault("EXPIRED", 0L);
+                long cancelledCount = ticketsByStatus.getOrDefault("CANCELLED", 0L);
+
+                // 5. Calculate totals and attendance rate[cite: 1]
+                long totalIssued = tickets.size();
+                double attendanceRate = totalIssued == 0 ? 0.0 : (double) usedCount / totalIssued;
+
+                log.info(
+                                "TICKET_ANALYTICS_GENERATED startDate={} endDate={} totalIssued={} usedCount={} validCount={} expiredCount={} cancelledCount={}",
+                                startDate,
+                                endDate,
+                                totalIssued,
+                                usedCount,
+                                validCount,
+                                expiredCount,
+                                cancelledCount);
+
+                long elapsed = System.currentTimeMillis() - start;
+
+                if (elapsed > 1000) {
+                        log.warn(
+                                        "Slow {} took {}ms",
+                                        "getAnalytics",
+                                        elapsed);
+                }
+
+                MDC.remove("startDate");
+                MDC.remove("endDate");
+
+                // 6. Build and return DTO using the Builder Pattern[cite: 1]
+                return TicketAnalyticsDTO.builder()
+                                .totalIssued(totalIssued)
+                                .usedCount(usedCount)
+                                .validCount(validCount)
+                                .expiredCount(expiredCount)
+                                .cancelledCount(cancelledCount)
+                                .attendanceRate(attendanceRate)
+                                .ticketsByStatus(ticketsByStatus)
+                                .build();
         }
 
-        // 2. Expand window to fully-closed range [startDateT00:00:00,
-        // endDateT23:59:59.999][cite: 1]
-        LocalDateTime startDateTime = startDate.atStartOfDay();
-        LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
+        // new first endpoint
+        public int getUsedTicketCountForBooking(Long bookingId) {
 
-        // 3. Fetch data
-        List<Ticket> tickets = ticketRepository.findAllByIssuedAtBetween(startDateTime, endDateTime);
+                MDC.put("bookingId", bookingId.toString());
 
-        // 4. Aggregate ticket counts by status[cite: 1]
-        Map<String, Long> ticketsByStatus = tickets.stream()
-                .collect(Collectors.groupingBy(
-                        ticket -> ticket.getStatus().name(),
-                        Collectors.counting()));
+                List<Ticket> tickets = ticketRepository.findByBookingIdAndStatus(
+                                bookingId,
+                                TicketStatus.USED);
 
-        // Extract specific counts (default to 0 if not present)[cite: 1]
-        long usedCount = ticketsByStatus.getOrDefault("USED", 0L);
-        long validCount = ticketsByStatus.getOrDefault("VALID", 0L);
-        long expiredCount = ticketsByStatus.getOrDefault("EXPIRED", 0L);
-        long cancelledCount = ticketsByStatus.getOrDefault("CANCELLED", 0L);
+                log.info(
+                                "USED_TICKET_COUNT bookingId={} count={}",
+                                bookingId,
+                                tickets.size());
 
-        // 5. Calculate totals and attendance rate[cite: 1]
-        long totalIssued = tickets.size();
-        double attendanceRate = totalIssued == 0 ? 0.0 : (double) usedCount / totalIssued;
+                MDC.remove("bookingId");
 
-        log.info(
-                "TICKET_ANALYTICS_GENERATED startDate={} endDate={} totalIssued={} usedCount={} validCount={} expiredCount={} cancelledCount={}",
-                startDate,
-                endDate,
-                totalIssued,
-                usedCount,
-                validCount,
-                expiredCount,
-                cancelledCount
-        );
-
-        long elapsed = System.currentTimeMillis() - start;
-
-        if (elapsed > 1000) {
-            log.warn(
-                    "Slow {} took {}ms",
-                    "getAnalytics",
-                    elapsed
-            );
+                return tickets.size();
         }
 
-        MDC.remove("startDate");
-        MDC.remove("endDate");
+        // new second endpoint
+        @Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
+        public EventTicketSummaryDTO getEventTicketSummary(Long eventId) {
 
-        // 6. Build and return DTO using the Builder Pattern[cite: 1]
-        return TicketAnalyticsDTO.builder()
-                .totalIssued(totalIssued)
-                .usedCount(usedCount)
-                .validCount(validCount)
-                .expiredCount(expiredCount)
-                .cancelledCount(cancelledCount)
-                .attendanceRate(attendanceRate)
-                .ticketsByStatus(ticketsByStatus)
-                .build();
-    }
+                long start = System.currentTimeMillis();
 
-    // new first endpoint
-    public int getUsedTicketCountForBooking(Long bookingId) {
+                MDC.put("eventId", eventId.toString());
 
-        MDC.put("bookingId", bookingId.toString());
+                List<Ticket> tickets = ticketRepository.findByEventId(eventId);
 
-        List<Ticket> tickets =
-                ticketRepository.findByBookingIdAndStatus(
-                        bookingId,
-                        TicketStatus.USED
-                );
+                if (tickets.isEmpty()) {
 
-        log.info(
-                "USED_TICKET_COUNT bookingId={} count={}",
-                bookingId,
-                tickets.size()
-        );
+                        MDC.remove("eventId");
 
-        MDC.remove("bookingId");
+                        throw new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "No tickets found for event: " + eventId);
+                }
 
-        return tickets.size();
-    }
+                long totalTicketsSold = tickets.size();
 
-    // new second endpoint
-    @Cacheable(cacheNames = "ticket-service::S4-F8", key = "#eventId")
-    public EventTicketSummaryDTO getEventTicketSummary(Long eventId) {
+                long usedCount = tickets.stream()
+                                .filter(t -> t.getStatus() == TicketStatus.USED)
+                                .count();
 
-        long start = System.currentTimeMillis();
+                log.info(
+                                "EVENT_TICKET_SUMMARY eventId={} totalTicketsSold={} usedCount={}",
+                                eventId,
+                                totalTicketsSold,
+                                usedCount);
 
-        MDC.put("eventId", eventId.toString());
+                long elapsed = System.currentTimeMillis() - start;
 
-        List<Ticket> tickets =
-                ticketRepository.findByEventId(eventId);
+                if (elapsed > 1000) {
 
-        if (tickets.isEmpty()) {
+                        log.warn(
+                                        "Slow {} took {}ms",
+                                        "getEventTicketSummary",
+                                        elapsed);
+                }
 
-            MDC.remove("eventId");
+                MDC.remove("eventId");
 
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "No tickets found for event: " + eventId
-            );
+                return new EventTicketSummaryDTO(
+                                totalTicketsSold,
+                                usedCount);
         }
-
-        long totalTicketsSold = tickets.size();
-
-        long usedCount = tickets.stream()
-                .filter(t -> t.getStatus() == TicketStatus.USED)
-                .count();
-
-        log.info(
-                "EVENT_TICKET_SUMMARY eventId={} totalTicketsSold={} usedCount={}",
-                eventId,
-                totalTicketsSold,
-                usedCount
-        );
-
-        long elapsed = System.currentTimeMillis() - start;
-
-        if (elapsed > 1000) {
-
-            log.warn(
-                    "Slow {} took {}ms",
-                    "getEventTicketSummary",
-                    elapsed
-            );
-        }
-
-        MDC.remove("eventId");
-
-        return new EventTicketSummaryDTO(
-                totalTicketsSold,
-                usedCount
-        );
-    }
 }

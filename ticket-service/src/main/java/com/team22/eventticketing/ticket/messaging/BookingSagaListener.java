@@ -2,8 +2,10 @@ package com.team22.eventticketing.ticket.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team22.eventticketing.ticket.config.RabbitConfig;
+import com.team22.eventticketing.ticket.model.BookingEventMapping;
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketStatus;
+import com.team22.eventticketing.ticket.repository.BookingEventMappingRepository;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 import com.team22.eventticketing.ticket.service.CacheEvictionService;
 import com.team22.eventticketing.contracts.events.BookingCancelledEvent;
@@ -18,6 +20,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -33,15 +36,18 @@ public class BookingSagaListener {
     private final TicketEventPublisher publisher;
     private final CacheEvictionService cacheEviction;
     private final ObjectMapper objectMapper;
+    private final BookingEventMappingRepository mappingRepository;
 
     public BookingSagaListener(TicketRepository ticketRepository,
                                TicketEventPublisher publisher,
                                CacheEvictionService cacheEviction,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               BookingEventMappingRepository mappingRepository) {
         this.ticketRepository = ticketRepository;
         this.publisher = publisher;
         this.cacheEviction = cacheEviction;
         this.objectMapper = objectMapper;
+        this.mappingRepository = mappingRepository;
     }
 
     @RabbitListener(queues = RabbitConfig.SAGA_QUEUE)
@@ -60,9 +66,12 @@ public class BookingSagaListener {
         }
     }
 
-    private void handlePlaced(BookingPlacedEvent event) {
+    @Transactional
+    void handlePlaced(BookingPlacedEvent event) {
         log.info("Captured booking.placed bookingId={} userId={} eventId={}",
                 event.bookingId(), event.userId(), event.eventId());
+        mappingRepository.save(new BookingEventMapping(
+                event.bookingId(), event.eventId(), LocalDateTime.now()));
     }
 
     private void handleCompleted(BookingCompletedEvent event) {
