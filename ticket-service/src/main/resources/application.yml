@@ -33,6 +33,7 @@
       password: ${RABBITMQ_PASSWORD:guest}
       listener:
         simple:
+          observation-enabled: true
           default-requeue-rejected: false
           retry:
             enabled: true
@@ -66,5 +67,9 @@
         enabled: true
       readinessstate:
         enabled: true
+    metrics:
+      distribution:
+        percentiles-histogram:
+          "[http.server.requests]": true
 
 
