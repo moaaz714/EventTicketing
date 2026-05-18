@@ -175,6 +175,85 @@
           "refId": "B"
         }
       ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 6,
+      "title": "Ticket-Service ERROR Rate",
+      "description": "Tracks ERROR logs emitted by ticket-service. Useful for detecting spikes caused by failed ticket issuance, cache failures, or downstream service outages.",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"ticket-service\", level=\"ERROR\"}[1m]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 7,
+      "title": "Feign Call Failures",
+      "description": "Counts failed Feign calls to booking-service and event-service. Helps identify downstream microservice instability affecting S4-F1, S4-F2, S4-F3, S4-F4, and S4-F9.",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"ticket-service\"} |= \"Feign call to\" |= \"failed\" [5m]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 8,
+      "title": "Successful Feign Calls",
+      "description": "Tracks successful Feign invocations between ticket-service and external services. Useful for validating healthy communication with booking-service and event-service.",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({app=\"eventticketing\", service=\"ticket-service\"} |= \"returned successfully\" [5m]))",
+          "refId": "A"
+        }
+      ]
     }
+
   ]
 }
