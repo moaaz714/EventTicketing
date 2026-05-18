@@ -47,9 +47,25 @@
 
   feign:
     booking-service:
-      url: http://booking-service:8083
+      url: http://booking-service:8080
     event-service:
-      url: http://localhost:8082
+      url: http://localhost:8080
+#    ticket-service:
+#      url: http://localhost:8080
+#    user-service:
+#      url: http://localhost:8080
+#    sales-service:
+#      url: http://localhost:8080
+
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: "prometheus,health,info"
+    metrics:
+      distribution:
+        percentiles-histogram:
+          http.server.requests: true
 
   management:
     endpoints:
