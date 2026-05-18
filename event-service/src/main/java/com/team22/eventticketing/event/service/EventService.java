@@ -14,7 +14,7 @@ import com.team22.eventticketing.event.observer.EntityObserver;
 import com.team22.eventticketing.event.repository.EventRepository;
 import com.team22.eventticketing.event.repository.EventSearchRepository;
 import com.team22.eventticketing.event.repository.EventSessionRepository;
-
+import org.springframework.data.domain.PageRequest;
 import com.team22.eventticketing.contracts.dto.AvgCapacityDTO;
 import com.team22.eventticketing.contracts.dto.VenueCoordsDTO;
 import com.team22.eventticketing.contracts.dto.EventBookingRevenueDTO;
@@ -182,17 +182,19 @@ public class EventService {
 
     @Cacheable(cacheNames = "event-service::S2-F6", key = "#limit")
     public List<TopEventDTO> getTopRatedEvents(int limit) {
-        if (limit <= 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Limit must be greater than 0");
-        List<Object[]> rows = eventRepository.findTopRatedEvents(limit);
-        List<TopEventDTO> result = new ArrayList<>();
-        for (Object[] row : rows) {
-            Long eventId = ((Number) row[0]).longValue();
-            String name = (String) row[1];
-            Double rating = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
-            Long totalBookings = row[3] == null ? 0L : ((Number) row[3]).longValue();
-            result.add(TopEventDTO.builder().eventId(eventId).name(name).rating(rating).totalBookings(totalBookings).build());
+        if (limit <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Limit must be greater than 0");
         }
-        return result;
+
+        return eventRepository.findAllByOrderByRatingDesc(PageRequest.of(0, limit))
+                .stream()
+                .map(event -> TopEventDTO.builder()
+                        .eventId(event.getId())
+                        .name(event.getName())
+                        .rating(event.getRating() == null ? 0.0 : event.getRating())
+                        .totalBookings(0L)
+                        .build())
+                .toList();
     }
 
     // ─── [S2-F3] Get Event Revenue DTO ───────────────────────────
