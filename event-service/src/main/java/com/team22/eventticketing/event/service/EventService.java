@@ -14,7 +14,7 @@ import com.team22.eventticketing.event.observer.EntityObserver;
 import com.team22.eventticketing.event.repository.EventRepository;
 import com.team22.eventticketing.event.repository.EventSearchRepository;
 import com.team22.eventticketing.event.repository.EventSessionRepository;
-
+import org.springframework.data.domain.PageRequest;
 import com.team22.eventticketing.contracts.dto.AvgCapacityDTO;
 import com.team22.eventticketing.contracts.dto.VenueCoordsDTO;
 import com.team22.eventticketing.contracts.dto.EventBookingRevenueDTO;
@@ -29,9 +29,7 @@ import com.team22.eventticketing.contracts.feign.BookingServiceClient;
 import com.team22.eventticketing.contracts.feign.TicketServiceClient;
 import com.team22.eventticketing.contracts.feign.UserServiceClient;
 
-
 import feign.FeignException;
-
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -157,55 +155,46 @@ public class EventService {
     // ─── [S2-F4] Update Event Status ──────────────────────────────
     @Transactional
     public void updateEventStatus(Long eventId, UpdateEventStatusRequest request) {
-        // 1. Fetch Event
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Event not found"));
 
-        // 2. Capture the old status BEFORE making any changes (Required for Payload)
         String oldStatus = event.getStatus() != null ? event.getStatus().name() : "UNKNOWN";
         String newStatus = request.getStatus().name();
 
-        // 3. Synchronous Feign Check (S2-F4)
         if (request.getStatus() == EventStatus.CANCELLED) {
             int activeCount = bookingServiceClient.getEventActiveBookingCount(eventId);
-//              int activeCount =0;
-
-
             if (activeCount > 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot cancel event with active bookings");
             }
         }
 
-        // 4. Local DB Update
         event.setStatus(request.getStatus());
         eventRepository.save(event);
 
-        // 5. Asynchronous Notification (Slice 5)
-        // Use the exact DTO from your contracts module to ensure the payload matches the rubric!
         EventStatusChangedEvent statusEvent = new EventStatusChangedEvent(
                 event.getId(),
                 oldStatus,
                 newStatus
         );
 
-        // Publish to the TopicExchange: event.events
-        // Routing Key: event.status-changed
         rabbitTemplate.convertAndSend("event.events", "event.status-changed", statusEvent);
     }
 
     @Cacheable(cacheNames = "event-service::S2-F6", key = "#limit")
     public List<TopEventDTO> getTopRatedEvents(int limit) {
-        if (limit <= 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Limit must be greater than 0");
-        List<Object[]> rows = eventRepository.findTopRatedEvents(limit);
-        List<TopEventDTO> result = new ArrayList<>();
-        for (Object[] row : rows) {
-            Long eventId = ((Number) row[0]).longValue();
-            String name = (String) row[1];
-            Double rating = row[2] == null ? 0.0 : ((Number) row[2]).doubleValue();
-            Long totalBookings = row[3] == null ? 0L : ((Number) row[3]).longValue();
-            result.add(TopEventDTO.builder().eventId(eventId).name(name).rating(rating).totalBookings(totalBookings).build());
+        if (limit <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Limit must be greater than 0");
         }
-        return result;
+
+        return eventRepository.findAllByOrderByRatingDesc(PageRequest.of(0, limit))
+                .stream()
+                .map(event -> TopEventDTO.builder()
+                        .eventId(event.getId())
+                        .name(event.getName())
+                        .rating(event.getRating() == null ? 0.0 : event.getRating())
+                        .totalBookings(0L)
+                        .build())
+                .toList();
     }
 
     // ─── [S2-F3] Get Event Revenue DTO ───────────────────────────
@@ -458,11 +447,15 @@ public class EventService {
         EventSearchDocument esDoc = new EventSearchDocument();
         esDoc.setId(String.valueOf(pgEvent.getId()));
         esDoc.setName(pgEvent.getName());
-        esDoc.setCategory(pgEvent.getCategory().name());
+        if (pgEvent.getCategory() != null) {
+            esDoc.setCategory(pgEvent.getCategory().name());
+        }
         esDoc.setVenue(pgEvent.getVenue());
         esDoc.setEventDate(pgEvent.getEventDate());
         esDoc.setRating(pgEvent.getRating() != null ? pgEvent.getRating() : 0.0);
-        esDoc.setStatus(pgEvent.getStatus().name());
+        if (pgEvent.getStatus() != null) {
+            esDoc.setStatus(pgEvent.getStatus().name());
+        }
 
         String description = "";
         if (pgEvent.getDetails() != null && pgEvent.getDetails().containsKey("description")) {
@@ -561,5 +554,4 @@ public class EventService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Ticket service temporarily unavailable");
         }
     }
-
 }
