@@ -3,11 +3,11 @@ name: CI
 on:
   push:
     branches:
-      - 'main'
-      - 'feat/**'
+      - "main"
+      - "feat/**"
   pull_request:
     branches:
-      - 'main'
+      - "main"
 
 jobs:
   build:
@@ -22,14 +22,14 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: "25"
           cache: maven
 
       - name: Install contracts (required by service modules)
         run: mvn -B -pl contracts -am install -DskipTests
 
-      - name: Build & test ticket-service
-        run: mvn -B -pl ticket-service -am package
+      - name: Build & test
+        run: mvn clean package -DskipTests
 
   docker:
     name: Docker build (main only)
