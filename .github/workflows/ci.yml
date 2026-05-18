@@ -101,6 +101,9 @@ jobs:
     name: Docker build & push
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         service:
@@ -136,11 +139,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set lowercase repo owner
+        run: echo "OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Build & push ${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
           context: ./${{ matrix.service }}
           push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:latest
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ env.OWNER_LC }}/${{ matrix.service }}:latest
+            ghcr.io/${{ env.OWNER_LC }}/${{ matrix.service }}:${{ github.sha }}
