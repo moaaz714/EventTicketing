@@ -42,11 +42,16 @@ jobs:
           --health-retries 10
 
       mongo:
-        image: mongo:latest
+        image: mongo:8
         env:
           MONGO_INITDB_ROOT_USERNAME: root
           MONGO_INITDB_ROOT_PASSWORD: rootpass
         ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --username root --password rootpass --eval 'db.runCommand({ping:1})' --quiet"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
       redis:
         image: redis:latest
