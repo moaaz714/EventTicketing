@@ -163,7 +163,7 @@ data:
           "id": 1,
           "title": "Error Rate",
           "description": "LogQL — ERROR-level log lines per minute from booking-service",
-          "type": "timeseries",
+          "type": "logs",
           "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
           "datasource": { "type": "loki", "uid": "loki" },
           "targets": [
@@ -191,7 +191,7 @@ data:
           "id": 3,
           "title": "Feign Call Outcomes",
           "description": "LogQL — Successful Feign calls vs failures.",
-          "type": "timeseries",
+          "type": "logs",
           "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
           "datasource": { "type": "loki", "uid": "loki" },
           "targets": [
