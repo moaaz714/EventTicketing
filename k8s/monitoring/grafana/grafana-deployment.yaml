@@ -26,11 +26,11 @@ spec:
           volumeMounts:
             - name: grafana-storage
               mountPath: /var/lib/grafana
-            # mounts dashboards.yaml (provider) AND all *.json files into the same folder
-            # Grafana reads dashboards.yaml as a provisioning config
-            # and finds the JSON files right beside it at the same path
             - name: dashboards
               mountPath: /etc/grafana/dashboards
+            - name: dashboards
+              mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
+              subPath: dashboards.yaml
             - name: datasources
               mountPath: /etc/grafana/provisioning/datasources
       volumes:

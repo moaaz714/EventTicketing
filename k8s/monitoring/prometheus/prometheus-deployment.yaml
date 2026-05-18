@@ -26,6 +26,12 @@ spec:
               mountPath: /etc/prometheus
             - name: storage
               mountPath: /prometheus
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 10
       volumes:
         - name: config
           configMap:
