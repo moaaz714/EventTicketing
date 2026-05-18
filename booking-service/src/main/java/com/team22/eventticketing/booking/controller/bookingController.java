@@ -18,8 +18,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import dto.BookingSummaryDTO;
-import dto.EventBookingRevenueDTO;
+import com.team22.eventticketing.contracts.dto.BookingSummaryDTO;
+import com.team22.eventticketing.contracts.dto.EventBookingRevenueDTO;
 
 // adding the loggers
 

@@ -13,10 +13,11 @@ import com.team22.eventticketing.booking.repository.UserNodeRepository;
 import com.team22.eventticketing.booking.repository.UserNodeCustomRepository;
 import com.team22.eventticketing.booking.repository.UserNodeRecommendationRepository;
 import com.team22.eventticketing.booking.security.AuthContext;
-import dto.*;
-import feign.EventServiceClient;
-import feign.TicketServiceClient;
-import feign.UserServiceClient;
+import com.team22.eventticketing.contracts.dto.*;
+import com.team22.eventticketing.contracts.events.BookingCancelledEvent;
+import com.team22.eventticketing.contracts.events.BookingCompletedEvent;
+import com.team22.eventticketing.contracts.events.BookingPlacedEvent;
+import com.team22.eventticketing.contracts.feign.*;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -26,6 +27,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StopWatch;
 import org.springframework.web.server.ResponseStatusException;
+import com.team22.eventticketing.booking.messaging.BookingEventPublisher;
+
+import java.math.BigDecimal;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -33,7 +37,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.math.BigDecimal;
 import java.math.RoundingMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,6 +63,7 @@ public class BookingService {
     private final EventServiceClient eventServiceClient;
     private final UserServiceClient userServiceClient;
     private final TicketServiceClient ticketServiceClient;
+    private final BookingEventPublisher eventPublisher;
 
     public BookingService(BookingRepository bookingRepository,
                           AnalyticsDashboardTarget dashboardAdapter,
@@ -73,7 +77,8 @@ public class BookingService {
                           UserNodeRecommendationRepository userNodeRecommendationRepository,
                           EventServiceClient eventServiceClient,
                           UserServiceClient userServiceClient,
-                          TicketServiceClient ticketServiceClient
+                          TicketServiceClient ticketServiceClient,
+                          BookingEventPublisher eventPublisher
 
     ) {
 
@@ -90,6 +95,7 @@ public class BookingService {
         this.eventServiceClient=eventServiceClient;
         this.userServiceClient=userServiceClient;
         this.ticketServiceClient=ticketServiceClient;
+        this.eventPublisher = eventPublisher;
     }
 
 // we have the following methods currently querying other services dbs
@@ -134,6 +140,8 @@ public class BookingService {
             MDC.remove("bookingId");
         }
         notifyObservers("BOOKING_CREATED", Map.of("bookingId", saved.getId()));
+        BookingPlacedEvent event = new BookingPlacedEvent(saved.getId(), saved.getUserId(), saved.getEventId());
+        eventPublisher.publishBookingPlaced(event);
         return saved;
     }
 
@@ -236,6 +244,9 @@ public class BookingService {
 
             cacheEviction.evictEntityAndFeatures("booking", id, "S3-F1", "S3-F6", "S3-F9", "S3-F10");
             notifyObservers("BOOKING_COMPLETED", Map.of("bookingId", saved.getId()));
+            BigDecimal amount = saved.getTotalAmount() != null ? BigDecimal.valueOf(saved.getTotalAmount()) : BigDecimal.ZERO;
+            BookingCompletedEvent event = new BookingCompletedEvent(saved.getId(), saved.getUserId(), saved.getEventId(), amount);
+            eventPublisher.publishBookingCompleted(event);
             return saved;
         } finally {
             MDC.remove("bookingId");
@@ -307,6 +318,8 @@ public class BookingService {
             bookingRepository.cancelValidTicketsForBooking(id);
             cacheEviction.evictEntityAndFeatures("booking", id, "S3-F1", "S3-F6", "S3-F9", "S3-F10");
             notifyObservers("BOOKING_CANCELLED", Map.of("bookingId", id));
+            BookingCancelledEvent event = new BookingCancelledEvent(id, booking.getUserId(), booking.getEventId(), "User requested cancellation");
+            eventPublisher.publishBookingCancelled(event);
         } finally {
             MDC.remove("bookingId");
         }

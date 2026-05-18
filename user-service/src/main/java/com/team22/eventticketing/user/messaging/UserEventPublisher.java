@@ -1,8 +1,8 @@
 package com.team22.eventticketing.user.messaging;
 
 import com.team22.eventticketing.user.config.RabbitMQConfig;
-import events.UserDeactivatedEvent;
-import events.UserRegisteredEvent;
+import com.team22.eventticketing.contracts.events.UserDeactivatedEvent;
+import com.team22.eventticketing.contracts.events.UserRegisteredEvent;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
