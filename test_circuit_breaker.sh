@@ -128,9 +128,9 @@ echo ""
 info "[ Phase 4 ] Restarting booking-service..."
 docker start "$BOOKING_CONTAINER" > /dev/null
 START_RFC=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-DEADLINE=$(( $(date +%s) + 60 ))
+DEADLINE=$(( $(date +%s) + 90 ))
 
-info "  Waiting for booking-service to be ready (max 60s)..."
+info "  Waiting for booking-service to be ready (max 90s)..."
 while true; do
   if docker logs "$BOOKING_CONTAINER" --since "$START_RFC" 2>&1 | grep -q "Started BookingServiceApplication"; then
     break
@@ -143,8 +143,8 @@ done
 pass "booking-service is up"
 
 echo ""
-info "[ Phase 5 ] Waiting 11s for circuit to transition OPEN → HALF_OPEN..."
-sleep 11
+info "[ Phase 5 ] Waiting 15s for circuit OPEN → HALF_OPEN and booking-service warmup..."
+sleep 15
 pass "Wait complete"
 
 # ── Phase 4: Recovery ─────────────────────────────────────────────────────────

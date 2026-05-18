@@ -46,7 +46,11 @@ resilience4j:
       bookingService:
         sliding-window-type: COUNT_BASED
         sliding-window-size: 5
-        failure-rate-threshold: 50          # open after 50% failures in window
-        wait-duration-in-open-state: 10s    # stay open for 10s, then go HALF_OPEN
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 2
         register-health-indicator: true
+  timelimiter:
+    instances:
+      bookingService:
+        timeout-duration: 5s
