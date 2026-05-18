@@ -1,5 +1,6 @@
 package com.team22.eventticketing.user.controller;
 
+import com.team22.eventticketing.contracts.feign.BookingServiceClient;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.repository.UserRepository;
@@ -8,14 +9,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
-import java.util.List;
 import java.util.Map;
 
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -32,8 +33,8 @@ class UserCategorySearchIT {
     @Autowired
     private UserRepository userRepository;
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    @MockitoBean
+    private BookingServiceClient bookingServiceClient;
 
     private Long userAId;
     private Long userBId;
@@ -43,29 +44,35 @@ class UserCategorySearchIT {
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
 
+        userRepository.findAll().stream()
+                .filter(u -> u.getEmail().startsWith("s1f9-"))
+                .forEach(u -> userRepository.deleteById(u.getId()));
+
         // User A: favoriteCategory=CONCERT, 5 completed bookings
         User userA = new User("Cat User A", "s1f9-a@test.com", "pass", "0900000001", Role.ATTENDEE);
         userA.setPreferences(Map.of("favoriteCategory", "CONCERT"));
         userAId = userRepository.save(userA).getId();
-        insertCompletedBookings(userAId, 5);
 
         // User B: favoriteCategory=CONCERT, 2 completed bookings
         User userB = new User("Cat User B", "s1f9-b@test.com", "pass", "0900000002", Role.ATTENDEE);
         userB.setPreferences(Map.of("favoriteCategory", "CONCERT"));
         userBId = userRepository.save(userB).getId();
-        insertCompletedBookings(userBId, 2);
 
         // User C: favoriteCategory=SPORTS, 10 completed bookings
         User userC = new User("Cat User C", "s1f9-c@test.com", "pass", "0900000003", Role.ATTENDEE);
         userC.setPreferences(Map.of("favoriteCategory", "SPORTS"));
         userCId = userRepository.save(userC).getId();
-        insertCompletedBookings(userCId, 10);
+
+        when(bookingServiceClient.getTotalBookingCount(userAId, "COMPLETED")).thenReturn(5L);
+        when(bookingServiceClient.getTotalBookingCount(userBId, "COMPLETED")).thenReturn(2L);
+        when(bookingServiceClient.getTotalBookingCount(userCId, "COMPLETED")).thenReturn(10L);
     }
 
     @AfterEach
     void tearDown() {
-        jdbcTemplate.update("DELETE FROM bookings WHERE user_id IN (?, ?, ?)", userAId, userBId, userCId);
-        userRepository.deleteAllById(List.of(userAId, userBId, userCId));
+        userRepository.findAll().stream()
+                .filter(u -> u.getEmail().startsWith("s1f9-"))
+                .forEach(u -> userRepository.deleteById(u.getId()));
     }
 
     // (b) CONCERT + minBookings=3 → only User A
@@ -96,14 +103,5 @@ class UserCategorySearchIT {
                         .param("category", "")
                         .param("minBookings", "1"))
                 .andExpect(status().isBadRequest());
-    }
-
-    private void insertCompletedBookings(Long userId, int count) {
-        for (int i = 0; i < count; i++) {
-            jdbcTemplate.update("""
-                    INSERT INTO bookings (user_id, total_amount, status, booking_date, contact_email)
-                    VALUES (?, 100.0, 'COMPLETED', NOW(), 'test@test.com')
-                    """, userId);
-        }
     }
 }
