@@ -23,7 +23,7 @@ services:
     image: rabbitmq:3-management
     container_name: eventticketing-rabbitmq
     ports:
-      - "5672:5672"   # AMQP Port
+      - "5672:5672" # AMQP Port
       - "15672:15672" # Management UI
     environment:
       - RABBITMQ_DEFAULT_USER=guest
@@ -115,6 +115,11 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventticketingdb
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+
+      SPRING_DATA_MONGODB_URI: mongodb://root:rootpass@mongo:27017/etdb-tickets-mongo?authSource=admin
+
+      SPRING_CASSANDRA_KEYSPACE_NAME: etdb_tickets_ks
+
       SPRING_RABBITMQ_HOST: rabbitmq
     depends_on:
       postgres:
@@ -150,7 +155,7 @@ services:
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -163,7 +168,7 @@ services:
     # Notice the memory limits applied directly in the command here:
     command: redis-server --requirepass redispass --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "redispass", "ping" ]
+      test: ["CMD", "redis-cli", "-a", "redispass", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -181,7 +186,8 @@ services:
     volumes:
       - es-data:/usr/share/elasticsearch/data
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1" ]
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -201,7 +207,7 @@ services:
     volumes:
       - neo4j-data:/data
     healthcheck:
-      test: [ "CMD", "neo4j", "status" ]
+      test: ["CMD", "neo4j", "status"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -228,6 +234,20 @@ services:
       interval: 30s
       timeout: 10s
       retries: 10
+  # API Gateway (Port 8080)
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - user-service
+      - event-service
+      - booking-service
+      - ticket-service
+      - sales-service
+    networks:
+      - default
 
 volumes:
   pgdata:

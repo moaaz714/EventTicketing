@@ -15,6 +15,7 @@ import com.team22.eventticketing.user.dto.RegisterRequest;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.entity.UserStatus;
+import com.team22.eventticketing.user.messaging.UserEventPublisher;
 import com.team22.eventticketing.user.observer.EntityObserver;
 import com.team22.eventticketing.user.repository.UserRepository;
 
@@ -24,14 +25,17 @@ public class AuthService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final UserEventPublisher userEventPublisher;
     private final List<EntityObserver> observers = new ArrayList<>();
 
     public AuthService(UserRepository userRepository,
                        BCryptPasswordEncoder passwordEncoder,
-                       JwtService jwtService) {
+                       JwtService jwtService,
+                       UserEventPublisher userEventPublisher) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.userEventPublisher = userEventPublisher;
     }
     private void notifyObservers(String action, Object payload) {
         for (EntityObserver o : observers) o.onEvent(action, payload);
@@ -74,10 +78,18 @@ public class AuthService {
                 Role.ATTENDEE
         );
         user.setStatus(UserStatus.ACTIVE);
-        userRepository.save(user);
+
+        try {
+            user = userRepository.save(user);
+        } catch (Exception e) {
+            // Sequence out of sync — reset it and retry
+            userRepository.resetSequence();
+            user = userRepository.save(user);
+        }
 
         // e) MongoDB logging
         notifyObservers("REGISTERED", Map.of("userId", user.getId()));
+        userEventPublisher.publishUserRegistered(user.getId(), user.getEmail(), user.getRole().name());
 
         // f) Generate token
         String token = jwtService.generateToken(user.getId(), user.getEmail(), user.getRole().name());

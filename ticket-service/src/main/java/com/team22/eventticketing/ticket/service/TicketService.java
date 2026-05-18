@@ -14,16 +14,18 @@ import com.team22.eventticketing.ticket.model.dto.NearbyTicketDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketAnalyticsDTO;
 import com.team22.eventticketing.ticket.model.dto.TicketItemDTO;
 import com.team22.eventticketing.ticket.model.dto.UnusedTicketDTO;
+import com.team22.eventticketing.ticket.messaging.TicketEventPublisher;
 import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
 
-import dto.EventDTO;
-import dto.EventTicketSummaryDTO;
-import feign.BookingServiceClient;
-import feign.EventServiceClient;
-import dto.VenueCoordsDTO;
-import dto.BookingDTO;
-
+import com.team22.eventticketing.contracts.dto.EventDTO;
+import com.team22.eventticketing.contracts.dto.EventTicketSummaryDTO;
+import com.team22.eventticketing.contracts.events.TicketIssuedEvent;
+import com.team22.eventticketing.contracts.events.TicketStatusChangedEvent;
+import com.team22.eventticketing.contracts.feign.BookingServiceClient;
+import com.team22.eventticketing.contracts.feign.EventServiceClient;
+import com.team22.eventticketing.contracts.dto.VenueCoordsDTO;
+import com.team22.eventticketing.contracts.dto.BookingDTO;
 
 import java.util.HashMap;
 
@@ -57,12 +59,16 @@ public class TicketService {
     private final EventServiceClient eventServiceClient;
     private static final Logger log =
             LoggerFactory.getLogger(TicketService.class);
+    private final TicketEventPublisher ticketEventPublisher;
 
-    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction, BookingServiceClient bookingServiceClient, EventServiceClient eventServiceClient) {
+    public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction,
+            BookingServiceClient bookingServiceClient, EventServiceClient eventServiceClient,
+            TicketEventPublisher ticketEventPublisher) {
         this.ticketRepository = ticketRepository;
         this.cacheEviction = cacheEviction;
         this.bookingServiceClient = bookingServiceClient;
         this.eventServiceClient = eventServiceClient;
+        this.ticketEventPublisher = ticketEventPublisher;
     }
 
     public void register(EntityObserver observer) {
@@ -149,6 +155,7 @@ public class TicketService {
         MDC.put("ticketId", id.toString());
 
         Ticket existing = getTicketById(id);
+        TicketStatus previousStatus = existing.getStatus();
 
         if (updated.getBookingId() != null)
             existing.setBookingId(updated.getBookingId());
@@ -172,6 +179,12 @@ public class TicketService {
         );
 
         cacheEviction.evictEntityAndFeatures("ticket", id, "S4-F1", "S4-F5", "S4-F6", "S4-F8", "S4-F9", "S4-F10");
+
+        if (saved.getStatus() != null && saved.getStatus() != previousStatus) {
+            ticketEventPublisher.publishTicketStatusChanged(
+                    new TicketStatusChangedEvent(saved.getId(), saved.getBookingId(), saved.getStatus().name()));
+        }
+
         notifyObservers("TICKET_UPDATED", Map.of("ticketId", saved.getId()));
 
         long elapsed = System.currentTimeMillis() - start;
@@ -260,8 +273,7 @@ public class TicketService {
 
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
-                    "Booking not found with id: " + bookingId
-            );
+                    "Booking not found with id: " + bookingId);
         }
 
         Long eventId = booking.eventId();
@@ -286,8 +298,7 @@ public class TicketService {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "Duplicate ticket code in batch: "
-                                + item.getTicketCode()
-                );
+                                + item.getTicketCode());
             }
         }
 
@@ -306,8 +317,7 @@ public class TicketService {
 
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Ticket code already exists: " + code
-                );
+                        "Ticket code already exists: " + code);
             }
         }
 
@@ -335,7 +345,7 @@ public class TicketService {
 
         }).toList();
 
-        ticketRepository.saveAll(tickets);
+        List<Ticket> savedTickets = ticketRepository.saveAll(tickets);
 
         log.info(
                 "{} {} saved with status={}",
@@ -361,13 +371,16 @@ public class TicketService {
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
 
+        for (Ticket t : savedTickets) {
+            ticketEventPublisher.publishTicketIssued(
+                    new TicketIssuedEvent(t.getId(), bookingId, t.getAttendeeName(), t.getTicketCode()));
+        }
+
         notifyObservers(
                 "TICKETS_BATCH_ISSUED",
                 Map.of(
                         "bookingId", bookingId,
-                        "count", tickets.size()
-                )
-        );
+                        "count", savedTickets.size()));
 
         MDC.remove("bookingId");
         MDC.remove("eventId");
@@ -442,8 +455,7 @@ public class TicketService {
             Long bookingId,
             String attendeeName,
             String ticketCode,
-            Map<String, Object> metadata
-    ) {
+            Map<String, Object> metadata) {
 
         MDC.put("bookingId", bookingId.toString());
 
@@ -478,8 +490,7 @@ public class TicketService {
 
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
-                    "Booking not found"
-            );
+                    "Booking not found");
         }
 
         Long eventId = booking.eventId();
@@ -498,8 +509,7 @@ public class TicketService {
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Ticket code already exists"
-            );
+                    "Ticket code already exists");
         }
 
         Ticket ticket = new Ticket();
@@ -533,13 +543,14 @@ public class TicketService {
         cacheEviction.evictPattern("S4-F9");
         cacheEviction.evictPattern("S4-F10");
 
+        ticketEventPublisher.publishTicketIssued(
+                new TicketIssuedEvent(saved.getId(), bookingId, saved.getAttendeeName(), saved.getTicketCode()));
+
         notifyObservers(
                 "TICKET_ISSUED",
                 Map.of(
                         "ticketId", saved.getId(),
-                        "bookingId", bookingId
-                )
-        );
+                        "bookingId", bookingId));
 
         MDC.remove("ticketId");
         MDC.remove("bookingId");
@@ -555,8 +566,7 @@ public class TicketService {
     public List<NearbyTicketDTO> findNearbyTickets(
             double lat,
             double lon,
-            double radiusKm
-    ) {
+            double radiusKm) {
 
         long start = System.currentTimeMillis();
 
@@ -684,8 +694,7 @@ public class TicketService {
             }
         }
 
-        results.sort((a, b) ->
-                Double.compare(a.getDistanceKm(), b.getDistanceKm()));
+        results.sort((a, b) -> Double.compare(a.getDistanceKm(), b.getDistanceKm()));
 
         long elapsed = System.currentTimeMillis() - start;
 
@@ -1123,6 +1132,7 @@ public class TicketService {
                 .ticketsByStatus(ticketsByStatus)
                 .build();
     }
+
     // new first endpoint
     public int getUsedTicketCountForBooking(Long bookingId) {
 

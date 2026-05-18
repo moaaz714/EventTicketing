@@ -26,6 +26,21 @@
       keyspace-name: etdb_tickets_ks
       schema-action: CREATE_IF_NOT_EXISTS
 
+    rabbitmq:
+      host: ${RABBITMQ_HOST:rabbitmq}
+      port: ${RABBITMQ_PORT:5672}
+      username: ${RABBITMQ_USER:guest}
+      password: ${RABBITMQ_PASSWORD:guest}
+      listener:
+        simple:
+          default-requeue-rejected: false
+          retry:
+            enabled: true
+            max-retries: 3
+            initial-interval: 1000
+            multiplier: 2.0
+            max-interval: 10000
+
   jwt:
     secret: ${JWT_SECRET:24966c8a763b3a3f7f264cefb93d95159184e8c5e2af5c94e05387371d47a3fd=}
     expiration: ${JWT_EXPIRATION_MS:86400000}
@@ -51,5 +66,21 @@
       distribution:
         percentiles-histogram:
           http.server.requests: true
+
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,info,prometheus
+    endpoint:
+      health:
+        probes:
+          enabled: true
+        show-details: never
+    health:
+      livenessstate:
+        enabled: true
+      readinessstate:
+        enabled: true
 
 

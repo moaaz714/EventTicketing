@@ -1,7 +1,7 @@
 package com.team22.eventticketing.ticket.controller;
 
 import com.team22.eventticketing.ticket.model.dto.*;
-import dto.EventTicketSummaryDTO;
+import com.team22.eventticketing.contracts.dto.EventTicketSummaryDTO;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
