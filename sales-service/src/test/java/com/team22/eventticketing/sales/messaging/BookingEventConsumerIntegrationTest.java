@@ -5,11 +5,11 @@ import com.team22.eventticketing.sales.messaging.publishers.PaymentEventPublishe
 import com.team22.eventticketing.sales.observer.MongoEventLogger;
 import com.team22.eventticketing.sales.repository.PaymentAuditEventRepository;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
-import events.BookingCancelledEvent;
-import events.BookingCompletedEvent;
-import feign.BookingServiceClient;
-import feign.EventServiceClient;
-import feign.UserServiceClient;
+import com.team22.eventticketing.contracts.events.BookingCancelledEvent;
+import com.team22.eventticketing.contracts.events.BookingCompletedEvent;
+import com.team22.eventticketing.contracts.feign.BookingServiceClient;
+import com.team22.eventticketing.contracts.feign.EventServiceClient;
+import com.team22.eventticketing.contracts.feign.UserServiceClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

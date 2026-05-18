@@ -6,8 +6,8 @@ import com.team22.eventticketing.sales.messaging.publishers.PaymentEventPublishe
 import com.team22.eventticketing.sales.repository.PromotionRepository;
 import com.team22.eventticketing.sales.repository.SalePromotionRepository;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
-import dto.BookingDTO;
-import feign.BookingServiceClient;
+import com.team22.eventticketing.contracts.dto.BookingDTO;
+import com.team22.eventticketing.contracts.feign.BookingServiceClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
