@@ -5,9 +5,9 @@ import com.team22.eventticketing.contracts.dto.EventDTO;
 import com.team22.eventticketing.contracts.dto.EventTicketSummaryDTO;
 import com.team22.eventticketing.contracts.dto.VenueCoordsDTO;
 import com.team22.eventticketing.contracts.events.TicketIssuedEvent;
-import com.team22.eventticketing.contracts.feign.BookingServiceClient;
 import com.team22.eventticketing.contracts.feign.EventServiceClient;
 import com.team22.eventticketing.ticket.messaging.TicketEventPublisher;
+import com.team22.eventticketing.ticket.resilience.BookingServiceFacade;
 import com.team22.eventticketing.ticket.model.BookingEventMapping;
 import com.team22.eventticketing.ticket.model.Ticket;
 import com.team22.eventticketing.ticket.model.TicketStatus;
@@ -46,7 +46,7 @@ class TicketServiceUnitTest {
 
     @Mock TicketRepository ticketRepository;
     @Mock CacheEvictionService cacheEviction;
-    @Mock BookingServiceClient bookingServiceClient;
+    @Mock BookingServiceFacade bookingServiceFacade;
     @Mock EventServiceClient eventServiceClient;
     @Mock TicketEventPublisher ticketEventPublisher;
     @Mock BookingEventMappingRepository bookingEventMappingRepository;
@@ -62,7 +62,7 @@ class TicketServiceUnitTest {
         Long bookingId = 1L;
         Long eventId = 99L;
 
-        when(bookingServiceClient.getBooking(bookingId)).thenReturn(bookingDto(bookingId, eventId));
+        when(bookingServiceFacade.getBooking(bookingId)).thenReturn(bookingDto(bookingId, eventId));
         when(bookingEventMappingRepository.findById(bookingId))
                 .thenReturn(Optional.of(new BookingEventMapping(bookingId, eventId, java.time.LocalDateTime.now())));
         when(ticketRepository.existsByTicketCode("TKT-001")).thenReturn(false);
@@ -74,7 +74,7 @@ class TicketServiceUnitTest {
 
         Ticket saved = ticketService.issueTicket(bookingId, "Alice", "TKT-001", Map.of());
 
-        verify(bookingServiceClient, times(1)).getBooking(bookingId);
+        verify(bookingServiceFacade, times(1)).getBooking(bookingId);
         verify(ticketRepository).save(any(Ticket.class));
         verify(ticketEventPublisher).publishTicketIssued(any(TicketIssuedEvent.class));
         assertThat(saved.getId()).isEqualTo(42L);
@@ -85,7 +85,7 @@ class TicketServiceUnitTest {
     @Test
     void f2_issueTicket_feignThrows_mapsTo404AndDoesNotPublish() {
         Long bookingId = 999L;
-        when(bookingServiceClient.getBooking(bookingId)).thenThrow(new RuntimeException("404 Not Found"));
+        when(bookingServiceFacade.getBooking(bookingId)).thenThrow(new RuntimeException("404 Not Found"));
 
         assertThatThrownBy(() -> ticketService.issueTicket(bookingId, "Alice", "TKT-X", Map.of()))
                 .isInstanceOf(ResponseStatusException.class)
@@ -110,7 +110,7 @@ class TicketServiceUnitTest {
         EventTicketSummaryDTO summary = ticketService.getEventTicketSummary(eventId);
 
         verify(ticketRepository, times(1)).findByEventId(eventId);
-        verify(bookingServiceClient, never()).getBooking(anyLong());
+        verify(bookingServiceFacade, never()).getBooking(anyLong());
         verify(eventServiceClient, never()).getEvent(anyLong());
         assertThat(summary.totalTicketsSold()).isEqualTo(3L);
         assertThat(summary.usedCount()).isEqualTo(2L);
@@ -135,13 +135,13 @@ class TicketServiceUnitTest {
         latest.setId(100L);
         latest.setBookingId(bookingId);
 
-        when(bookingServiceClient.getBooking(bookingId)).thenReturn(bookingDto(bookingId, 99L));
+        when(bookingServiceFacade.getBooking(bookingId)).thenReturn(bookingDto(bookingId, 99L));
         when(ticketRepository.findTopByBookingIdOrderByIssuedAtDesc(bookingId))
                 .thenReturn(Optional.of(latest));
 
         Ticket result = ticketService.getLatestTicketByBooking(bookingId);
 
-        verify(bookingServiceClient, times(1)).getBooking(bookingId);
+        verify(bookingServiceFacade, times(1)).getBooking(bookingId);
         verify(ticketRepository, times(1)).findTopByBookingIdOrderByIssuedAtDesc(bookingId);
         assertThat(result.getId()).isEqualTo(100L);
     }
@@ -149,7 +149,7 @@ class TicketServiceUnitTest {
     @Test
     void f1_getLatestTicketByBooking_feignThrows_mapsTo404() {
         Long bookingId = 999L;
-        when(bookingServiceClient.getBooking(bookingId)).thenThrow(new RuntimeException("404"));
+        when(bookingServiceFacade.getBooking(bookingId)).thenThrow(new RuntimeException("404"));
 
         assertThatThrownBy(() -> ticketService.getLatestTicketByBooking(bookingId))
                 .isInstanceOf(ResponseStatusException.class)
@@ -168,7 +168,7 @@ class TicketServiceUnitTest {
                 new TicketItemDTO("Alice", "TKT-001", Map.of()),
                 new TicketItemDTO("Bob", "TKT-002", Map.of())));
 
-        when(bookingServiceClient.getBooking(bookingId)).thenReturn(bookingDto(bookingId, eventId));
+        when(bookingServiceFacade.getBooking(bookingId)).thenReturn(bookingDto(bookingId, eventId));
         when(bookingEventMappingRepository.findById(bookingId))
                 .thenReturn(Optional.of(new BookingEventMapping(bookingId, eventId, java.time.LocalDateTime.now())));
         when(ticketRepository.existsByTicketCode(anyString())).thenReturn(false);
@@ -182,7 +182,7 @@ class TicketServiceUnitTest {
         int count = ticketService.batchIssueTickets(request);
 
         assertThat(count).isEqualTo(2);
-        verify(bookingServiceClient, times(1)).getBooking(bookingId);
+        verify(bookingServiceFacade, times(1)).getBooking(bookingId);
         verify(ticketRepository, times(1)).saveAll(anyList());
         verify(ticketEventPublisher, times(2)).publishTicketIssued(any(TicketIssuedEvent.class));
     }
@@ -193,7 +193,7 @@ class TicketServiceUnitTest {
         BatchTicketRequestDTO request = new BatchTicketRequestDTO(bookingId, List.of(
                 new TicketItemDTO("Alice", "TKT-X", Map.of())));
 
-        when(bookingServiceClient.getBooking(bookingId)).thenThrow(new RuntimeException("404"));
+        when(bookingServiceFacade.getBooking(bookingId)).thenThrow(new RuntimeException("404"));
 
         assertThatThrownBy(() -> ticketService.batchIssueTickets(request))
                 .isInstanceOf(ResponseStatusException.class)
@@ -220,7 +220,7 @@ class TicketServiceUnitTest {
         ticket.setAttendeeName("Alice");
 
         when(ticketRepository.findByStatus(TicketStatus.VALID)).thenReturn(List.of(ticket));
-        when(bookingServiceClient.getBooking(bookingId)).thenReturn(bookingDto(bookingId, eventId));
+        when(bookingServiceFacade.getBooking(bookingId)).thenReturn(bookingDto(bookingId, eventId));
         when(eventServiceClient.getEvent(eventId))
                 .thenReturn(new EventDTO(eventId, "TestEvent", "UPCOMING", java.time.LocalDateTime.now()));
         when(eventServiceClient.getEventVenueCoords(eventId))
@@ -228,7 +228,7 @@ class TicketServiceUnitTest {
 
         List<NearbyTicketDTO> results = ticketService.findNearbyTickets(centerLat, centerLon, 5.0);
 
-        verify(bookingServiceClient, times(1)).getBooking(bookingId);
+        verify(bookingServiceFacade, times(1)).getBooking(bookingId);
         verify(eventServiceClient, times(1)).getEvent(eventId);
         verify(eventServiceClient, times(1)).getEventVenueCoords(eventId);
         assertThat(results).hasSize(1);
@@ -272,7 +272,7 @@ class TicketServiceUnitTest {
 
         verify(eventServiceClient, times(1)).getEvent(upcomingEventId);
         verify(eventServiceClient, times(1)).getEvent(pastEventId);
-        verify(bookingServiceClient, never()).getBooking(anyLong());
+        verify(bookingServiceFacade, never()).getBooking(anyLong());
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getTicketCode()).isEqualTo("TKT-UP-1");
         assertThat(results.get(0).getEventName()).isEqualTo("UpcomingFest");
