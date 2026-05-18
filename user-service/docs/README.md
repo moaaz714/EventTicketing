@@ -40,4 +40,5 @@ Health check: `GET http://localhost:8080/api/users/health` → should return `OK
 | [authentication.md](authentication.md) | JWT login flow and how requests are secured |
 | [messaging.md](messaging.md) | RabbitMQ events published and consumed |
 | [caching.md](caching.md) | Redis caching strategy and cache lifetimes |
+| [circuit-breaker.md](circuit-breaker.md) | How the service stays up when booking-service goes down |
 | [configuration.md](configuration.md) | Environment variables and application settings |

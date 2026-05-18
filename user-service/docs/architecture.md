@@ -108,6 +108,8 @@ The Feign client interface (`feign.BookingServiceClient` in the `contracts` modu
 
 **Why this matters:** user-service never touches the bookings database directly. If booking-service is down, those endpoints will return an error, but the rest of user-service still works fine.
 
+**What happens if booking-service goes down?** Rather than returning an error or hanging for a long time, user-service uses a **circuit breaker**. After a few failed calls it stops trying to reach booking-service and immediately returns safe default values (zeros for counts and amounts) until booking-service comes back. See [circuit-breaker.md](circuit-breaker.md) for the full details.
+
 ---
 
 ## Observer pattern (audit logging)
