@@ -6,6 +6,7 @@ public class TicketScanDTO {
     private Instant timestamp;
     private String scanType, attendeeName, gate, section, seatNumber, notes;
 
+
     public TicketScanDTO(Builder builder) {
         this.timestamp = builder.timestamp;
         this.scanType = builder.scanType;

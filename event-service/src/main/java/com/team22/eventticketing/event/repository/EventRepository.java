@@ -2,10 +2,12 @@ package com.team22.eventticketing.event.repository;
 
 import com.team22.eventticketing.event.model.Event;
 import com.team22.eventticketing.event.model.EventCategory;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -13,17 +15,7 @@ import java.util.List;
 @Repository
 public interface EventRepository extends JpaRepository<Event, Long> {
 
-    @Query(value = """
-            SELECT EXISTS (
-                SELECT *
-                FROM bookings b
-                WHERE b.event_id = :eventId
-                  AND b.status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN')
-            )
-            """, nativeQuery = true)
-    boolean existsActiveBookingsForEvent(@Param("eventId") Long eventId);
-
-
+    // Local event-service query only: events table JSONB
     @Query(value = """
             SELECT * FROM events e
             WHERE e.details ->> :key = :value
@@ -33,39 +25,17 @@ public interface EventRepository extends JpaRepository<Event, Long> {
             @Param("value") String value
     );
 
+    // Local event-service query only: events table JSONB + local status
     @Query(value = """
-        SELECT * FROM events e
-        WHERE e.details ->> :key = :value
-          AND e.status = :status
-        """, nativeQuery = true)
+            SELECT * FROM events e
+            WHERE e.details ->> :key = :value
+              AND e.status = :status
+            """, nativeQuery = true)
     List<Event> findByDetailAttributeAndStatus(
             @Param("key") String key,
             @Param("value") String value,
             @Param("status") String status
     );
-
-    @Query(value = """
-        SELECT 
-            COUNT(id) AS totalBookings, 
-            COALESCE(SUM(total_amount), 0) AS totalRevenue, 
-            COALESCE(AVG(total_amount), 0) AS avgBookingAmount 
-        FROM bookings 
-        WHERE event_id = :eventId 
-          AND status = 'COMPLETED'
-    """, nativeQuery = true)
-    List<Object[]> getEventRevenueStats(@Param("eventId") Long eventId);
-
-    // Check if booking exists at all
-    @Query(value = "SELECT COUNT(*) FROM bookings WHERE id = :bookingId", nativeQuery = true)
-    long checkBookingExists(@Param("bookingId") Long bookingId);
-
-    // Check if it is completed and matches the event
-    @Query(value = "SELECT COUNT(*) FROM bookings b WHERE b.id = :bookingId AND b.event_id = :eventId AND b.status = 'COMPLETED'", nativeQuery = true)
-    long countCompletedBookingForEvent(@Param("bookingId") Long bookingId, @Param("eventId") Long eventId);
-
-    //  check if the user is an ADMIN
-    @Query(value = "SELECT COUNT(*) FROM users u WHERE u.id = :userId AND u.role = 'ADMIN'", nativeQuery = true)
-    long checkUserIsAdmin(@Param("userId") Long userId);
 
     List<Event> findByCategoryOrderByEventDateAsc(EventCategory category);
 
@@ -83,61 +53,23 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     List<Event> findAllByOrderByEventDateAsc();
 
     List<Event> findByCategoryAndEventDateAfterOrderByEventDateAsc(
-            EventCategory category, LocalDateTime startDate);
+            EventCategory category,
+            LocalDateTime startDate
+    );
 
     List<Event> findByCategoryAndEventDateBeforeOrderByEventDateAsc(
-            EventCategory category, LocalDateTime endDate);
+            EventCategory category,
+            LocalDateTime endDate
+    );
 
     List<Event> findByEventDateAfterOrderByEventDateAsc(LocalDateTime startDate);
 
     List<Event> findByEventDateBeforeOrderByEventDateAsc(LocalDateTime endDate);
 
-    //  Find events that have at least one unverified session
+    // Local event-service query only: Event -> EventSession relationship
     @Query("SELECT DISTINCT e FROM Event e JOIN e.eventSessions s WHERE s.verified = false")
     List<Event> findEventsWithUnverifiedSessions();
 
-    @Query(value = """
-        SELECT 
-            e.id AS eventId,
-            e.name AS name,
-            e.rating AS rating,
-            COUNT(b.id) AS totalBookings
-        FROM events e
-        LEFT JOIN bookings b ON b.event_id = e.id
-        GROUP BY e.id, e.name, e.rating
-        ORDER BY e.rating DESC
-        LIMIT :limit
-        """, nativeQuery = true)
-    List<Object[]> findTopRatedEvents(@Param("limit") int limit);
-
-
-    // Total bookings count
-    @Query(value = "SELECT COUNT(*) FROM bookings WHERE event_id = :eventId", nativeQuery = true)
-    long countBookingsByEventId(@Param("eventId") Long eventId);
-
-    // Total revenue (COMPLETED only)
-    @Query(value = """
-    SELECT COALESCE(SUM(total_amount), 0)
-    FROM bookings
-    WHERE event_id = :eventId AND status = 'COMPLETED'
-""", nativeQuery = true)
-    double sumRevenueByEventId(@Param("eventId") Long eventId);
-
-    // Total tickets sold
-    @Query(value = """
-    SELECT COUNT(t.id)
-    FROM tickets t
-    JOIN bookings b ON t.booking_id = b.id
-    WHERE b.event_id = :eventId
-""", nativeQuery = true)
-    long countTicketsByEventId(@Param("eventId") Long eventId);
-
-    // USED tickets
-    @Query(value = """
-    SELECT COUNT(t.id)
-    FROM tickets t
-    JOIN bookings b ON t.booking_id = b.id
-    WHERE b.event_id = :eventId AND t.status = 'USED'
-""", nativeQuery = true)
-    long countUsedTicketsByEventId(@Param("eventId") Long eventId);
+    // Local event-service query only: rating is stored on Event
+    List<Event> findAllByOrderByRatingDesc(Pageable pageable);
 }

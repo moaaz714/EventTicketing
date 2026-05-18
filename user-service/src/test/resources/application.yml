@@ -3,6 +3,10 @@ spring:
     url: jdbc:postgresql://localhost:5433/etdb-users
     username: postgres
     password: postgres
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:bookings-stub.sql
   jpa:
     hibernate:
       ddl-auto: update
@@ -14,6 +18,11 @@ spring:
       password: redispass
     mongodb:
       uri: mongodb://root:rootpass@localhost:27017/eventticketingmongo?authSource=admin
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
 
 jwt:
   secret: 24966c8a763b3a3f7f264cefb93d95159184e8c5e2af5c94e05387371d47a3fd=

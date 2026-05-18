@@ -1,5 +1,6 @@
 package com.team22.eventticketing.user.controller;
 
+import com.team22.eventticketing.contracts.feign.BookingServiceClient;
 import com.team22.eventticketing.user.entity.Role;
 import com.team22.eventticketing.user.entity.User;
 import com.team22.eventticketing.user.entity.UserStatus;
@@ -8,12 +9,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -28,8 +30,8 @@ class UserDeactivateIT {
     @Autowired
     private UserRepository userRepository;
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    @MockitoBean
+    private BookingServiceClient bookingServiceClient;
 
     private Long userId;
 
@@ -37,31 +39,27 @@ class UserDeactivateIT {
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
 
-        jdbcTemplate.execute("DELETE FROM bookings WHERE user_id IN (SELECT id FROM users WHERE email = 'deactivate-test@test.com')");
-        jdbcTemplate.execute("DELETE FROM users WHERE email = 'deactivate-test@test.com'");
+        userRepository.findAll().stream()
+                .filter(u -> "deactivate-test@test.com".equals(u.getEmail()))
+                .forEach(u -> userRepository.deleteById(u.getId()));
 
         User user = new User("Deactivate Test", "deactivate-test@test.com", "pass", "0000000000", Role.ATTENDEE);
         userId = userRepository.save(user).getId();
-
-        // Scenario a: create a PENDING booking for this user
-        jdbcTemplate.update("""
-                INSERT INTO bookings (user_id, total_amount, status, booking_date, contact_email)
-                VALUES (?, 100.0, 'PENDING', NOW(), 'test@test.com')
-                """, userId);
     }
 
     // Scenario b: deactivate with active booking → 400
     @Test
     void deactivate_returns400WhenActiveBookingExists() throws Exception {
+        when(bookingServiceClient.getActiveBookingCount(userId)).thenReturn(1);
+
         mockMvc.perform(put("/api/users/" + userId + "/deactivate"))
                 .andExpect(status().isBadRequest());
     }
 
-    // Scenario d: deactivate after booking completed → success
+    // Scenario d: deactivate with no active bookings → success
     @Test
     void deactivate_succeedsWhenNoActiveBookings() throws Exception {
-        // Scenario c: update booking to COMPLETED
-        jdbcTemplate.update("UPDATE bookings SET status = 'COMPLETED' WHERE user_id = ?", userId);
+        when(bookingServiceClient.getActiveBookingCount(userId)).thenReturn(0);
 
         mockMvc.perform(put("/api/users/" + userId + "/deactivate"))
                 .andExpect(status().isOk());
