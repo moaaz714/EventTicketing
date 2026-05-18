@@ -1,13 +1,13 @@
 package com.team22.eventticketing.sales.messaging.consumers;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.team22.eventticketing.sales.config.PaymentEventConfig;
 import com.team22.eventticketing.sales.entity.TicketSale;
 import com.team22.eventticketing.sales.messaging.publishers.PaymentEventPublisher;
 import com.team22.eventticketing.sales.observer.MongoEventLogger;
 import com.team22.eventticketing.sales.repository.TicketSaleRepository;
-import events.BookingCancelledEvent;
-import events.BookingCompletedEvent;
+import com.team22.eventticketing.contracts.events.BookingCancelledEvent;
+import com.team22.eventticketing.contracts.events.BookingCompletedEvent;
 import jakarta.transaction.Transactional;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;

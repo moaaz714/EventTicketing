@@ -52,10 +52,14 @@ public class RedisConfig {
                 // S4-F12 
                 configs.put("ticket-service::S4-F12", cfg(Duration.ofMinutes(5), json));
 
+
                 return RedisCacheManager.builder(factory)
-                                .withInitialCacheConfigurations(configs)
-                                .cacheDefaults(cfg(Duration.ofMinutes(10), json))
-                                .build();
+                        .withInitialCacheConfigurations(configs)
+                        .cacheDefaults(cfg(Duration.ofMinutes(10), json))
+                        .enableStatistics()
+                        .build();
+
+
         }
 
         @Bean
@@ -77,12 +81,17 @@ public class RedisConfig {
                 return template;
         }
 
+
         private RedisCacheConfiguration cfg(Duration ttl, RedisSerializer<Object> json) {
                 return RedisCacheConfiguration.defaultCacheConfig()
-                                .entryTtl(ttl)
-                                .serializeKeysWith(RedisSerializationContext.SerializationPair
-                                                .fromSerializer(new StringRedisSerializer()))
-                                .serializeValuesWith(RedisSerializationContext.SerializationPair
-                                                .fromSerializer(json));
+                        .computePrefixWith(cacheName ->
+                                "ticket-service::" + cacheName + "::")
+                        .entryTtl(ttl)
+                        .serializeKeysWith(RedisSerializationContext.SerializationPair
+                                .fromSerializer(new StringRedisSerializer()))
+                        .serializeValuesWith(RedisSerializationContext.SerializationPair
+                                .fromSerializer(json));
         }
+
+
 }
