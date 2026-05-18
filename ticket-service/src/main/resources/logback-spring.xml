@@ -1,6 +1,5 @@
 <configuration>
 
-    ```
     <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
 
         <http>
@@ -49,6 +48,6 @@
     <root level="INFO">
         <appender-ref ref="LOKI"/>
     </root>
-    ```
+
 
 </configuration>
