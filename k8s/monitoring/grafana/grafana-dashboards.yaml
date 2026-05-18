@@ -278,142 +278,192 @@ data:
 
   # ── S2/S6: Event Service Dashboard (Unified Slice 5 & Slice 6) ──
   event-dashboard.json: |
-      {
-    "annotations": {
-      "list": [ ]
-    },
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 0,
-    "id": null,
-    "links": [ ],
-    "panels": [
-      {
-        "datasource": {
-          "type": "loki",
-          "uid": "loki"
+    {
+      "annotations": {
+        "list": []},
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "tags": [
+        "event-service",
+        "eventticketing"],
+      "templating": {
+        "list": []},
+      "time": {
+        "from": "now-1h",
+        "to": "now"},
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "Event Service Dashboard",
+      "uid": "event-service-dashboard",
+      "version": 1,
+      "panels": [
+        {
+          "id": 1,
+          "title": "Error Rate (errors per minute)",
+          "type": "timeseries",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 0},
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"},
+              "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\", level=\"ERROR\"}[1m]))",
+              "legendFormat": "errors/min",
+              "refId": "A"
+            }
+          ]
         },
-        "fieldConfig": {
-          "defaults": { },
-          "overrides": [ ]
+        {
+          "id": 2,
+          "title": "Feign Call Failures",
+          "type": "logs",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 0},
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"},
+              "expr": "{app=\"eventticketing\", service=\"event-service\"} |~ \"FeignException|unavailable\"",
+              "refId": "A"
+            }
+          ]
         },
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 0
+        {
+          "id": 3,
+          "title": "Feign Call Outcomes",
+          "type": "logs",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 8},
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"},
+              "expr": "{app=\"eventticketing\", service=\"event-service\"} |~ \"Feign|FeignException\"",
+              "refId": "A"
+            }
+          ]
         },
-        "id": 1,
-        "title": "Event Service — Error Rate",
-        "type": "timeseries",
-        "targets": [
-          {
-            "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\", level=\"ERROR\"}[1m]))",
-            "legendFormat": "errors/min",
-            "refId": "A"
-          }
-        ]
-      },
-      {
-        "datasource": {
-          "type": "loki",
-          "uid": "loki"
+        {
+          "id": 4,
+          "title": "HTTP Request Rate (req/s per endpoint)",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 8},
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"},
+              "expr": "sum by(method, uri) (rate(http_server_requests_seconds_count{job=\"event-service\"}[5m]))",
+              "legendFormat": "{{method}} {{uri}}",
+              "refId": "A"
+            }
+          ]
         },
-        "fieldConfig": {
-          "defaults": { },
-          "overrides": [ ]
+        {
+          "id": 5,
+          "title": "HTTP Latency Percentiles (P50 / P95 / P99)",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 16},
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"},
+              "expr": "histogram_quantile(0.50, sum by(le, uri) (rate(http_server_requests_seconds_bucket{job=\"event-service\"}[5m])))",
+              "legendFormat": "P50 {{uri}}",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"},
+              "expr": "histogram_quantile(0.95, sum by(le, uri) (rate(http_server_requests_seconds_bucket{job=\"event-service\"}[5m])))",
+              "legendFormat": "P95 {{uri}}",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"},
+              "expr": "histogram_quantile(0.99, sum by(le, uri) (rate(http_server_requests_seconds_bucket{job=\"event-service\"}[5m])))",
+              "legendFormat": "P99 {{uri}}",
+              "refId": "C"
+            }
+          ]
         },
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 0
-        },
-        "id": 2,
-        "title": "Event Service — Feign Call Failures",
-        "type": "timeseries",
-        "targets": [
-          {
-            "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\, level=\"ERROR"\"} | json [1m] | message =~ \".*unavailable.*|.*temporarily unavailable.*|.*Feign.*failed.*|.*FeignException.*\" [5m]))",
-            "legendFormat": "feign failures/5m",
-            "refId": "A"
-          }
-        ]
-      },
-      {
-        "datasource": {
-          "type": "loki",
-          "uid": "loki"
-        },
-        "fieldConfig": {
-          "defaults": { },
-          "overrides": [ ]
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 8
-        },
-        "id": 3,
-        "title": "Event Service — Successful Feign Calls",
-        "type": "timeseries",
-        "targets": [
-          {
-            "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\", level=\"ERROR\"} | json [1m]))",
-            "legendFormat": "feign successes/5m",
-            "refId": "A"
-          }
-        ]
-      },
-      {
-        "datasource": {
-          "type": "loki",
-          "uid": "loki"
-        },
-        "fieldConfig": {
-          "defaults": { },
-          "overrides": [ ]
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 8
-        },
-        "id": 4,
-        "title": "Event Service — Read Endpoint Activity",
-        "type": "timeseries",
-        "targets": [
-          {
-            "expr": "sum(count_over_time({app=\"eventticketing\", service=\"event-service\"} | json | message =~ \".*Average capacity requested.*|.*Venue coordinates requested.*\" [5m]))",
-            "legendFormat": "S2-READ-DB reads/5m",
-            "refId": "A"
-          }
-        ]
-      }
-    ],
-    "refresh": "5s",
-    "schemaVersion": 39,
-    "style": "dark",
-    "tags": [
-      "event-service",
-      "eventticketing",
-      "loki"
-    ],
-    "templating": {
-      "list": [ ]
-    },
-    "time": {
-      "from": "now-1h",
-      "to": "now"
-    },
-    "timepicker": { },
-    "timezone": "browser",
-    "title": "Event Service Monitoring Dashboard",
-    "uid": "event-service-monitoring-dashboard",
-    "version": 1
-  }
+        {
+          "id": 6,
+          "title": "JVM Heap Usage",
+          "type": "timeseries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"},
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 16},
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"},
+              "expr": "jvm_memory_used_bytes{job=\"event-service\", area=\"heap\"}",
+              "legendFormat": "heap used",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"},
+              "expr": "jvm_memory_max_bytes{job=\"event-service\", area=\"heap\"}",
+              "legendFormat": "heap max",
+              "refId": "B"
+            }
+          ]
+        }
+      ]
+    }
 
   # ── S4: Ticket Service Dashboard (owned by S4-INFRA) ──
   ticket-dashboard.json: |
