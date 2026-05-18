@@ -415,7 +415,7 @@ data:
     "version": 1
   }
 
-  # ── S4: Ticket Service Dashboard — placeholder, filled by S4-INFRA ──
+  # ── S4: Ticket Service Dashboard (owned by S4-INFRA) ──
   ticket-dashboard.json: |
     {
       "annotations": { "list": [] },
@@ -437,11 +437,92 @@ data:
       "panels": [
         {
           "id": 1,
+          "title": "Error Rate (errors per minute)",
+          "description": "Count of ERROR-level log lines from ticket-service per minute. Spikes indicate scan failures, Feign errors, or Cassandra write issues.",
+          "type": "timeseries",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "fixed", "fixedColor": "red" },
+              "custom": { "lineWidth": 1, "fillOpacity": 10 },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+            "tooltip": { "mode": "single", "sort": "none" }
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "sum(count_over_time({app=\"eventticketing\", service=\"ticket-service\", level=\"ERROR\"}[1m]))",
+              "legendFormat": "errors/min",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "RabbitMQ Ticket Events (issued / cancelled / saga)",
+          "description": "Log lines for ticket.issued, ticket.cancelled, ticket.status-changed published events and booking.placed / booking.cancelled consumed events.",
+          "type": "logs",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "options": {
+            "dedupStrategy": "none",
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showCommonLabels": false,
+            "showLabels": false,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "{app=\"eventticketing\", service=\"ticket-service\"} |~ \"ticket\\.issued|ticket\\.cancelled|ticket\\.status-changed|booking\\.placed|booking\\.cancelled\"",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Feign Call Outcomes",
+          "description": "Log lines for Feign calls to booking-service and event-service. Detects downstream degradation affecting ticket issuance and nearby-event lookups.",
+          "type": "logs",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "options": {
+            "dedupStrategy": "none",
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showCommonLabels": false,
+            "showLabels": false,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+          },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "{app=\"eventticketing\", service=\"ticket-service\"} |~ \"Feign|FeignException\"",
+              "queryType": "range",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
           "title": "HTTP Request Rate (req/s per endpoint)",
-          "description": "Requests per second to ticket-service endpoints, grouped by method and URI.",
+          "description": "Requests per second to ticket-service endpoints grouped by method and URI. Shows load on scan, batch-issue, and history endpoints.",
           "type": "timeseries",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
           "fieldConfig": {
             "defaults": {
               "color": { "mode": "palette-classic" },
@@ -464,12 +545,12 @@ data:
           ]
         },
         {
-          "id": 2,
+          "id": 5,
           "title": "HTTP Latency Percentiles (P50 / P95 / P99)",
-          "description": "Request latency percentiles for ticket-service endpoints. S4-F3 (findNearbyTickets) does N+1 Feign calls and should show the highest tail.",
+          "description": "Request latency percentiles for ticket-service. P99 spikes on /nearby or /batch indicate slow Feign chains or Cassandra writes.",
           "type": "timeseries",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
           "fieldConfig": {
             "defaults": {
               "color": { "mode": "palette-classic" },
@@ -504,70 +585,12 @@ data:
           ]
         },
         {
-          "id": 3,
-          "title": "Saga Listener Throughput (ticket.booking.saga-listener)",
-          "description": "RabbitMQ listener invocations per second on the booking saga queue, split by success vs failure. Rising failures = messages heading to DLQ.",
-          "type": "timeseries",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-          "fieldConfig": {
-            "defaults": {
-              "color": { "mode": "palette-classic" },
-              "custom": { "lineWidth": 1, "fillOpacity": 10 },
-              "unit": "ops"
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-            "tooltip": { "mode": "multi", "sort": "desc" }
-          },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum by(result) (rate(spring_rabbitmq_listener_seconds_count{job=\"ticket-service\", queue=\"ticket.booking.saga-listener\"}[5m]))",
-              "legendFormat": "{{result}}",
-              "refId": "A"
-            }
-          ]
-        },
-        {
-          "id": 4,
-          "title": "Redis Cache Hit Ratio (per cache)",
-          "description": "Hit ratio per cache name (S4-F1, S4-F3, S4-F5, S4-F6, S4-F8, S4-F9, S4-F10, ticket detail).",
-          "type": "timeseries",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-          "fieldConfig": {
-            "defaults": {
-              "color": { "mode": "palette-classic" },
-              "custom": { "lineWidth": 1, "fillOpacity": 10 },
-              "unit": "percentunit",
-              "min": 0,
-              "max": 1
-            },
-            "overrides": []
-          },
-          "options": {
-            "legend": { "calcs": ["mean", "min"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-            "tooltip": { "mode": "multi", "sort": "desc" }
-          },
-          "targets": [
-            {
-              "datasource": { "type": "prometheus", "uid": "prometheus" },
-              "expr": "sum by(cache) (rate(cache_gets_total{job=\"ticket-service\", result=\"hit\"}[5m])) / clamp_min(sum by(cache) (rate(cache_gets_total{job=\"ticket-service\"}[5m])), 0.001)",
-              "legendFormat": "{{cache}}",
-              "refId": "A"
-            }
-          ]
-        },
-        {
-          "id": 5,
+          "id": 6,
           "title": "JVM Heap Usage",
-          "description": "JVM heap memory used vs max for ticket-service. Watch for sustained growth approaching max.",
+          "description": "JVM heap used vs max for ticket-service. Sustained growth approaching max heap indicates a Redis cache or Cassandra result-set memory leak.",
           "type": "timeseries",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
           "fieldConfig": {
             "defaults": {
               "color": { "mode": "palette-classic" },
@@ -597,6 +620,8 @@ data:
         }
       ]
     }
+
+  # ── S5: Sales Service Dashboard (owned by S5-INFRA) ──
   sales-dashboard.json: |
     {
       "annotations": { "list": [] },
