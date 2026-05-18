@@ -18,12 +18,12 @@ import com.team22.eventticketing.ticket.messaging.TicketEventPublisher;
 import com.team22.eventticketing.ticket.observer.EntityObserver;
 import com.team22.eventticketing.ticket.repository.BookingEventMappingRepository;
 import com.team22.eventticketing.ticket.repository.TicketRepository;
+import com.team22.eventticketing.ticket.resilience.BookingServiceFacade;
 
 import com.team22.eventticketing.contracts.dto.EventDTO;
 import com.team22.eventticketing.contracts.dto.EventTicketSummaryDTO;
 import com.team22.eventticketing.contracts.events.TicketIssuedEvent;
 import com.team22.eventticketing.contracts.events.TicketStatusChangedEvent;
-import com.team22.eventticketing.contracts.feign.BookingServiceClient;
 import com.team22.eventticketing.contracts.feign.EventServiceClient;
 import com.team22.eventticketing.contracts.dto.VenueCoordsDTO;
 import com.team22.eventticketing.contracts.dto.BookingDTO;
@@ -56,19 +56,19 @@ public class TicketService {
         private final TicketRepository ticketRepository;
         private final CacheEvictionService cacheEviction;
         private final List<EntityObserver> observers = new ArrayList<>();
-        private final BookingServiceClient bookingServiceClient;
+        private final BookingServiceFacade bookingServiceFacade;
         private final EventServiceClient eventServiceClient;
         private static final Logger log = LoggerFactory.getLogger(TicketService.class);
         private final TicketEventPublisher ticketEventPublisher;
         private final BookingEventMappingRepository bookingEventMappingRepository;
 
         public TicketService(TicketRepository ticketRepository, CacheEvictionService cacheEviction,
-                        BookingServiceClient bookingServiceClient, EventServiceClient eventServiceClient,
+                        BookingServiceFacade bookingServiceFacade, EventServiceClient eventServiceClient,
                         TicketEventPublisher ticketEventPublisher,
                         BookingEventMappingRepository bookingEventMappingRepository) {
                 this.ticketRepository = ticketRepository;
                 this.cacheEviction = cacheEviction;
-                this.bookingServiceClient = bookingServiceClient;
+                this.bookingServiceFacade = bookingServiceFacade;
                 this.eventServiceClient = eventServiceClient;
                 this.ticketEventPublisher = ticketEventPublisher;
                 this.bookingEventMappingRepository = bookingEventMappingRepository;
@@ -262,7 +262,7 @@ public class TicketService {
 
                 try {
 
-                        booking = bookingServiceClient.getBooking(bookingId);
+                        booking = bookingServiceFacade.getBooking(bookingId);
 
                         log.info(
                                         "{}.{} returned successfully",
@@ -407,7 +407,7 @@ public class TicketService {
 
                 try {
 
-                        bookingServiceClient.getBooking(bookingId);
+                        bookingServiceFacade.getBooking(bookingId);
 
                         log.info(
                                         "{}.{} returned successfully",
@@ -467,7 +467,7 @@ public class TicketService {
 
                 try {
 
-                        booking = bookingServiceClient.getBooking(bookingId);
+                        booking = bookingServiceFacade.getBooking(bookingId);
 
                         log.info(
                                         "{}.{} returned successfully",
@@ -582,7 +582,7 @@ public class TicketService {
                                                 "getBooking",
                                                 ticket.getBookingId());
 
-                                BookingDTO booking = bookingServiceClient.getBooking(ticket.getBookingId());
+                                BookingDTO booking = bookingServiceFacade.getBooking(ticket.getBookingId());
 
                                 log.info(
                                                 "{}.{} returned successfully",
