@@ -30,15 +30,17 @@ spec:
           readinessProbe:
             exec:
               command: ["rabbitmq-diagnostics", "check_port_connectivity"]
-            initialDelaySeconds: 20
-            periodSeconds: 10
-            failureThreshold: 5
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 10
+            timeoutSeconds: 10
           livenessProbe:
             exec:
-              command: ["rabbitmq-diagnostics", "status"]
-            initialDelaySeconds: 60
+              command: ["rabbitmq-diagnostics", "check_port_connectivity"]
+            initialDelaySeconds: 120
             periodSeconds: 30
-            failureThreshold: 3
+            failureThreshold: 5
+            timeoutSeconds: 10
           volumeMounts:
             - name: rabbitmq-storage
               mountPath: /var/lib/rabbitmq
