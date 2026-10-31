@@ -1,0 +1,54 @@
+/* Low-Res Proof tokens. Anything unresolved renders in pixels, anything
+   settled in smooth type. One synthetic accent; red only for failure. */
+:root {
+  --paper: #F2F0EB;
+  --paper-raised: #FBFAF7;
+  --ink: #0A0A0A;
+  --ink-2: #4A4945;      /* secondary text, 8.2:1 on paper */
+  --ink-3: #6B6A65;      /* tertiary text, 5.0:1 on paper */
+  --hair: #CFCCC4;
+  --accent: #2B3BFF;     /* actions and live state */
+  --accent-press: #1F2BD1;
+  --danger: #E5011A;     /* failure and destructive confirmation (fills) */
+  --danger-ink: #B80018; /* red text on paper, 5.9:1 */
+  --danger-wash: #FCE3E5;
+
+  --rule: 2px solid var(--ink);
+  --rule-hair: 1px solid var(--hair);
+
+  --font-pixel: 'Silkscreen', ui-monospace, monospace;
+  --font-text: 'Schibsted Grotesk', system-ui, sans-serif;
+
+  /* Text scale (grotesk) */
+  --t-xs: 13px;
+  --t-sm: 15px;
+  --t-md: 18px;
+  --t-lg: 24px;
+  --t-xl: 32px;
+
+  /* Pixel scale: whole multiples of 8 only */
+  --px-16: 16px;
+  --px-24: 24px;
+  --px-32: 32px;
+  --px-48: 48px;
+  --px-64: 64px;
+  --px-96: 96px;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
+
+  --gutter: 40px;
+  --max: 1440px;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@media (max-width: 720px) {
+  :root { --gutter: 16px; }
+}

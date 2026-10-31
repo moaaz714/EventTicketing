@@ -51,3 +51,7 @@ cacheing.pdf
 CACHING_IMPLEMENTATION_PLAN.md
 m2User_desc.pdf
 MS2 requirements.pdf
+
+### Impeccable (machine-local) ###
+.impeccable/questions/
+.impeccable/quality-bar/

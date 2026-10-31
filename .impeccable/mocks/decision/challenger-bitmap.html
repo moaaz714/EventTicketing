@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F4F4EF;--ink:#000;--blue:#2B3BFF;--red:#FF3B1F;--mute:#5c5c58;--rule:#cfcfc8}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;background:var(--paper);color:var(--ink);font:400 15px/1.45 "Schibsted Grotesk",sans-serif}
+.px{font-family:Silkscreen,monospace;-webkit-font-smoothing:none;font-smooth:never}
+header{height:64px;display:flex;align-items:center;gap:36px;padding:0 40px;border-bottom:2px solid var(--ink)}
+.mark{font-size:24px}
+nav{display:flex;gap:24px;font-weight:600}nav .on{background:var(--ink);color:var(--paper);padding:4px 10px}
+.search{margin-left:auto;width:380px;height:40px;border:2px solid var(--ink);background:#fff;padding:8px 12px;color:var(--mute)}
+main{display:grid;grid-template-columns:1fr 400px;height:836px}
+.left{padding:28px 40px;overflow:hidden}
+.lead{display:grid;grid-template-columns:1fr 260px;gap:32px;padding-bottom:24px;border-bottom:2px solid var(--ink)}
+.lead .px{font-size:96px;line-height:.92;color:var(--blue);letter-spacing:-2px}
+.lead .meta{align-self:end;font-weight:600}
+.lead .meta b{display:block;font-size:28px;font-weight:800;font-variant-numeric:tabular-nums}
+.btn{display:inline-block;margin-top:12px;background:var(--blue);color:#fff;padding:12px 18px;font-weight:800}
+.filters{display:flex;gap:8px;margin:20px 0 10px}
+.chip{border:2px solid var(--ink);padding:4px 12px;font-weight:600}.chip.on{background:var(--ink);color:var(--paper)}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-weight:600;color:var(--mute);padding:8px 0;border-bottom:2px solid var(--ink)}
+td{padding:11px 0;border-bottom:1px solid var(--rule);font-variant-numeric:tabular-nums}
+td b{font-weight:800}
+aside{border-left:2px solid var(--ink);padding:28px;background:#fff}
+aside h2{font-size:22px;font-weight:800;margin-bottom:16px}
+.bk{border-top:2px solid var(--ink);padding:16px 0 18px}
+.bk .t{display:flex;justify-content:space-between;color:var(--mute)}
+.st{font-size:30px;margin:8px 0 6px}
+.st.pend{color:var(--red)}
+.st.smooth{font:800 30px "Schibsted Grotesk";color:var(--ink)}
+.bar{display:flex;gap:3px;margin:8px 0}.bar i{width:14px;height:14px;background:var(--rule)}.bar i.d{background:var(--ink)}.bar i.a{background:var(--red)}
+.pay{display:block;text-align:center;background:var(--ink);color:#fff;padding:12px;font-weight:800;margin-top:10px}
+.note{color:var(--mute);font-size:13px}
+</style></head><body>
+<header><span class="px mark">EVENT TICKETING</span><nav><span class="on">Events</span><span>My bookings</span><span>Tickets</span></nav><div class="search">Search events, venues, artists</div></header>
+<main>
+<section class="left">
+ <div class="lead"><div class="px">CAIRO JAZZ NIGHT</div><div class="meta">El Sawy Culturewheel, Zamalek<b>Fri 14 Nov, 20:00</b>From EGP 350 · ★ 4.6<br><span class="btn">Book seats</span></div></div>
+ <div class="filters"><span class="chip on">All</span><span class="chip">Concerts</span><span class="chip">Sports</span><span class="chip">Theater</span><span class="chip">Conferences</span><span class="chip">Festivals</span></div>
+ <table>
+  <tr><th>Date</th><th>Event</th><th>Venue</th><th>Category</th><th>From</th></tr>
+  <tr><td>Sun 23 Nov 06:30</td><td><b>Pyramids Half Marathon</b></td><td>Giza Plateau</td><td>Sports</td><td>EGP 600</td></tr>
+  <tr><td>Thu 27 Nov 19:30</td><td><b>Hamlet, in Arabic</b></td><td>Cairo Opera House</td><td>Theater</td><td>EGP 250</td></tr>
+  <tr><td>Sat 29 Nov 09:00</td><td><b>DevFest Cairo 2026</b></td><td>GUC New Cairo</td><td>Conference</td><td>EGP 150</td></tr>
+  <tr><td>Thu 4 Dec 16:00</td><td><b>Sandbox Sound Festival</b></td><td>El Gouna</td><td>Festival</td><td>EGP 2,400</td></tr>
+  <tr><td>Fri 12 Dec 21:00</td><td><b>Wust El Balad live</b></td><td>Cairo Jazz Club</td><td>Concert</td><td>EGP 400</td></tr>
+ </table>
+</section>
+<aside>
+ <h2>Your bookings</h2>
+ <div class="bk"><div class="t"><span>Cairo Jazz Night</span><span>#0005</span></div><div class="px st pend">PAYMENT PENDING</div><div class="bar"><i class="d"></i><i class="d"></i><i class="d"></i><i class="a"></i><i></i></div><span class="note">Seats held · 2 × Standard · EGP 700</span><span class="pay">Pay EGP 700</span></div>
+ <div class="bk"><div class="t"><span>DevFest Cairo 2026</span><span>#0003</span></div><div class="st smooth">Paid · 1 ticket</div></div>
+ <div class="bk"><div class="t"><span>Hamlet, in Arabic</span><span>#0004</span></div><div class="st smooth" style="color:var(--mute)">Cancelled</div></div>
+</aside>
+</main>
+</body></html>

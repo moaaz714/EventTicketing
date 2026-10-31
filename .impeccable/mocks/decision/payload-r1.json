@@ -1,0 +1,101 @@
+{
+  "title": "Choose the visual world for the Event Ticketing web app (bolder hand)",
+  "question": "Bolder re-roll: foreign forms at full commitment. The first dealt world leads. Keep it, take an alternate, or re-roll again.",
+  "options": [
+    {
+      "id": "challenger-botanical",
+      "kind": "challenger",
+      "catalogId": "editorial-sequence-montage-botanical-folio-season",
+      "label": "Season Folio",
+      "kicker": "THE ROLL",
+      "lineage": "botanical folios that follow one plant through its seasons",
+      "thesis": "Every booking is one specimen drawn through its life stages on fixed-scale plates, bud to fruit to husk.",
+      "palette": ["#F1F3EC", "#2F6B3A", "#C8282E", "#1E1A1D", "#8E7B62"],
+      "materials": ["herbarium sheet", "sepia hairlines", "engraved italic names"],
+      "viewport": "Top nav and search; event list as specimen captions; the open booking shown as five registered stage plates on one baseline, current stage in full colour.",
+      "risk": "Sits near the cream-and-serif default; must hold to herbarium white and saturated fruit, and attendees do not identify with botany.",
+      "html": ".impeccable/mocks/decision/challenger-botanical.html",
+      "raised": [
+        {"from": "challenger-timetable", "raise": "Booking and ticket state is a mark in a fixed cell: filled holds, hollow does not, scarlet strikes, green confirms."}
+      ]
+    },
+    {
+      "id": "challenger-bitmap",
+      "kind": "challenger",
+      "catalogId": "emigre-bitmap-specimen",
+      "label": "Low-Res Proof",
+      "verdict": "wins",
+      "lineage": "Emigre bitmap type specimens and 90s club flyers",
+      "thesis": "Unresolved things render in pixels; a booking's status sharpens into smooth type the moment the saga resolves.",
+      "palette": ["#F4F4EF", "#000000", "#2B3BFF", "#FF3B1F"],
+      "materials": ["coarse bitmap display", "fine grotesk text", "dot-matrix halftone"],
+      "viewport": "Top nav; tonight's lead event set in poster-scale pixel type; a dense event table below; bookings rail with pending states in bitmap and settled ones in smooth bold.",
+      "case": "Beats the leader on both axes: club and gig culture is the audience's own print world, and bitmap-versus-smooth makes async state legible at a glance.",
+      "risk": "Pixel type must stay at display sizes and status words; at body sizes it hurts reading.",
+      "html": ".impeccable/mocks/decision/challenger-bitmap.html",
+      "hero": "https://impeccable.style/worlds/cards/emigre-bitmap-specimen-hero.webp"
+    },
+    {
+      "id": "challenger-transit",
+      "kind": "challenger",
+      "catalogId": "wayfinding-cartography-signage-midnight-transit-diagram",
+      "label": "Saga Line",
+      "verdict": "wins",
+      "lineage": "metro diagrams fired as enamel station murals",
+      "thesis": "A booking is a journey on a line: stations are states, and the payment-failed compensation path is a branch line to Refunded.",
+      "palette": ["#0E1B3D", "#F2F4F7", "#E23B2E", "#2D6CDF", "#F2A900", "#1E9E5A"],
+      "materials": ["midnight-blue enamel", "porcelain station ticks", "four line inks"],
+      "viewport": "Midnight-blue top bar; event list coded by category line colour; the open booking drawn as a line diagram with the current station lit and the refund branch shown dim.",
+      "case": "Beats the leader on both axes: everyone rides the metro to get to an event, and the saga literally is a branching route.",
+      "risk": "The diagram must stay one strip per booking; drawn as a full network map it becomes decoration.",
+      "html": ".impeccable/mocks/decision/challenger-transit.html",
+      "hero": "https://impeccable.style/worlds/cards/wayfinding-cartography-signage-midnight-transit-diagram-hero.webp"
+    },
+    {
+      "id": "challenger-cassette",
+      "kind": "challenger",
+      "catalogId": "vernacular-ephemera-cassette-j-card",
+      "label": "Mixtape J-Card",
+      "verdict": "competitive",
+      "lineage": "hand-lettered cassette inlays",
+      "thesis": "An event's sessions are a tracklist ruled in ballpoint, timed to fill the venue's capacity like a side of tape.",
+      "palette": ["#FBFBF8", "#1F3FA8", "#8C8C8C", "#D7262E"],
+      "materials": ["lined inlay stock", "ballpoint blue", "TDK red stripe"],
+      "viewport": "Event page as an unfolded J-card: spine title, sessions as side A and side B with right-aligned times, a capacity meter like remaining tape.",
+      "case": "Holds audience identification (music people) but loses product clarity: hand lettering in a payment flow reads unserious.",
+      "risk": "Handwriting at UI sizes undermines trust at checkout.",
+      "html": ".impeccable/mocks/decision/challenger-cassette.html",
+      "hero": "https://impeccable.style/worlds/cards/vernacular-ephemera-cassette-j-card-hero.webp"
+    },
+    {
+      "id": "challenger-timetable",
+      "kind": "challenger",
+      "catalogId": "rw-timetable-slide-rack",
+      "label": "Timetable Slide Rack",
+      "verdict": "declined",
+      "lineage": "1970s pocket airline timetables on a light table",
+      "thesis": "One type size; rank carried by weight, case and reversal on raked glass slides.",
+      "palette": ["#E0A526", "#2B2F33", "#F3EEDC", "#D2381F", "#1F6B47"],
+      "materials": ["goldenrod light bed", "tinted glass slides"],
+      "viewport": "A raked rack of event slides travelling sideways.",
+      "case": "Loses both axes: raked containers and lateral travel fight a booking task.",
+      "risk": "Raked layout breaks forms and tables.",
+      "kept": "State as a mark in a fixed cell.",
+      "hero": "https://impeccable.style/worlds/cards/rw-timetable-slide-rack-hero.webp"
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "canon": true,
+  "canonCard": {
+    "kind": "canon",
+    "label": "The category standard",
+    "thesis": "A ticket marketplace as Eventbrite or Tixr ship it, at full craft.",
+    "palette": ["#FFFFFF", "#111827", "#5B3DF5"],
+    "materials": ["clean grid", "event photography"],
+    "viewport": "Search hero, photo event cards in a grid, sticky checkout summary.",
+    "risk": "Indistinguishable from the competition by design.",
+    "html": ".impeccable/mocks/decision/canon.html"
+  },
+  "buildPath": {"value": "code"},
+  "steer": true
+}

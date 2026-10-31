@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--board:#121315;--panel:#1c1d21;--flap:#F2F2EE;--amber:#FFB000;--green:#2BB673;--red:#E5484D;--mute:#8a8c94}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;background:var(--board);color:var(--flap);font:400 15px/1.4 Barlow,sans-serif}
+header{height:68px;display:flex;align-items:center;gap:36px;padding:0 40px;border-bottom:1px solid #2a2b30}
+.mark{font:700 26px Barlow Condensed;letter-spacing:.04em;text-transform:uppercase}
+.mark b{color:var(--amber)}
+nav{display:flex;gap:26px;color:var(--mute);font-weight:600}nav .on{color:var(--flap)}
+.search{margin-left:auto;width:360px;height:40px;background:var(--panel);border-radius:6px;padding:10px 14px;color:var(--mute)}
+main{padding:28px 40px}
+h1{font:700 44px Barlow Condensed;text-transform:uppercase;letter-spacing:.03em}
+.sub{color:var(--mute);margin:4px 0 20px}
+table{width:100%;border-collapse:separate;border-spacing:0 6px}
+th{font:600 12px Barlow;text-transform:uppercase;letter-spacing:.1em;color:var(--mute);text-align:left;padding:0 14px}
+td{background:var(--panel);padding:14px;font:500 22px Barlow Condensed;text-transform:uppercase;letter-spacing:.04em}
+td:first-child{border-radius:6px 0 0 6px}td:last-child{border-radius:0 6px 6px 0}
+.f{display:inline-block;background:#26272c;border-radius:3px;padding:2px 6px;margin-right:2px;box-shadow:inset 0 -1px 0 #000,inset 0 1px 0 #333}
+.st{color:var(--amber)}.ok{color:var(--green)}
+.strip{position:absolute;bottom:0;left:0;right:0;height:150px;background:#0b0c0d;border-top:2px solid var(--amber);padding:20px 40px;display:flex;gap:20px}
+.bk{flex:1;background:var(--panel);border-radius:8px;padding:16px}
+.bk .t{color:var(--mute);font-size:13px;text-transform:uppercase;letter-spacing:.08em}
+.bk .s{font:700 30px Barlow Condensed;text-transform:uppercase;margin-top:6px}
+.btn{float:right;background:var(--amber);color:#111;font-weight:700;border-radius:6px;padding:8px 14px;margin-top:-34px}
+</style></head><body>
+<header><div class="mark">Event<b>Ticketing</b></div><nav><span class="on">Departures</span><span>My bookings</span><span>Tickets</span></nav><div class="search">Search events</div></header>
+<main>
+<h1>Upcoming events</h1><div class="sub">Cairo · next 30 days · synthetic demo data</div>
+<table>
+<tr><th>Date</th><th>Time</th><th>Event</th><th>Venue</th><th>From</th><th>Status</th></tr>
+<tr><td><span class="f">1</span><span class="f">4</span> NOV</td><td>20:00</td><td>Cairo Jazz Night</td><td>El Sawy Culturewheel</td><td>EGP 350</td><td class="ok">On sale</td></tr>
+<tr><td><span class="f">2</span><span class="f">3</span> NOV</td><td>06:30</td><td>Pyramids Half Marathon</td><td>Giza Plateau</td><td>EGP 600</td><td class="st">Few left</td></tr>
+<tr><td><span class="f">2</span><span class="f">7</span> NOV</td><td>19:30</td><td>Hamlet, in Arabic</td><td>Cairo Opera House</td><td>EGP 250</td><td class="ok">On sale</td></tr>
+<tr><td><span class="f">2</span><span class="f">9</span> NOV</td><td>09:00</td><td>DevFest Cairo 2026</td><td>GUC New Cairo</td><td>EGP 150</td><td class="ok">On sale</td></tr>
+</table>
+</main>
+<div class="strip">
+ <div class="bk"><div class="t">#0005 · Cairo Jazz Night</div><div class="s st">Payment pending</div><span class="btn">Pay EGP 700</span></div>
+ <div class="bk"><div class="t">#0003 · DevFest Cairo</div><div class="s ok">Paid · Gate open</div></div>
+ <div class="bk"><div class="t">#0004 · Hamlet</div><div class="s" style="color:var(--mute)">Cancelled</div></div>
+</div>
+</body></html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--inlay:#FBFBF8;--pen:#1F3FA8;--pencil:#8C8C8C;--tdk:#D7262E;--rule:#c9d6ee}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;background:#ECEDEF;color:#1b1f2a;font:400 15px/1.45 "Atkinson Hyperlegible",sans-serif}
+header{height:64px;background:#fff;display:flex;align-items:center;gap:36px;padding:0 40px;border-bottom:1px solid #d5d7dc}
+.mark{font:700 24px Kalam;color:var(--pen)}
+nav{display:flex;gap:24px;font-weight:700;color:#596070}nav .on{color:var(--pen)}
+.search{margin-left:auto;width:360px;height:40px;border:1px solid #c6c9d0;border-radius:6px;padding:9px 12px;color:#7a8090}
+main{padding:28px 40px;display:grid;grid-template-columns:90px 1fr 340px;gap:0;height:836px}
+.spine{background:var(--inlay);border:1px solid #d3d6dc;border-right:0;writing-mode:vertical-rl;transform:rotate(180deg);font:700 26px Kalam;color:var(--pen);padding:18px 24px;display:flex;justify-content:space-between}
+.spine i{display:block;height:80px;width:14px;background:var(--tdk)}
+.card{background:var(--inlay) repeating-linear-gradient(transparent 0 31px,var(--rule) 31px 32px);border:1px solid #d3d6dc;padding:24px 36px}
+.card h1{font:700 44px/1 Kalam;color:var(--pen)}
+.meta{color:#596070;margin:6px 0 18px}
+.sides{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+.side h3{font:700 22px Kalam;color:var(--pen);text-decoration:underline;margin-bottom:6px}
+.tr{display:flex;justify-content:space-between;height:32px;align-items:center;font:400 20px Kalam;color:var(--pen)}
+.tr span:last-child{font-variant-numeric:tabular-nums}
+.tr.full{color:var(--pencil);text-decoration:line-through}
+.tape{margin-top:22px}
+.tape .bar{height:12px;background:#dfe3ea;border-radius:6px;overflow:hidden}.tape .bar i{display:block;height:100%;width:72%;background:var(--pen)}
+.tape small{color:#596070}
+.buy{background:#fff;border:1px solid #d3d6dc;border-left:0;padding:24px}
+.buy h2{font-size:18px;margin-bottom:12px}
+.opt{border:1px solid #c6c9d0;border-radius:8px;padding:12px;margin-bottom:10px;display:flex;justify-content:space-between}
+.opt.on{border:2px solid var(--pen)}
+.qty{display:flex;justify-content:space-between;align-items:center;margin:14px 0}
+.qty b{font-size:20px}
+.btn{display:block;text-align:center;background:var(--tdk);color:#fff;padding:13px;border-radius:8px;font-weight:700}
+.est{color:#596070;margin-top:10px;font-size:13px}
+</style></head><body>
+<header><span class="mark">Event Ticketing</span><nav><span class="on">Events</span><span>My bookings</span><span>Tickets</span></nav><div class="search">Search events</div></header>
+<main>
+ <div class="spine"><span>CAIRO JAZZ NIGHT · 14 NOV</span><i></i></div>
+ <div class="card">
+  <h1>Cairo Jazz Night</h1>
+  <div class="meta">El Sawy Culturewheel, Zamalek · Friday 14 November · doors 19:30</div>
+  <div class="sides">
+   <div class="side"><h3>Side A · River Hall</h3>
+    <div class="tr"><span>Opening set, Nour Trio</span><span>20:00</span></div>
+    <div class="tr"><span>Oud and upright bass</span><span>20:45</span></div>
+    <div class="tr full"><span>Masterclass (full)</span><span>21:30</span></div>
+    <div class="tr"><span>Late jam</span><span>22:15</span></div>
+   </div>
+   <div class="side"><h3>Side B · Wisdom Hall</h3>
+    <div class="tr"><span>Vocal standards</span><span>20:15</span></div>
+    <div class="tr"><span>Big band hour</span><span>21:00</span></div>
+    <div class="tr"><span>Closing set</span><span>22:00</span></div>
+   </div>
+  </div>
+  <div class="tape"><div class="bar"><i></i></div><small>72% of River Hall capacity booked · 112 seats left</small></div>
+ </div>
+ <aside class="buy">
+  <h2>Book seats</h2>
+  <div class="opt on"><span>Standard</span><b>EGP 350</b></div>
+  <div class="opt"><span>VIP</span><b>EGP 875</b></div>
+  <div class="qty"><span>Tickets</span><b>− 2 +</b></div>
+  <span class="btn">Reserve 2 seats</span>
+  <div class="est">Estimate: EGP 700 + EGP 35 service fee</div>
+ </aside>
+</main>
+</body></html>

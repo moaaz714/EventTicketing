@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;1,400;1,600&family=Karla:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--sheet:#F1F3EC;--green:#2F6B3A;--scarlet:#C8282E;--fruit:#1E1A1D;--sepia:#8E7B62;--graphite:#55584f}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;background:var(--sheet);color:var(--fruit);font:400 15px/1.5 Karla,sans-serif}
+header{height:68px;display:flex;align-items:center;gap:36px;padding:0 48px;border-bottom:1px solid var(--sepia)}
+.mark{font:600 italic 24px Spectral;color:var(--green)}
+nav{display:flex;gap:26px;font-weight:600;color:var(--graphite)}nav .on{color:var(--fruit);text-decoration:underline;text-underline-offset:6px}
+.search{margin-left:auto;width:360px;height:40px;border:1px solid var(--sepia);background:#fff;padding:9px 12px;color:var(--graphite)}
+main{display:grid;grid-template-columns:420px 1fr;height:832px}
+.list{border-right:1px solid var(--sepia);padding:28px 32px}
+.list h2{font:400 italic 26px Spectral;margin-bottom:14px}
+.ev{padding:14px 0;border-top:1px solid #d6d2c4;display:grid;grid-template-columns:1fr auto;gap:2px 12px}
+.ev b{font:600 italic 19px Spectral}
+.ev .m{color:var(--graphite);grid-column:1}
+.ev .p{grid-row:1/3;grid-column:2;text-align:right;font-variant-numeric:tabular-nums}
+.ev.on{background:#fff;margin:0 -12px;padding:14px 12px;border-top-color:var(--green)}
+.detail{padding:32px 48px}
+.k{color:var(--graphite);font-weight:600}
+h1{font:400 italic 46px/1.1 Spectral;margin:6px 0 4px}
+.plates{display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin:28px 0 0;border-top:1px solid var(--sepia);border-bottom:1px solid var(--sepia)}
+.plate{height:270px;border-right:1px solid #d6d2c4;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:16px}
+.plate:last-child{border-right:0}
+.stem{position:absolute;bottom:72px;width:2px;height:120px;background:var(--green);left:50%}
+.form{position:absolute;bottom:186px;left:50%;transform:translateX(-50%);border-radius:50%}
+.s1 .form{width:16px;height:22px;background:var(--green)}
+.s2 .form{width:30px;height:30px;background:var(--green);border-radius:50% 50% 10% 50%}
+.s3 .form{width:50px;height:50px;background:var(--scarlet);border-radius:50% 8% 50% 8%}
+.s4 .form{width:44px;height:44px;background:var(--fruit)}
+.s5 .form{width:40px;height:40px;border:2px dashed #9aa09a;background:transparent}
+.done .stem,.done .form{opacity:.38;filter:grayscale(1)}
+.lab{font-weight:700}.lab small{display:block;font-weight:400;color:var(--graphite);text-align:center}
+.mark2{display:inline-block;width:12px;height:12px;border:2px solid var(--green);border-radius:50%;margin-right:6px;vertical-align:-1px}
+.fill{background:var(--green)}
+.now .lab{color:var(--scarlet)}
+.act{display:flex;gap:16px;align-items:center;margin-top:24px}
+.btn{background:var(--green);color:#fff;padding:12px 20px;font-weight:700}
+.ghost{margin-left:auto;border:1px solid var(--sepia);padding:11px 18px;color:var(--graphite)}
+.cap{margin-top:18px;color:var(--graphite);max-width:640px}
+</style></head><body>
+<header><span class="mark">Event Ticketing</span><nav><span class="on">Events</span><span>My bookings</span><span>Tickets</span></nav><div class="search">Search events and venues</div></header>
+<main>
+<section class="list"><h2>This season</h2>
+ <div class="ev on"><b>Cairo Jazz Night</b><span class="m">El Sawy Culturewheel · Fri 14 Nov</span><span class="p">EGP 350</span></div>
+ <div class="ev"><b>Pyramids Half Marathon</b><span class="m">Giza Plateau · Sun 23 Nov</span><span class="p">EGP 600</span></div>
+ <div class="ev"><b>Hamlet, in Arabic</b><span class="m">Cairo Opera House · Thu 27 Nov</span><span class="p">EGP 250</span></div>
+ <div class="ev"><b>DevFest Cairo 2026</b><span class="m">GUC New Cairo · Sat 29 Nov</span><span class="p">EGP 150</span></div>
+ <div class="ev"><b>Sandbox Sound Festival</b><span class="m">El Gouna · Thu 4 Dec</span><span class="p">EGP 2,400</span></div>
+</section>
+<section class="detail">
+ <span class="k">Booking 0005 · 2 × Standard · EGP 700</span>
+ <h1>Cairo Jazz Night</h1>
+ <span class="k">El Sawy Culturewheel, Zamalek · Friday 14 November, 20:00</span>
+ <div class="plates">
+  <div class="plate s1 done"><div class="stem"></div><div class="form"></div><div class="lab"><span class="mark2 fill"></span>Reserved<small>12:04</small></div></div>
+  <div class="plate s2 done"><div class="stem"></div><div class="form"></div><div class="lab"><span class="mark2 fill"></span>Confirmed<small>12:05</small></div></div>
+  <div class="plate s3 now"><div class="stem"></div><div class="form"></div><div class="lab"><span class="mark2"></span>Payment pending<small>waiting on you</small></div></div>
+  <div class="plate s4"><div class="stem"></div><div class="form"></div><div class="lab"><span class="mark2"></span>Paid<small>—</small></div></div>
+  <div class="plate s5"><div class="stem"></div><div class="form"></div><div class="lab"><span class="mark2"></span>Ticket<small>—</small></div></div>
+ </div>
+ <p class="cap">Your seats are held. Pay to receive two tickets; if payment fails, the booking is refunded automatically.</p>
+ <div class="act"><span class="btn">Pay EGP 700</span><span class="k">Card, wallet or PayPal</span><span class="ghost">Cancel booking</span></div>
+</section>
+</main>
+</body></html>
