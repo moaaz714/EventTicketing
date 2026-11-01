@@ -45,7 +45,7 @@ What runs, and what matters to the frontend:
 
 - **Startup time.** Expect several minutes on first run: image pulls, then Cassandra and Elasticsearch health checks.
 - **Gateway timing.** The gateway only `depends_on` user-service, so it can come up before the others. If early requests return 502 or 503, wait, then `docker compose restart api-gateway`.
-- **Health check:** `curl -i http://localhost:8080/api/auth/login -X POST -H 'Content-Type: application/json' -d '{"email":"x","password":"y"}'` should return 401 "Invalid credentials" (not 502).
+- **Health check:** `curl -i http://localhost:8080/api/auth/login -X POST -H 'Content-Type: application/json' -d '{"email":"x","password":"y"}'` should return 401 (not 502). The body is Spring's default `{"error":"Unauthorized"}`; user-service doesn't include its "Invalid credentials" message.
 
 Seed users and bookings after the services have created their schemas. The script uses `docker exec` against the containers by name:
 
@@ -156,3 +156,73 @@ Found while reading the backend code. The app works around them where it can.
 - [ ] Any frontend fix needed for the real backend is made in `src/api/journey.ts` or `src/api/endpoints.ts`, and the mock is updated to match.
 - [ ] `npm run build` and `npm run lint` are clean (four existing react-refresh warnings are expected).
 - [ ] Results are written back into this file under a new "Results against the real backend" section, or reported to the user, along with any backend changes you'd recommend. Don't change backend code unless the user asks.
+
+## Results against the real backend
+
+Run on 2026-11-01 from `feat/frontend` at `51f9d68`: Windows 11, Docker Desktop 28.3, JDK 25 and Maven 3.9 (local build), Node 24. Desktop at 1440×900 and mobile at 390×844. The frontend works against the real gateway wherever the backend works. The booking journey can't be completed, because four backend bugs block it. Flows C2 to C7 and D were not reached.
+
+### Bringing the stack up
+
+- The jars build cleanly with `mvn -DskipTests package`. `seed.py` ran; on Windows the command is `python seed.py`, since there is no `python3`.
+- **ticket-service does not start under Compose.** It has three separate problems:
+  1. `contracts/.../feign/TicketServiceClient` uses `${feign.ticket-service.url}`, and ticket-service scans that package but doesn't define the property. Workaround: set the env var `FEIGN_TICKET_SERVICE_URL=http://ticket-service:8080`.
+  2. Nothing creates the Cassandra keyspace `etdb_tickets_ks`. `schema-action` only creates tables, the image ignores `CASSANDRA_KEYSPACE`, and k8s uses `eventticketingks`. Workaround: `docker exec eventticketing-cassandra cqlsh -e "CREATE KEYSPACE IF NOT EXISTS etdb_tickets_ks WITH replication = {'class':'SimpleStrategy','replication_factor':1}"`.
+  3. **A code bug with no config workaround.** `ticket/messaging/BookingSagaListener` injects the Jackson 2 `com.fasterxml.jackson.databind.ObjectMapper`, but Spring Boot 4 only provides Jackson 3 (`tools.jackson.databind.ObjectMapper`, which sales-service uses). Startup fails with "required a bean of type ObjectMapper". ticket-service stayed down for this run.
+- ticket-service and sales-service log only to Loki (`loki.monitoring.svc.cluster.local`), so `docker logs` shows nothing useful. To debug, mount a console logback file and point `LOGGING_CONFIG` at it.
+- Let `docker compose pull` finish before the first `up`. Mongo, Redis, Neo4j and Cassandra use `:latest`. Starting the stack while a pull was still running created Mongo's volume with 8.2, and the newer 9.0 image then refused it (exit 62).
+
+### Flows
+
+| Flow | Result |
+|---|---|
+| A1 Redirect | Pass |
+| A2 Sign in | Pass. The JWT carries `uid` and `role`. |
+| A3 Register | Pass. A duplicate email or phone gets a 409 with no message, so the app showed "Conflict". Fixed, see below. |
+| A4 Sign out and back in | Pass |
+| B1 Demo events | **Fail (backend).** `POST /api/events` saves the event, then returns 500 while indexing it in Elasticsearch. `EventSearchDocument` has `indexName = "com/team22/eventticketing/contracts/events"`; it was `"events"` before `64911a3`, which looks like a find-and-replace slip. The app stops after the first event. Once any event exists the button disappears, so the user can't retry. The other demo events were created through the API for the rest of the run. |
+| B2 Lead event | Pass, except that "From EGP …" is missing (see B3). |
+| B3 From prices | **Fail (backend).** Every estimate returns 503 "Event service unavailable". booking-service's Feign calls to event-service don't forward `Authorization`: its `FeignCorrelationConfig` only adds the correlation id, while the sales-service and user-service versions forward the token. event-service rejects the calls with a 401. The table shows "—". |
+| B4 Chips and sorting | Pass. All four sorts set `aria-sort`. |
+| B5 Search | `GET /api/events/search/full-text` returns 500 (the same index bug). The app fell back to local matching and said so: "jazz" found 2 events, "cairo" found 4. |
+| C1 Reserve | **Blocked by B3.** The estimate error shows in the panel and Reserve stays disabled. |
+| C2 to C7 | Not reached. Confirm hits the same auth bug: on seeded booking #5, `PUT /confirm` returns 503 "Event service unavailable", and the app shows that message. |
+| D Declined payment | Not reached. |
+| E Cancel | **Fail (backend).** `PUT /api/bookings/{id}/cancel` returns 500. `BookingRepository.cancelValidTicketsForBooking` runs `UPDATE tickets …` against the booking database, which has no `tickets` table. The toast shows the raw JDBC message. |
+| F Mobile | F1 and F2 pass. F3: strip labels fit on one line at 390 px, though "Checked in" and "Payment" nearly touch; I couldn't test the label with a trailing `*`. The payment form couldn't be reached. |
+| G Accessibility | Pass. Every stop on Events has the blue focus outline (search shows it on its form via `:focus-within`), and there are no traps. "/" focuses search. Reduced motion was checked in the CSS only, because the browser couldn't emulate it: the status dither and both blink animations are turned off. |
+
+Also seen: with ticket-service down, `/tickets` shows the loading skeleton for about 25 s before "Internal Server Error" and **Try again**. That's four attempts at roughly 4 s each (the gateway's DNS timeout) plus retry backoff. No requests went to `/api/promotions`, `/api/sale-promotions` or `/api/favorite-venues`.
+
+### Section 6 gaps on the real stack
+
+1. **No CORS:** confirmed. Every call went through the proxy on :5173.
+2. **JWT filter:** confirmed. The app decodes `uid` and `role` from the token.
+3. **Missing gateway routes:** none of those calls were made, as expected.
+4. **No endpoint sets `CHECKED_IN`:** not reached.
+5. **Nothing moves a booking to `PAYMENT_PENDING` or `PAID`:** not reached in the UI, but the live RabbitMQ bindings show the saga can't reach booking-service. sales-service publishes `payment.*` to the `payment.events` exchange, which has **no bindings**. booking-service's `booking.saga-feedback` queue binds `payment.*` and `ticket.issued` on `booking.events` only. `booking.completed` does reach sales-service (`payment.saga-listener`), so the pending sale should still be created. Flow D should therefore end on the app's `PAYMENT_FAILED*` fallback.
+6. **Tickets aren't issued automatically:** not reached, because ticket-service is down. It publishes `ticket.issued` to `ticket.events`, so booking-service wouldn't receive it either.
+7. **Booking creation needs `userId` and `status`:** not reached.
+8. **Only booking-service sends error messages:** confirmed. It is the only service with `server.error.include-message: always`.
+9. **Dates without a zone:** event dates display as local time, correctly.
+10. **No pagination:** caused no visible problem with this data set.
+
+### Frontend changes from this run
+
+- `src/api/endpoints.ts`: when the backend sends only the status text, login shows "Wrong email or password." for a 401, and register shows "That email or phone number is already registered." for a 409. A real backend message still takes precedence.
+- `scripts/mock-gateway.mjs`: error bodies now include `message` only for `/api/bookings` routes, matching the real stack.
+- `npm run build` is clean, and `npm run lint` shows only the four expected warnings.
+
+### Recommended backend fixes (not made)
+
+1. event-service `EventSearchDocument`: change it back to `indexName = "events"`. This fixes B1, B5 and `/index`.
+2. booking-service `FeignCorrelationConfig`: forward `Authorization` the way sales-service does. This fixes B3, C1 and confirm.
+3. booking-service cancel: drop `cancelValidTicketsForBooking`. ticket-service already marks tickets `CANCELLED` when it receives `booking.cancelled`. This fixes E.
+4. ticket-service: inject `tools.jackson.databind.ObjectMapper`, define `feign.ticket-service.url` (or stop scanning `TicketServiceClient` in ticket-service itself), and create the keyspace at startup or in Compose.
+5. Saga routing: either bind `booking.saga-feedback` to `payment.events` (`payment.*`) and `ticket.events` (`ticket.issued`), or publish those events to `booking.events`.
+6. Set `server.error.include-message: always` in the other services, so their messages reach the UI.
+7. Pin image versions in `docker-compose.yaml`, and give ticket-service and sales-service a console log appender outside k8s.
+
+### Frontend follow-ups worth considering
+
+- Make demo seeding resumable: skip events that already exist by name and add any missing sessions. Keep the button available while demo events are missing.
+- Don't put raw 500 messages in toasts. booking-service includes exception text, SQL included.

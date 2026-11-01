@@ -1,4 +1,4 @@
-import { api } from './client'
+import { ApiError, api } from './client'
 import type {
   AuthResponse,
   Booking,
@@ -15,12 +15,27 @@ import type {
   User,
 } from './types'
 
+/**
+ * user-service sends Spring's default error body without a message, so the
+ * client only sees the status text ("Unauthorized", "Conflict"). Name the
+ * failure instead; a real message from the backend still wins.
+ */
+const explain = (status: number, statusText: string, message: string) => (err: unknown): never => {
+  if (err instanceof ApiError && err.status === status && err.message === statusText)
+    throw new ApiError(status, message)
+  throw err
+}
+
 // Auth (user-service, public through the gateway)
 export const login = (email: string, password: string) =>
-  api<AuthResponse>('/api/auth/login', { method: 'POST', body: { email, password } })
+  api<AuthResponse>('/api/auth/login', { method: 'POST', body: { email, password } }).catch(
+    explain(401, 'Unauthorized', 'Wrong email or password.'),
+  )
 
 export const register = (body: { name: string; email: string; password: string; phone: string }) =>
-  api<AuthResponse>('/api/auth/register', { method: 'POST', body })
+  api<AuthResponse>('/api/auth/register', { method: 'POST', body }).catch(
+    explain(409, 'Conflict', 'That email or phone number is already registered.'),
+  )
 
 export const getUser = (id: number) => api<User>(`/api/users/${id}`)
 

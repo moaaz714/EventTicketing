@@ -195,7 +195,10 @@ const server = http.createServer(async (req, res) => {
     send(404, { status: 404, error: 'Not Found', path: url.pathname })
   } catch (err) {
     const status = err instanceof HttpError ? err.status : 500
-    send(status, { status, error: http.STATUS_CODES[status], message: err.message, path: url.pathname })
+    // Only booking-service sets server.error.include-message; the other
+    // services send Spring's default body with no message.
+    const message = url.pathname.startsWith('/api/bookings') ? err.message : undefined
+    send(status, { status, error: http.STATUS_CODES[status], message, path: url.pathname })
   }
 })
 
